@@ -3,6 +3,25 @@
   "use strict";
 
   // =========================================================
+  // Constants
+  // =========================================================
+  function getForecastBaseUrl() {
+   const root = getRoot();
+   const u = (root?.dataset?.forecastUrl || "").trim();
+   return u || "/dash/api/forecast/";
+ }
+
+  const FORECAST_TTL_MS = 60 * 1000; // 1분(페이지 내 재호출 방지용)
+
+  // Chart instance keys
+  const CHART_KEYS = {
+    long: "__dailyCumsumChart",
+    car: "__carDailyCumsumChart",
+    nonlife: "__nonlifeDailyCumsumChart",
+    life: "__lifeDailyCumsumChart",
+  };
+
+  // =========================================================
   // JSON helpers
   // =========================================================
   function safeJsonFromScriptTag(id, fallback) {
@@ -16,11 +35,16 @@
   }
 
   // =========================================================
-  // Logging / Debug (once)
+  // Root helpers
   // =========================================================
+  function getRoot() {
+    return document.getElementById("dash-sales");
+  }
+
   function getStaticVer() {
-    const root = document.getElementById("dash-sales");
-    return (root?.dataset?.staticVersion || "dev").trim();
+    const root = getRoot();
+    // data-static-version / data-static-ver 둘 다 지원
+    return (root?.dataset?.staticVersion || root?.dataset?.staticVer || "dev").trim();
   }
 
   function debugOnce(payload) {
@@ -161,7 +185,7 @@
     });
   }
 
-  // =========================================================
+    // =========================================================
   // Chart helpers
   // =========================================================
   function showWarnById(warnId, msg) {
@@ -206,8 +230,7 @@
       if (cur - prev !== 0) lastIdx = i;
     }
 
-    // 전부 증가 없음(=월 전체 0) -> 전부 null (원치 않으면 return cumsum;)
-    if (lastIdx < 0) return cumsum.map(() => null);
+    if (lastIdx < 0) return cumsum.map(() => null); // 월 전체 0이면 전부 null
 
     return cumsum.map((v, i) => (i <= lastIdx ? v : null));
   }
@@ -222,32 +245,165 @@
     return false;
   }
 
+  function lastIncreaseIndex(cumsum) {
+    if (!Array.isArray(cumsum) || cumsum.length === 0) return -1;
+    let lastIdx = -1;
+    for (let i = 0; i < cumsum.length; i++) {
+      const cur = Number(cumsum[i] ?? 0);
+      const prev = i === 0 ? 0 : Number(cumsum[i - 1] ?? 0);
+      if (cur - prev !== 0) lastIdx = i;
+    }
+    return lastIdx;
+  }
+
   // =========================================================
-  // Render chart (2 datasets: 당월 + 전월)
+  // Render helpers
   // =========================================================
   function normalizeSeriesToLen(arr, len) {
-    // arr이 없거나 배열이 아니면 전부 null
     if (!Array.isArray(arr) || arr.length === 0) return new Array(len).fill(null);
-
-    // 길이가 맞으면 그대로
     if (arr.length === len) return arr;
-
-    // 길이가 다르면: 짧으면 null로 패딩, 길면 자르기
     if (arr.length < len) return arr.concat(new Array(len - arr.length).fill(null));
     return arr.slice(0, len);
   }
 
+  function pad2(n) {
+    const x = String(n ?? "");
+    return x.length === 1 ? "0" + x : x;
+  }
+
+  function inferYmFromLabels(rawLabels) {
+    // rawLabels: ["YYYY-MM-DD", ...]
+    if (!Array.isArray(rawLabels) || rawLabels.length === 0) return "";
+    const s = String(rawLabels[0] || "");
+    const m = s.match(/^(\d{4}-\d{2})-\d{2}$/);
+    return m ? m[1] : "";
+  }
+
+  function getFiltersFromDom(root) {
+    const part = (document.getElementById("partSelect")?.value || "").trim();
+    const branch = (document.getElementById("branchSelect")?.value || "").trim();
+    const lifeNl = (document.getElementById("lifeNlSelect")?.value || "").trim();
+    const insurer = (document.getElementById("insurerSelect")?.value || "").trim();
+
+    // q는 서버 캐시 파편화 방지 차원에서 예측에는 보통 제외 권장.
+    // 필요하면 root.dataset.initialQ 같은 걸 추가해서 포함시키면 됨.
+    return { part, branch, life_nl: lifeNl, insurer };
+  }
+
+  // =========================================================
+  // Forecast fetching (cached)
+  // =========================================================
+  const __forecastCache = {
+    at: 0,
+    key: "",
+    payload: null,
+  };
+
+  function buildForecastUrl({ ym, asofDay, scope, part, branch }) {
+    const base = getForecastBaseUrl();
+    const url = new URL(base, window.location.origin);
+
+    url.searchParams.set("ym", ym);
+    url.searchParams.set("asof_day", String(asofDay || 1));
+
+    // scope: branch/part/all 등 (너가 서버에서 정의)
+    url.searchParams.set("scope", scope || "all");
+
+    if (part) url.searchParams.set("part", part);
+    if (branch) url.searchParams.set("branch", branch);
+
+    return url.toString();
+  }
+
+  async function fetchForecastOnce({ ym, asofDay, scope, part, branch }) {
+    const now = Date.now();
+    const key = [ym, asofDay, scope || "all", part || "", branch || ""].join("|");
+
+    if (__forecastCache.payload && __forecastCache.key === key && now - __forecastCache.at < FORECAST_TTL_MS) {
+      return __forecastCache.payload;
+    }
+
+    const url = buildForecastUrl({ ym, asofDay, scope, part, branch });
+
+    try {
+      const res = await fetch(url, { method: "GET", headers: { "Accept": "application/json" } });
+      const ct = String(res.headers.get("content-type") || "").toLowerCase();
+      if (!ct.includes("application/json")) {
+        // 로그인 리다이렉트/에러 페이지(HTML) 등
+        const text = await res.text().catch(() => "");
+        console.warn("[Forecast] non-json response", { status: res.status, ct, head: text.slice(0, 120) });
+        __forecastCache.at = now;
+        __forecastCache.key = key;
+        __forecastCache.payload = null;
+        return null;
+      }
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok || !data || data.ok !== true) {
+        __forecastCache.at = now;
+        __forecastCache.key = key;
+        __forecastCache.payload = null;
+        return null;
+      }
+
+      __forecastCache.at = now;
+      __forecastCache.key = key;
+      // ✅ 서버는 {ok:true, data:{...}} 형태
+      __forecastCache.payload = data.data || null;
+      return __forecastCache.payload;
+    } catch (e) {
+      __forecastCache.at = now;
+      __forecastCache.key = key;
+      __forecastCache.payload = null;
+      return null;
+    }
+  }
+
+  // =========================================================
+  // Forecast -> datasets builder
+  //   - 입력: mean/lo/hi (cumsum 기준) OR 일매출 기준이면 서버에서 cumsum으로 변환해서 내려주는 걸 권장
+  // =========================================================
+  function buildForecastDatasets(seriesObj, labelsLen, asofIdx) {
+    // seriesObj: {mean:[..], lo:[..], hi:[..]}
+    if (!seriesObj || typeof seriesObj !== "object") return null;
+
+    const mean = normalizeSeriesToLen(seriesObj.mean, labelsLen);
+    const lo = normalizeSeriesToLen(seriesObj.lo, labelsLen);
+    const hi = normalizeSeriesToLen(seriesObj.hi, labelsLen);
+
+    // ✅ asofIdx(0-based) 이전은 실제/과거 구간이므로 null로 날려서 “미래만” 보이게
+    function maskBefore(arr) {
+      return arr.map((v, i) => (i <= asofIdx ? null : v));
+    }
+
+    const fMean = maskBefore(mean);
+    const fLo = maskBefore(lo);
+    const fHi = maskBefore(hi);
+
+    return { fMean, fLo, fHi };
+  }
+
+  // =========================================================
+  // Render chart (datasets: 당월 + 전월 + 전년도 + 예측(선/밴드))
+  // =========================================================
   function renderCompareLineChart(opts) {
     const {
       canvasId,
       warnId,
       chartKey,
+
       thisMonthScriptId,
       prevMonthScriptId,
-      yearAgoScriptId,               // ✅ 추가
-      yearAgoLabel, 
+      yearAgoScriptId,
+
+      forecastSeriesKey,          // "long" | "car" | "nonlife" | "life"
+      forecastPayload,            // fetchForecastOnce 결과
+      asofDay,                    // 1~말일
       thisLabel,
       prevLabel,
+      yearAgoLabel,
+      forecastLabel,              // 예측 라인 label
+      forecastBandLabel,          // 예측 밴드 label(표시 안함)
       useNlLifeUnifiedYAxis,
       trimAfterLast,
     } = opts;
@@ -261,11 +417,7 @@
 
     const rawThis = safeJsonFromScriptTag(thisMonthScriptId, []);
     const rawPrev = safeJsonFromScriptTag(prevMonthScriptId, []);
-    const rawYA   = yearAgoScriptId ? safeJsonFromScriptTag(yearAgoScriptId, []) : [];
-
-    const fixedYA   = normalizeSeriesToLen(rawYA, len);
-
-    const dataYA   = trimAfterLast ? trimAfterLastIncreaseToNull(fixedYA) : fixedYA;
+    const rawYA = yearAgoScriptId ? safeJsonFromScriptTag(yearAgoScriptId, []) : [];
 
     if (!Array.isArray(labels) || len === 0) {
       showWarnById(warnId, "차트 라벨(월 1~말일)이 없습니다.");
@@ -285,8 +437,9 @@
       return;
     }
 
-    // ✅ 전월은 “없어도 렌더”하도록 보정
+    // ✅ 전월/전년도는 길이 보정(없어도 렌더)
     const fixedPrev = normalizeSeriesToLen(rawPrev, len);
+    const fixedYA = normalizeSeriesToLen(rawYA, len);
 
     if (typeof window.Chart === "undefined") {
       showWarnById(warnId, "Chart.js 로드에 실패했습니다. (정적 파일 경로/collectstatic 여부 확인)");
@@ -295,6 +448,7 @@
 
     const dataThis = trimAfterLast ? trimAfterLastIncreaseToNull(rawThis) : rawThis;
     const dataPrev = trimAfterLast ? trimAfterLastIncreaseToNull(fixedPrev) : fixedPrev;
+    const dataYA = trimAfterLast ? trimAfterLastIncreaseToNull(fixedYA) : fixedYA;
 
     const anyThis = hasAnyIncrease(rawThis);
     const anyPrev = hasAnyIncrease(fixedPrev);
@@ -306,6 +460,7 @@
 
     destroyChart(chartKey);
 
+    // y축 통일(손보/생보만)
     const nlStep = safeJsonFromScriptTag("nl-l-y-step", null);
     const nlMax = safeJsonFromScriptTag("nl-l-y-max", null);
 
@@ -316,25 +471,129 @@
       yScale.ticks = { stepSize: nlStep, callback: (v) => Number(v).toLocaleString() };
     }
 
+    // =========================================================
+    // Forecast overlay
+    //   - asofDay: 1~말일  -> asofIdx: 0-based
+    //   - “예측은 미래(>asofIdx)만 표시”
+    // =========================================================
+    const asofIdx = Math.max(0, Math.min(len - 1, Number(asofDay || 1) - 1));
+    let forecastSets = null;
+
+    // forecastPayload: 이제 payload.data가 넘어오므로 forecastPayload.series 존재
+    if (forecastPayload?.series && forecastSeriesKey) {
+      const KEYMAP = {
+        long: "long",
+        car: "car",
+        nonlife: "long_nonlife",
+        life: "long_life",
+      };
+      const serverKey = KEYMAP[forecastSeriesKey] || forecastSeriesKey;
+      const catPayload = forecastPayload.series[serverKey];
+      const pred = catPayload?.pred;
+      if (pred) {
+        // 서버는 p10/p50/p90 (누적) 형태
+        const seriesObj = { mean: pred.p50, lo: pred.p10, hi: pred.p90 };
+        forecastSets = buildForecastDatasets(seriesObj, len, asofIdx);
+      } else if (catPayload && catPayload.pred === null) {
+        // ✅ 예측 데이터가 없을 때 사용자에게 이유를 알려줌
+        showWarnById(
+          warnId,
+          "AI 예측 데이터가 없습니다. (업로드 직후 예측 생성 작업이 아직 완료되지 않았거나, 해당 스코프의 예측이 생성되지 않았습니다.)"
+        );
+      } 
+    }
+
+    // 밴드(fill) 구현:
+    // - (1) hi 라인을 투명으로 그리고
+    // - (2) lo 라인도 투명으로 그린 다음
+    // - (3) lo dataset에서 hi로 fill 하도록 (fill: {target: idx})
+    // Chart.js fill target은 "dataset index" 기반이므로 순서가 중요.
+    const datasets = [];
+
+    // (A) 당월
+    datasets.push({
+      label: thisLabel || "당월",
+      data: dataThis,
+      tension: 0.25,
+      pointRadius: 2,
+      borderWidth: 2,
+      borderColor: "rgb(54, 162, 235)",
+      backgroundColor: "rgba(54, 162, 235, 0.15)",
+      spanGaps: false,
+    });
+
+    // (B) 전월
+    datasets.push({
+      label: prevLabel || "전월",
+      data: dataPrev,
+      tension: 0.25,
+      pointRadius: 2,
+      borderWidth: 2,
+      borderDash: [6, 4],
+      borderColor: "rgb(75, 192, 192)",
+      backgroundColor: "rgba(75, 192, 192, 0.15)",
+      spanGaps: false,
+    });
+
+    // (C) 전년도
+    datasets.push({
+      label: yearAgoLabel || "전년도",
+      data: dataYA,
+      tension: 0.25,
+      pointRadius: 2,
+      borderWidth: 2,
+      borderDash: [2, 4],
+      borderColor: "rgb(153, 102, 255)",
+      backgroundColor: "rgba(153, 102, 255, 0.12)",
+      spanGaps: false,
+    });
+
+    // (D) 예측 밴드 + 예측선
+    if (forecastSets) {
+      const { fMean, fLo, fHi } = forecastSets;
+
+      const hiIndex = datasets.length;
+      datasets.push({
+        label: (forecastBandLabel || "예측 상한"),
+        data: fHi,
+        tension: 0.25,
+        pointRadius: 0,
+        borderWidth: 0,
+        borderColor: "rgba(0,0,0,0)",     // 라인 숨김
+        backgroundColor: "rgba(0,0,0,0)",
+        spanGaps: false,
+      });
+
+      const loIndex = datasets.length;
+      datasets.push({
+        label: (forecastBandLabel || "예측 하한"),
+        data: fLo,
+        tension: 0.25,
+        pointRadius: 0,
+        borderWidth: 0,
+        borderColor: "rgba(0,0,0,0)",     // 라인 숨김
+        backgroundColor: "rgba(255, 159, 64, 0.18)", // 밴드 색(주황 계열)
+        fill: { target: hiIndex },        // lo -> hi 사이를 채움
+        spanGaps: false,
+      });
+
+      datasets.push({
+        label: forecastLabel || "예측",
+        data: fMean,
+        tension: 0.25,
+        pointRadius: 1,
+        borderWidth: 2,
+        borderDash: [4, 4],
+        borderColor: "rgb(255, 159, 64)", // 예측선(주황)
+        backgroundColor: "rgba(0,0,0,0)",
+        spanGaps: false,
+      });
+    }
+
     const ctx = canvas.getContext("2d");
     window[chartKey] = new window.Chart(ctx, {
       type: "line",
-      data: {
-        labels,
-        datasets: [
-          { label: thisLabel || "당월", data: dataThis, tension: 0.25, pointRadius: 2, borderWidth: 2,
-            borderColor: "rgb(54, 162, 235)", backgroundColor: "rgba(54, 162, 235, 0.15)", spanGaps: false },
-
-          { label: prevLabel || "전월", data: dataPrev, tension: 0.25, pointRadius: 2, borderWidth: 2,
-            borderDash: [6, 4],
-            borderColor: "rgb(75, 192, 192)", backgroundColor: "rgba(75, 192, 192, 0.15)", spanGaps: false },
-
-          // ✅ 전년도
-          { label: yearAgoLabel || "전년도", data: dataYA, tension: 0.25, pointRadius: 2, borderWidth: 2,
-            borderDash: [2, 4],
-            borderColor: "rgb(153, 102, 255)", backgroundColor: "rgba(153, 102, 255, 0.12)", spanGaps: false },
-        ],
-      },
+      data: { labels, datasets },
       options: {
         responsive: true,
         maintainAspectRatio: false,
@@ -343,9 +602,9 @@
           legend: { display: true },
           tooltip: {
             callbacks: {
-              label: function (ctx) {
-                const v = ctx?.parsed?.y;
-                const label = ctx?.dataset?.label || "";
+              label: function (c) {
+                const v = c?.parsed?.y;
+                const label = c?.dataset?.label || "";
                 if (v === null || typeof v === "undefined") return label + ": -";
                 return label + ": " + Number(v || 0).toLocaleString();
               },
@@ -360,62 +619,112 @@
   // =========================================================
   // Charts init
   // =========================================================
-  function initCharts() {
-    const rawLabels = safeJsonFromScriptTag("chart-day-labels", []);
+  async function initChartsWithForecast() {
+    const root = getRoot();
 
+    const rawLabels = safeJsonFromScriptTag("chart-day-labels", []);
+    const ym = inferYmFromLabels(rawLabels);
+
+    // 당월 series(4)
     const sLong = safeJsonFromScriptTag("chart-cumsum", []);
     const sCar = safeJsonFromScriptTag("car-chart-cumsum", []);
     const sNl = safeJsonFromScriptTag("nonlife-chart-cumsum", []);
     const sLife = safeJsonFromScriptTag("life-chart-cumsum", []);
 
+    // 전월 series(4)
     const pLong = safeJsonFromScriptTag("prev-chart-cumsum", []);
     const pCar = safeJsonFromScriptTag("prev-car-chart-cumsum", []);
     const pNl = safeJsonFromScriptTag("prev-nonlife-chart-cumsum", []);
     const pLife = safeJsonFromScriptTag("prev-life-chart-cumsum", []);
 
-    const prevYm = safeJsonFromScriptTag("prev-ym", null); // 템플릿에서 json_script로 내려오면 OK
-    // json_script가 아니라 context 문자열로만 넣는 경우 대비: dataset에서 읽기
-    const root = document.getElementById("dash-sales");
-    const prevYm2 = (root?.dataset?.prevYm || "").trim();
-
+    // 전년도 series(4)
     const pyLong = safeJsonFromScriptTag("py-chart-cumsum", []);
-    const pyCar  = safeJsonFromScriptTag("py-car-chart-cumsum", []);
-    const pyNl   = safeJsonFromScriptTag("py-nonlife-chart-cumsum", []);
+    const pyCar = safeJsonFromScriptTag("py-car-chart-cumsum", []);
+    const pyNl = safeJsonFromScriptTag("py-nonlife-chart-cumsum", []);
     const pyLife = safeJsonFromScriptTag("py-life-chart-cumsum", []);
+
+    const prevYm = safeJsonFromScriptTag("prev-ym", null);
     const prevYearYm = safeJsonFromScriptTag("prev-year-ym", null);
+
+    // asof_day 결정:
+    // - “실제 데이터가 마지막으로 증가한 일자”를 asof로 쓰는게 가장 자연스러움(= 실제가 있는 구간까지 학습)
+    // - long(손생) 기준으로 잡고, 없으면 오늘 날짜로 fallback
+    const lastIdx = lastIncreaseIndex(Array.isArray(sLong) ? sLong : []);
+    const labelsLen = Array.isArray(rawLabels) ? rawLabels.length : 0;
+
+    let asofDay = 1;
+    if (lastIdx >= 0) asofDay = lastIdx + 1;
+    else {
+      const today = new Date();
+      const d = today.getDate();
+      asofDay = d > 0 ? d : 1;
+    }
+
+    // 범위 보정(1~말일)
+    if (labelsLen > 0) asofDay = Math.max(1, Math.min(labelsLen, asofDay));
+
+    // 예측 scope 결정(권장):
+    // - head 권한이면 branch가 사실상 고정일 수 있음
+    // - UI의 선택값을 기준으로 branch/part를 보내고
+    // - 서버에서 권한 스코프를 재검증
+    const { part, branch } = getFiltersFromDom(root);
+
+    // scope 파라미터 정책(너가 서버에서 맞춰주면 됨)
+    // - branch 선택되어 있으면 branch
+    // - part만 있으면 part
+    // - 둘 다 없으면 all
+    let scope = "all";
+    if (branch) scope = "branch";
+    else if (part) scope = "part";
+
+    // forecast fetch(ym이 없으면 skip)
+    let forecastPayload = null;
+    if (ym) {
+      forecastPayload = await fetchForecastOnce({
+        ym,
+        asofDay,
+        scope,
+        part,
+        branch,
+      });
+    }
 
     debugOnce({
       staticVer: getStaticVer(),
       chartJsLoaded: typeof window.Chart !== "undefined",
-      labelsLen: Array.isArray(rawLabels) ? rawLabels.length : "N/A",
+      ym,
+      asofDay,
+      scope,
+      part,
+      branch,
+      prevYm: prevYm || null,
+      prevYearYm: prevYearYm || null,
+      labelsLen: labelsLen || "N/A",
       seriesLens: {
         long: Array.isArray(sLong) ? sLong.length : "N/A",
         car: Array.isArray(sCar) ? sCar.length : "N/A",
         nonlife: Array.isArray(sNl) ? sNl.length : "N/A",
         life: Array.isArray(sLife) ? sLife.length : "N/A",
       },
-      prevSeriesLens: {
-        long: Array.isArray(pLong) ? pLong.length : "N/A",
-        car: Array.isArray(pCar) ? pCar.length : "N/A",
-        nonlife: Array.isArray(pNl) ? pNl.length : "N/A",
-        life: Array.isArray(pLife) ? pLife.length : "N/A",
-      },
-      prevYm: prevYm || prevYm2 || null,
+      forecastHasSeries: !!forecastPayload?.series
     });
 
-    const prevTag = (prevYm || prevYm2) ? String(prevYm || prevYm2) : "전월";
-
-    // ✅ 당월 + 전월 비교(모두 마지막 영수일자 이후 null로 끊기)
+    // ✅ 4개 차트 렌더
     renderCompareLineChart({
       canvasId: "dailyCumsumChart",
       warnId: "chartWarn",
-      chartKey: "__dailyCumsumChart",
+      chartKey: CHART_KEYS.long,
       thisMonthScriptId: "chart-cumsum",
       prevMonthScriptId: "prev-chart-cumsum",
-      yearAgoScriptId: "py-chart-cumsum",  
+      yearAgoScriptId: "py-chart-cumsum",
+      forecastSeriesKey: "long",
+      forecastPayload,
+      asofDay,
       thisLabel: "당월매출(손생)",
-      prevLabel: `전월매출(손생)`,
-      yearAgoLabel: `전년도매출(손생)`,
+      prevLabel: "전월매출(손생)",
+      yearAgoLabel: "전년도매출(손생)",
+      forecastLabel: "예상매출(손생)",
+      forecastBandLabel: "예측구간(손생)",
       useNlLifeUnifiedYAxis: false,
       trimAfterLast: true,
     });
@@ -423,13 +732,18 @@
     renderCompareLineChart({
       canvasId: "carDailyCumsumChart",
       warnId: "carChartWarn",
-      chartKey: "__carDailyCumsumChart",
+      chartKey: CHART_KEYS.car,
       thisMonthScriptId: "car-chart-cumsum",
       prevMonthScriptId: "prev-car-chart-cumsum",
-      yearAgoScriptId: "py-car-chart-cumsum",   
+      yearAgoScriptId: "py-car-chart-cumsum",
+      forecastSeriesKey: "car",
+      forecastPayload,
+      asofDay,
       thisLabel: "당월매출(자동차)",
-      prevLabel: `전월매출(자동차)`,
-      yearAgoLabel: `전년도매출(자동차)`,
+      prevLabel: "전월매출(자동차)",
+      yearAgoLabel: "전년도매출(자동차)",
+      forecastLabel: "예상매출(자동차)",
+      forecastBandLabel: "예측구간(자동차)",
       useNlLifeUnifiedYAxis: false,
       trimAfterLast: true,
     });
@@ -437,13 +751,18 @@
     renderCompareLineChart({
       canvasId: "nonlifeDailyCumsumChart",
       warnId: "nonlifeChartWarn",
-      chartKey: "__nonlifeDailyCumsumChart",
+      chartKey: CHART_KEYS.nonlife,
       thisMonthScriptId: "nonlife-chart-cumsum",
       prevMonthScriptId: "prev-nonlife-chart-cumsum",
-      yearAgoScriptId: "py-nonlife-chart-cumsum",  
+      yearAgoScriptId: "py-nonlife-chart-cumsum",
+      forecastSeriesKey: "nonlife",
+      forecastPayload,
+      asofDay,
       thisLabel: "당월매출(손보)",
-      prevLabel: `전월매출(손보)`,
-      yearAgoLabel: `전년도매출(손보)`,
+      prevLabel: "전월매출(손보)",
+      yearAgoLabel: "전년도매출(손보)",
+      forecastLabel: "예상매출(손보)",
+      forecastBandLabel: "예측구간(손보)",
       useNlLifeUnifiedYAxis: true, // ✅ 손보/생보만 y축 통일
       trimAfterLast: true,
     });
@@ -451,14 +770,19 @@
     renderCompareLineChart({
       canvasId: "lifeDailyCumsumChart",
       warnId: "lifeChartWarn",
-      chartKey: "__lifeDailyCumsumChart",
+      chartKey: CHART_KEYS.life,
       thisMonthScriptId: "life-chart-cumsum",
       prevMonthScriptId: "prev-life-chart-cumsum",
-      yearAgoScriptId: "py-life-chart-cumsum",  
+      yearAgoScriptId: "py-life-chart-cumsum",
+      forecastSeriesKey: "life",
+      forecastPayload,
+      asofDay,
       thisLabel: "당월매출(생보)",
-      prevLabel: `전월매출(생보)`,
-      yearAgoLabel: `전년도매출(생보)`,
-      useNlLifeUnifiedYAxis: true, // ✅ 손보/생보만 y축 통일
+      prevLabel: "전월매출(생보)",
+      yearAgoLabel: "전년도매출(생보)",
+      forecastLabel: "예상매출(생보)",
+      forecastBandLabel: "예측구간(생보)",
+      useNlLifeUnifiedYAxis: true,
       trimAfterLast: true,
     });
   }
@@ -483,15 +807,19 @@
   // Boot
   // =========================================================
   document.addEventListener("DOMContentLoaded", function () {
-    const root = document.getElementById("dash-sales");
+    const root = getRoot();
     const ver = getStaticVer();
+
     try {
       console.log("[dash_sales_page] loaded v=" + ver);
     } catch (e) {}
 
     initPartBranchSync(root);
     initLifeNlInsurerSync(root);
-    initCharts();
+
+    // ✅ 예측 포함 차트 init(비동기)
+    initChartsWithForecast();
+
     initPageSize();
   });
 })();

@@ -1,5 +1,6 @@
 # django_ma/dash/models.py
 from django.db import models
+from django.utils import timezone
 from django.conf import settings
 
 
@@ -75,3 +76,90 @@ class SalesRecord(models.Model):
 
     def __str__(self):
         return f"{self.policy_no} / {self.insurer} / {self.ym}"
+
+
+class SalesDailyAgg(models.Model):
+    """
+    학습/예측 공용 집계 테이블 (일 단위)
+    scope_type: all/part/branch
+    scope_key: '*' or part/branch 문자열
+    category: long(손생장기)/car/long_nonlife/long_life  (4개 차트 기준)
+    """
+    SCOPE_CHOICES = [("all", "all"), ("part", "part"), ("branch", "branch")]
+    CAT_CHOICES = [
+        ("long", "손생장기"),
+        ("car", "자동차"),
+        ("long_nonlife", "손보장기"),
+        ("long_life", "생보장기"),
+    ]
+
+    ym = models.CharField(max_length=7, db_index=True)  # YYYY-MM
+    day = models.PositiveSmallIntegerField(db_index=True)  # 1..31
+
+    scope_type = models.CharField(max_length=10, choices=SCOPE_CHOICES, db_index=True)
+    scope_key = models.CharField(max_length=100, db_index=True)  # '*' or value
+    category = models.CharField(max_length=20, choices=CAT_CHOICES, db_index=True)
+
+    amount = models.BigIntegerField(default=0)  # 해당 일자 매출 합계(영수금)
+    cumsum = models.BigIntegerField(default=0)  # 월 1일부터 해당일까지 누적(서버에서 채움)
+
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "dash_sales_daily_agg"
+        unique_together = [("ym", "day", "scope_type", "scope_key", "category")]
+        indexes = [
+            models.Index(fields=["ym", "scope_type", "scope_key", "category"]),
+        ]
+
+
+class SalesForecast(models.Model):
+    """
+    월말 총액 예측(분위수) + 메타
+    같은 ym/scope/asof_day/category/model_ver는 1개로 upsert 가능
+    """
+    ym = models.CharField(max_length=7, db_index=True)
+    asof_day = models.PositiveSmallIntegerField(db_index=True)
+
+    scope_type = models.CharField(max_length=10, db_index=True)
+    scope_key = models.CharField(max_length=100, db_index=True)
+    category = models.CharField(max_length=20, db_index=True)
+
+    model_ver = models.CharField(max_length=40, default="lgbm_v1", db_index=True)
+
+    pred_total_p10 = models.BigIntegerField(null=True, blank=True)
+    pred_total_p50 = models.BigIntegerField(null=True, blank=True)
+    pred_total_p90 = models.BigIntegerField(null=True, blank=True)
+
+    # 실제 asof 누적(디버그/검증용)
+    actual_to_date = models.BigIntegerField(default=0)
+
+    created_at = models.DateTimeField(default=timezone.now, db_index=True)
+
+    class Meta:
+        db_table = "dash_sales_forecast"
+        unique_together = [("ym", "asof_day", "scope_type", "scope_key", "category", "model_ver")]
+        indexes = [
+            models.Index(fields=["ym", "scope_type", "scope_key", "asof_day"]),
+        ]
+
+
+class SalesForecastDaily(models.Model):
+    """
+    일별 예측(분위수) - 차트에 바로 쓰기 좋게
+    """
+    forecast = models.ForeignKey(SalesForecast, on_delete=models.CASCADE, related_name="days")
+    day = models.PositiveSmallIntegerField()
+
+    pred_amount_p10 = models.BigIntegerField(null=True, blank=True)
+    pred_amount_p50 = models.BigIntegerField(null=True, blank=True)
+    pred_amount_p90 = models.BigIntegerField(null=True, blank=True)
+
+    pred_cumsum_p10 = models.BigIntegerField(null=True, blank=True)
+    pred_cumsum_p50 = models.BigIntegerField(null=True, blank=True)
+    pred_cumsum_p90 = models.BigIntegerField(null=True, blank=True)
+
+    class Meta:
+        db_table = "dash_sales_forecast_daily"
+        unique_together = [("forecast", "day")]
+        indexes = [models.Index(fields=["forecast", "day"])]

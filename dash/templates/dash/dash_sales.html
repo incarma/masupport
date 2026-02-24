@@ -9,12 +9,15 @@
 {% with STATIC_VER="20260118-01" %}
 
 <div class="container-fluid mt-4" id="dash-sales"
-     data-upload-url="{% url 'dash_sales_upload' %}"
+     data-upload-url="{% url 'dash:dash_sales_upload' %}"
+     data-forecast-url="{% url 'dash:dash_forecast_api' %}"
+     data-today="{% now 'Y-m-d' %}"
      data-initial-part="{{ filter_part|default:''|escapejs }}"
      data-initial-branch="{{ filter_branch|default:''|escapejs }}"
      data-initial-life-nl="{{ filter_life_nl|default:''|escapejs }}"
      data-initial-insurer="{{ filter_insurer|default:''|escapejs }}"
-     data-static-version="{{ STATIC_VER }}">
+     data-static-version="{{ STATIC_VER }}"
+     data-static-ver="{{ STATIC_VER }}">
 
   <!-- =========================
        Header
@@ -109,7 +112,7 @@
 
         <div class="d-flex gap-2 ms-auto" style="white-space:nowrap;">
           <button type="submit" class="btn btn-primary text-nowrap">조회</button>
-          <a href="{% url 'dash_sales' %}" class="btn btn-outline-secondary text-nowrap">초기화</a>
+          <a href="{% url 'dash:dash_sales' %}" class="btn btn-outline-secondary text-nowrap">초기화</a>
         </div>
 
         <input type="hidden" name="page_size" value="{{ page_size|default:50 }}">

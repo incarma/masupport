@@ -4,11 +4,11 @@ Django settings for web_ma project (Django 5.2.x)
 Goals:
 - APP_ENV(dev/prod)로 .env 자동 선택
 - dev/prod 모두 DATABASE_URL 단일화
-- Windows/한글 로케일 환경에서 psycopg2 UnicodeDecodeError 방지용 UTF-8 강제
+- Windows/한글 로케일 환경에서 psycopg2/psycopg UnicodeDecodeError 방지용 UTF-8 강제
 - 운영에서만 secure cookie / whitenoise manifest 적용
+- dev에서 libpq(PG* env) 오염 방지 + docker(db host) 연결 사고 방지
+- ✅ 500 에러 traceback이 반드시 로그로 남도록 로깅 체계 강화
 """
-
-# django_ma/web_ma/settings.py
 
 from __future__ import annotations
 
@@ -30,25 +30,41 @@ def _read_app_env() -> str:
     return (os.environ.get("APP_ENV") or os.environ.get("ENV") or "dev").strip().lower()
 
 
-def _resolve_env_path(app_env: str) -> str:
-    """ENV_FILE 지정 시 우선 사용, 아니면 app_env에 따라 기본 .env 선택."""
+def _resolve_env_path(base_dir: Path, app_env: str) -> str:
+    """
+    ENV_FILE 지정 시 우선 사용.
+    아니면 app_env에 따라 기본 .env 선택.
+
+    ⚠️ 실행 위치 의존 제거: 항상 BASE_DIR 기준 절대 경로 사용
+    - prod:  <BASE_DIR>/docker/.env.prod
+    - dev:   <BASE_DIR>/.env.dev
+    """
     env_file = (os.environ.get("ENV_FILE") or "").strip()
     if env_file:
-        return env_file
-    return ".env.prod" if app_env in ("prod", "production") else ".env.dev"
+        p = Path(env_file)
+        return str(p if p.is_absolute() else (base_dir / p))
+
+    if app_env in ("prod", "production"):
+        return str(base_dir / "docker" / ".env.prod")
+    return str(base_dir / ".env.dev")
 
 
 APP_ENV = _read_app_env()
-ENV_PATH = _resolve_env_path(APP_ENV)
+ENV_PATH = _resolve_env_path(BASE_DIR, APP_ENV)
 config = Config(RepositoryEnv(ENV_PATH))
 
 # -----------------------------------------------------------------------------
-# Core flags
+# dev에서 libpq가 PG* 환경변수 읽어서 오염되는 케이스 방지
+# - PowerShell/Windows에서 흔하게 발생: 이전 세션 값이 남아 DSN이 꼬임
 # -----------------------------------------------------------------------------
-SECRET_KEY = config("SECRET_KEY")
+if APP_ENV == "dev":
+    for k in ("PGHOST", "PGPORT", "PGDATABASE", "PGUSER", "PGPASSWORD"):
+        os.environ.pop(k, None)
 
-# DEBUG는 환경변수/설정 혼선을 줄이기 위해 decouple에서만 읽도록 통일
-# (필요하면 DJANGO_DEBUG를 .env에 넣어 운영/개발에서 컨트롤)
+# =============================================================================
+# Core flags
+# =============================================================================
+SECRET_KEY = config("SECRET_KEY")
 DEBUG = config("DJANGO_DEBUG", default=False, cast=bool)
 
 IS_PROD = APP_ENV in ("prod", "production") and not DEBUG
@@ -80,7 +96,6 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django.contrib.humanize",
-
     # Local apps
     "home",
     "join",
@@ -90,7 +105,6 @@ INSTALLED_APPS = [
     "dash",
     "manual",
     "partner.apps.PartnerConfig",
-
     # 3rd party
     "widget_tweaks",
     "django_extensions",
@@ -105,7 +119,6 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
-
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -147,13 +160,17 @@ DATABASES = {
     "default": dj_database_url.parse(
         DATABASE_URL,
         conn_max_age=600,
-        ssl_require=False,  # 로컬/사내망에서는 False가 편함 (운영 SSL 필요 시 DATABASE_URL로 제어 권장)
+        ssl_require=False,  # 운영 SSL 필요 시 URL로 제어 권장
     )
 }
 
-# ✅ Windows/한글 로케일에서 psycopg2 UnicodeDecodeError 방지
+# ✅ UTF-8 강제 (psycopg2/psycopg 공통으로 안전)
 DATABASES["default"].setdefault("OPTIONS", {})
-DATABASES["default"]["OPTIONS"]["options"] = "-c client_encoding=UTF8"
+DATABASES["default"]["OPTIONS"].update({"client_encoding": "UTF8"})
+
+# 🚨 dev 환경에서 docker DB(host=db) 연결 시도 차단 (사고 방지)
+if APP_ENV == "dev" and DATABASES["default"].get("HOST") == "db":
+    raise RuntimeError("🚨 dev 환경에서 docker DB(db) 연결 차단")
 
 # ✅ 사고 방지: DEBUG 환경에서 운영 DB 키워드 감지 시 차단
 if DEBUG and ("django_ma_prod" in DATABASE_URL or "ma_prod" in DATABASE_URL):
@@ -201,7 +218,7 @@ MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
 # =============================================================================
-# 9) Session / Cookie (운영에서만 secure)
+# 9) Session / Cookie (운영에서만 secure + domain)
 # =============================================================================
 SESSION_ENGINE = "django.contrib.sessions.backends.db"
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
@@ -214,11 +231,12 @@ CSRF_COOKIE_HTTPONLY = False
 SESSION_COOKIE_SECURE = IS_PROD
 CSRF_COOKIE_SECURE = IS_PROD
 
-# ✅ 서브도메인/Edge 환경 안정화 (둘 다 쓰는 경우 권장)
-SESSION_COOKIE_DOMAIN = ".ma-support.kr"
-CSRF_COOKIE_DOMAIN = ".ma-support.kr"
+# ✅ prod에서만 도메인 쿠키 적용(로컬 개발 쿠키 꼬임 방지)
+if IS_PROD:
+    SESSION_COOKIE_DOMAIN = ".ma-support.kr"
+    CSRF_COOKIE_DOMAIN = ".ma-support.kr"
 
-# ✅ CSRF/세션 기본 권장 (로그인 폼은 top-level navigation이므로 Lax가 안전)
+# ✅ 로그인 폼은 top-level navigation이므로 Lax가 안전
 SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SAMESITE = "Lax"
 
@@ -249,9 +267,7 @@ UPLOAD_TEMP_DIR = Path(config("UPLOAD_TEMP_DIR", default=str(MEDIA_ROOT / "uploa
 # 12) CKEditor
 # =============================================================================
 CKEDITOR_UPLOAD_PATH = "uploads/"
-CKEDITOR_CONFIGS = {
-    "default": {"toolbar": "full", "height": 420, "width": "100%"}
-}
+CKEDITOR_CONFIGS = {"default": {"toolbar": "full", "height": 420, "width": "100%"}}
 
 # =============================================================================
 # 13) Default PK
@@ -259,67 +275,107 @@ CKEDITOR_CONFIGS = {
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # =============================================================================
-# 14) Logging (500 에러 Traceback 확보 + 기존 로그 유지)
+# 14) Logging (✅ 500 Traceback 확보 / 운영에서도 누락 방지)
+# -----------------------------------------------------------------------------
+# 핵심 포인트:
+# - django.request: 500 및 에러 traceback의 표준 로거 (반드시 ERROR 핸들러 지정)
+# - root: 누락 방지용으로 ERROR를 파일/콘솔에 연결
+# - 파일은 RotatingFileHandler로 용량 폭주 방지
+# - 로그 디렉터리 고정: <BASE_DIR>/logs/*
 # =============================================================================
+LOG_DIR = BASE_DIR / "logs"
+LOG_DIR.mkdir(exist_ok=True)
+
+LOG_FORMAT = "[{asctime}] {levelname} {name} {message}"
+LOG_STYLE = "{"
+
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
-
+    "formatters": {
+        "verbose": {"format": LOG_FORMAT, "style": LOG_STYLE},
+    },
     "handlers": {
-        # 기존 access 로그 (유지)
-        "file": {
-            "level": "INFO",
-            "class": "logging.FileHandler",
-            "filename": BASE_DIR / "access.log",
-        },
-
-        # ✅ 500 에러 전용 로그
-        "error_file": {
-            "level": "ERROR",
-            "class": "logging.FileHandler",
-            "filename": BASE_DIR / "django_error.log",
-        },
-
-        # ✅ 로컬/운영 콘솔 출력
         "console": {
             "class": "logging.StreamHandler",
+            "formatter": "verbose",
+        },
+        "access_file": {
+            "level": "INFO",
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": str(LOG_DIR / "access.log"),
+            "maxBytes": 10 * 1024 * 1024,
+            "backupCount": 5,
+            "formatter": "verbose",
+        },
+        "error_file": {
+            "level": "ERROR",
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": str(LOG_DIR / "django_error.log"),
+            "maxBytes": 10 * 1024 * 1024,
+            "backupCount": 10,
+            "formatter": "verbose",
+        },
+        "app_file": {
+            "level": "INFO",
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": str(LOG_DIR / "django_app.log"),
+            "maxBytes": 10 * 1024 * 1024,
+            "backupCount": 5,
+            "formatter": "verbose",
         },
     },
-
     "loggers": {
-        # 기존 유지
-        "django.security": {
-            "handlers": ["file"],
-            "level": "INFO",
-            "propagate": True,
-        },
-        "accounts.access": {
-            "handlers": ["file"],
-            "level": "INFO",
-            "propagate": False,
-        },
-
-        # ✅ 핵심: 500 Internal Server Error Traceback
+        # ✅ 500 / 템플릿 에러 / NoReverseMatch 등 request-level 에러가 여기로 떨어짐
         "django.request": {
             "handlers": ["error_file", "console"],
             "level": "ERROR",
             "propagate": False,
         },
+        # 보안 관련
+        "django.security": {
+            "handlers": ["access_file", "console"],
+            "level": "INFO",
+            "propagate": True,
+        },
+        # CSRF 실패 경고는 별도 로거로 크게 찍기
+        "django.security.csrf": {
+            "handlers": ["access_file", "console"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+        # 기존 커스텀 접근 로그 유지
+        "accounts.access": {
+            "handlers": ["access_file"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        # commission 쪽도 문제 추적 쉬우라고 기본 app 로그 연결(선택)
+        "commission": {
+            "handlers": ["app_file", "error_file", "console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+    },
+    # ✅ root에 ERROR를 연결해 “어디 로거에도 안 잡힌 예외”를 방지
+    "root": {
+        "handlers": ["error_file", "console"],
+        "level": "ERROR",
     },
 }
 
-# runserver 요청 로그 소음 제거 (유지)
+# runserver 요청 로그 소음 제거(유지)
 logging.getLogger("django.server").setLevel(logging.ERROR)
-
 
 CSRF_FAILURE_VIEW = "accounts.views.csrf_failure"
 
-LOGGING["loggers"]["django.security.csrf"] = {
-    "handlers": ["file", "console"],
-    "level": "WARNING",
-    "propagate": False,
-}
-
-
+# =============================================================================
+# 15) Reverse proxy / SSL (Cloudflare + Nginx 종료 전제)
+# =============================================================================
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 USE_X_FORWARDED_HOST = True
+
+# =============================================================================
+# 16) Dash models directory (pipeline artifacts)
+# =============================================================================
+DASH_MODEL_DIR = str(BASE_DIR / "var" / "dash_models")

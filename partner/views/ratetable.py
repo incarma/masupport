@@ -1,22 +1,26 @@
 # partner/views/ratetable.py
 # ------------------------------------------------------------
-# ✅ RateTable (요율현황) API
+# ✅ RateTable (요율현황) API (FINAL REFACTOR)
 # - userlist/json
 # - excel download
-# - excel upload
+# - excel upload  ✅ (Sheet: 업로드/Sheet1/첫시트 + 사번없으면 C열 + 손해보험/생명보험 매핑)
 # - user detail
 # - template excel
 # ------------------------------------------------------------
 
+from __future__ import annotations
+
 import io
 import traceback
 from datetime import datetime
+from typing import Optional, Tuple
 
 import pandas as pd
 from django.core.files.storage import default_storage
+from django.db import transaction
+from django.db.models import Q
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.http import require_GET, require_POST
-from django.db import transaction
 
 from accounts.models import CustomUser
 from partner.models import RateTable, SubAdminTemp
@@ -25,13 +29,102 @@ from .responses import json_err, json_ok
 from .utils import find_table_rate
 
 
+# =============================================================================
+# Excel Upload Helpers (SSOT)
+# =============================================================================
+
+SHEET_PRIORITIES = ("업로드", "Sheet1")  # ✅ user request
+EMP_COL_C_INDEX = 2  # ✅ user request: C열(3번째 열)
+COL_NONLIFE = "손해보험"  # ✅ user request: 손해보험 → 손보테이블(non_life_table)
+COL_LIFE = "생명보험"    # ✅ user request: 생명보험 → 생보테이블(life_table)
+
+EMP_COL_CANDIDATES = ("사번", "사원번호", "ID", "id", "사원ID")
+
+
+def _to_str(v) -> str:
+    return ("" if v is None else str(v)).strip()
+
+
+def _to_emp_id(v) -> str:
+    """
+    사번 정규화:
+    - 숫자/문자 혼합 케이스 대비
+    - 기본은 숫자만 추출하되, 숫자가 없으면 원문 유지
+    """
+    s = _to_str(v)
+    digits = "".join(ch for ch in s if ch.isdigit())
+    return digits or s
+
+
+def _pick_sheet_name(xls: pd.ExcelFile) -> str:
+    sheets = list(getattr(xls, "sheet_names", []) or [])
+    for name in SHEET_PRIORITIES:
+        if name in sheets:
+            return name
+    return sheets[0] if sheets else "Sheet1"
+
+
+def _detect_header_row(df_raw: pd.DataFrame, max_scan: int = 8) -> int:
+    """
+    헤더 자동 탐지:
+    첫 N행 중에서 손해보험/생명보험/사번 등 키워드가 가장 많이 포함된 행을 헤더로 판단
+    """
+    targets = {COL_NONLIFE, COL_LIFE, "사번", "사원번호", "성명", "이름"}
+    best_i, best_score = 0, -1
+    scan = min(max_scan, len(df_raw))
+    for i in range(scan):
+        row = df_raw.iloc[i].tolist()
+        row_str = [_to_str(v) for v in row if v is not None]
+        score = sum(1 for t in targets if any(t in s for s in row_str))
+        if score > best_score:
+            best_score = score
+            best_i = i
+    return best_i
+
+
+def _resolve_emp_col(df: pd.DataFrame) -> Optional[str]:
+    """
+    사번 컬럼 결정:
+    1) '사번' 등 명시 컬럼 우선
+    2) 없으면 무조건 C열(3번째 열)
+    """
+    for name in EMP_COL_CANDIDATES:
+        if name in df.columns:
+            return name
+    if len(df.columns) >= EMP_COL_C_INDEX + 1:
+        return df.columns[EMP_COL_C_INDEX]
+    return None
+
+
+def _safe_json(res: HttpResponse) -> JsonResponse:
+    # (placeholder) - server side에서 쓰지 않음. 남겨두지 않음.
+    raise NotImplementedError
+
+
+# =============================================================================
+# APIs
+# =============================================================================
+
 @require_GET
 def ajax_rate_userlist(request):
-    branch = (request.GET.get("branch") or "").strip()
+    """
+    JS(/static/js/partner/manage_table.js)에서 기대하는 JSON:
+    { data: [{branch, team_a, team_b, team_c, name, id, non_life_table, life_table}, ...] }
+    """
+    branch = _to_str(request.GET.get("branch"))
     if not branch:
         return JsonResponse({"data": []})
 
-    users = CustomUser.objects.filter(branch=branch, is_active=True).values("id", "name", "branch").order_by("name")
+    users = (
+        CustomUser.objects
+        .filter(branch=branch, is_active=True)
+        # 1️⃣ name이 null/빈값 제외
+        .exclude(Q(name__isnull=True) | Q(name__exact=""))
+        # 2️⃣ name에 '*' 포함 제외
+        .exclude(name__contains="*")
+        .values("id", "name", "branch")
+        .order_by("name")
+    )
     user_ids = [u["id"] for u in users]
 
     team_map = {
@@ -59,20 +152,28 @@ def ajax_rate_userlist(request):
                 "life_table": rate_info.get("life_table", ""),
             }
         )
+
     return JsonResponse({"data": data})
 
 
+@require_GET
 def ajax_rate_userlist_excel(request):
-    branch = (request.GET.get("branch") or "").strip()
+    """
+    요율현황 엑셀 다운로드
+    - 접근제어: superuser 아니면 본인지점만
+    """
+    branch = _to_str(request.GET.get("branch"))
     if not branch:
         return JsonResponse({"error": "지점을 선택해주세요."}, status=400)
 
     user = request.user
-    if user.grade != "superuser" and branch != user.branch:
+    if user.grade != "superuser" and branch != _to_str(getattr(user, "branch", "")):
         return JsonResponse({"error": "다른 지점 데이터에는 접근할 수 없습니다."}, status=403)
 
     users = list(
-        CustomUser.objects.filter(branch=branch, is_active=True).values("id", "name", "branch").order_by("name")
+        CustomUser.objects.filter(branch=branch, is_active=True)
+        .values("id", "name", "branch")
+        .order_by("name")
     )
     user_ids = [u["id"] for u in users]
 
@@ -119,49 +220,119 @@ def ajax_rate_userlist_excel(request):
 @require_POST
 @transaction.atomic
 def ajax_rate_userlist_upload(request):
+    """
+    ✅ 업로드 요구사항 반영 (FINAL)
+    1) 시트명: '업로드'가 없으면 'Sheet1' 시트도 허용(그것도 없으면 첫 시트)
+    2) '사번' 컬럼이 없어도 C열(3번째 열)을 사번으로 인식
+    3) '손해보험' → RateTable.non_life_table, '생명보험' → RateTable.life_table 매핑
+    + 접근제어: superuser 아니면 본인지점만 업로드 가능 (branch param 기준)
+    """
     excel_file = request.FILES.get("excel_file")
+    branch = _to_str(request.POST.get("branch"))
+
     if not excel_file:
         return json_err("엑셀 파일이 없습니다.", status=400)
+    if not branch:
+        return json_err("branch가 없습니다.", status=400)
 
+    # 권한: superuser 아니면 본인지점만
+    user = request.user
+    user_branch = _to_str(getattr(user, "branch", ""))
+    if getattr(user, "grade", "") != "superuser" and branch != user_branch:
+        return json_err("다른 지점 데이터에는 업로드할 수 없습니다.", status=403)
+
+    file_path = None
     try:
         file_path = default_storage.save(f"tmp/{excel_file.name}", excel_file)
         file_path_full = default_storage.path(file_path)
 
-        df = pd.read_excel(file_path_full, sheet_name="업로드").fillna("")
-        required_cols = ["사번", "손보테이블", "생보테이블"]
-        for col in required_cols:
-            if col not in df.columns:
-                default_storage.delete(file_path)
-                return json_err(f"'{col}' 컬럼이 없습니다.", status=400)
+        # 1) 시트 선택(업로드/Sheet1/첫시트)
+        xls = pd.ExcelFile(file_path_full)
+        sheet = _pick_sheet_name(xls)
 
-        updated_count, skipped_count = 0, 0
+        # 2) 헤더 자동탐지 (raw -> header row -> 실제 df)
+        df_raw = pd.read_excel(xls, sheet_name=sheet, header=None, dtype=str)
+        header_row = _detect_header_row(df_raw)
+        df = pd.read_excel(xls, sheet_name=sheet, header=header_row, dtype=str).fillna("")
+
+        # 컬럼 문자열 정리
+        df.columns = [_to_str(c) for c in df.columns]
+
+        # 3) 사번 컬럼 결정(명시 없으면 C열)
+        emp_col = _resolve_emp_col(df)
+        if not emp_col:
+            return json_err("사번 컬럼을 찾을 수 없습니다. (명시 컬럼 없으면 C열이 필요)", status=400)
+
+        # 4) 보험 컬럼 존재 확인 (손해보험/생명보험)
+        if COL_NONLIFE not in df.columns:
+            return json_err(f"'{COL_NONLIFE}' 컬럼이 없습니다.", status=400)
+        if COL_LIFE not in df.columns:
+            return json_err(f"'{COL_LIFE}' 컬럼이 없습니다.", status=400)
+
+        # 5) row → 업데이트 목록 구성
+        updates: list[Tuple[str, str, str]] = []
         for _, row in df.iterrows():
-            user_id = str(row["사번"]).strip()
-            if not user_id:
+            emp_id = _to_emp_id(row.get(emp_col))
+            if not emp_id:
+                continue
+
+            nonlife = _to_str(row.get(COL_NONLIFE))
+            life = _to_str(row.get(COL_LIFE))
+
+            # 둘다 비면 스킵(원치 않는 빈값 덮어쓰기 방지)
+            if not nonlife and not life:
+                continue
+
+            updates.append((emp_id, nonlife, life))
+
+        if not updates:
+            return json_err("업데이트할 데이터가 없습니다.", status=400)
+
+        # 6) CustomUser 매칭 (branch 스코프)
+        emp_ids = [u[0] for u in updates]
+        qs = CustomUser.objects.filter(branch=branch, is_active=True, id__in=emp_ids)
+        users_map = {str(u.id): u for u in qs}
+
+        updated_count = 0
+        skipped_count = 0
+
+        for emp_id, nonlife, life in updates:
+            target_user = users_map.get(str(emp_id))
+            if not target_user:
                 skipped_count += 1
                 continue
 
-            u = CustomUser.objects.filter(id=user_id).first()
-            if not u:
-                skipped_count += 1
-                continue
+            defaults = {}
+            if nonlife:
+                defaults["non_life_table"] = nonlife
+            if life:
+                defaults["life_table"] = life
 
-            RateTable.objects.update_or_create(
-                user=u,
-                defaults={"non_life_table": row["손보테이블"], "life_table": row["생보테이블"]},
-            )
+            RateTable.objects.update_or_create(user=target_user, defaults=defaults)
             updated_count += 1
 
-        default_storage.delete(file_path)
-        return json_ok({"message": f"업로드 완료 ({updated_count}건 업데이트 / {skipped_count}건 스킵됨)"})
+        return json_ok(
+            {"message": f"업로드 완료 ({updated_count}건 업데이트 / {skipped_count}건 스킵됨, sheet={sheet})"}
+        )
+
     except Exception as e:
         traceback.print_exc()
         return json_err(f"업로드 중 오류: {str(e)}", status=500)
 
+    finally:
+        if file_path:
+            try:
+                default_storage.delete(file_path)
+            except Exception:
+                pass
+
 
 @require_GET
 def ajax_rate_user_detail(request):
-    user_id = (request.GET.get("user_id") or "").strip()
+    """
+    대상자 요율 상세 + find_table_rate 적용
+    """
+    user_id = _to_str(request.GET.get("user_id"))
     if not user_id:
         return json_err("user_id가 없습니다.", status=400)
 
@@ -188,8 +359,10 @@ def ajax_rate_user_detail(request):
                 }
             }
         )
+
     except CustomUser.DoesNotExist:
         return json_err("대상자를 찾을 수 없습니다.", status=404)
+
     except Exception as e:
         traceback.print_exc()
         return json_err(str(e), status=500)
@@ -197,15 +370,24 @@ def ajax_rate_user_detail(request):
 
 @require_GET
 def ajax_rate_userlist_template_excel(request):
+    """
+    ✅ 업로드 양식 엑셀 (FINAL)
+    - '업로드' 시트 제공하되, 시스템은 'Sheet1'도 허용하므로 안내에 반영
+    - 컬럼: 손해보험 / 생명보험
+    - 사번 컬럼이 없어도 C열을 사번으로 인식하므로 가이드에 반영
+    """
     try:
-        branch = (request.GET.get("branch") or "").strip()
-        df = pd.DataFrame(columns=["사번", "손보테이블", "생보테이블"])
+        branch = _to_str(request.GET.get("branch"))
+
+        # 실제 업로드 권장 양식(명시 사번 포함 버전)
+        df = pd.DataFrame(columns=["사번", COL_NONLIFE, COL_LIFE])
 
         guide = pd.DataFrame(
             [
-                ["업로드 시트명은 반드시 '업로드' 이어야 합니다.", "", ""],
-                ["컬럼명은 정확히: 사번 / 손보테이블 / 생보테이블", "", ""],
-                ["사번은 CustomUser.id와 매칭됩니다.", "", ""],
+                ["시트명은 '업로드' 권장이나 'Sheet1'도 업로드 가능합니다.", "", ""],
+                ["'사번' 컬럼이 없더라도 C열(3번째 열)을 사번으로 인식합니다.", "", ""],
+                [f"보험 컬럼명은 정확히: {COL_NONLIFE} / {COL_LIFE}", "", ""],
+                ["사번은 CustomUser.id와 매칭됩니다. (지점 스코프 적용)", "", ""],
             ],
             columns=["안내", " ", "  "],
         )
@@ -214,6 +396,7 @@ def ajax_rate_userlist_template_excel(request):
         with pd.ExcelWriter(output, engine="openpyxl") as writer:
             df.to_excel(writer, index=False, sheet_name="업로드")
             guide.to_excel(writer, index=False, sheet_name="안내")
+
             ws = writer.book["업로드"]
             ws.column_dimensions["A"].width = 14
             ws.column_dimensions["B"].width = 20
@@ -226,6 +409,7 @@ def ajax_rate_userlist_template_excel(request):
         )
         resp["Content-Disposition"] = f'attachment; filename="{filename}"'
         return resp
+
     except Exception as e:
         traceback.print_exc()
         return json_err(f"양식 생성 오류: {str(e)}", status=500)

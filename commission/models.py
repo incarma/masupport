@@ -1,3 +1,4 @@
+# django_ma/commission/models.py
 from __future__ import annotations
 
 from decimal import Decimal
@@ -15,9 +16,8 @@ class DepositSummary(models.Model):
     """
     사용자(사번) 단위의 채권 요약 테이블.
 
-    주의:
-    - user는 OneToOne + primary_key 이므로 row의 PK는 user_id(사번)와 동일.
-    - 업로드 핸들러가 update_or_create(user_id=uid)를 많이 사용함.
+    - user는 OneToOne + primary_key 이므로 row PK == user_id(사번 문자열)
+    - 업로드 핸들러 update_or_create(user_id=uid)를 SSOT로 사용
     """
 
     DIV_CHOICES = (
@@ -158,7 +158,7 @@ class DepositOther(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = "deposit_others"  # 운영 테이블명 유지
+        db_table = "deposit_others"
         verbose_name = "기타채권"
         verbose_name_plural = "기타채권"
 
@@ -171,7 +171,6 @@ class DepositUploadLog(models.Model):
     upload_type = models.CharField(max_length=50, db_index=True, verbose_name="업로드 구분")
     uploaded_at = models.DateTimeField(auto_now=True, verbose_name="마지막 업로드 일시")
 
-    # ✅ db_column 제거 (DB 컬럼이 row_count / file_name 이기 때문)
     row_count = models.IntegerField(default=0, verbose_name="행 수(추정)")
     file_name = models.CharField(max_length=255, blank=True, default="", verbose_name="파일명")
 
@@ -181,17 +180,16 @@ class DepositUploadLog(models.Model):
             UniqueConstraint(fields=["part", "upload_type"], name="uq_deposit_uploadlog_part_type"),
         ]
 
+    def __str__(self) -> str:
+        return f"{self.part}/{self.upload_type} ({self.uploaded_at:%Y-%m-%d})"
+
 
 # =============================================================================
 # Approval / Efficiency (수수료결재 / 지점효율)
 # =============================================================================
 
 class ApprovalExcelUploadLog(models.Model):
-    """
-    결재/효율 업로드 로그(월도 + 부서 + kind unique)
-
-    - update_or_create 시 uploaded_at이 갱신되어야 하므로 auto_now=True 사용.
-    """
+    """결재/효율 업로드 로그(월도 + 부서 + kind unique)."""
 
     KIND_EFFICIENCY = "efficiency"
     KIND_APPROVAL = "approval"

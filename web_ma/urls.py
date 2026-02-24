@@ -7,14 +7,21 @@ URL configuration for web_ma project.
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib.auth import views as auth_views
+from django.urls import include, path, re_path
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect
-from django.urls import include, path, re_path
 from django.views.static import serve
 
 from accounts import views as accounts_views
 from accounts.custom_admin import custom_admin_site
 from accounts.views import SessionCloseLoginView
+
+import web_ma.views as web_views
+
+
+
+# ✅ 500 에러 핸들러(운영에서 traceback 강제 로깅용)
+handler500 = "web_ma.views.handler500"
 
 
 def home_redirect(request):
@@ -59,8 +66,6 @@ urlpatterns = [
     # 를 관리하고 있으므로, 여기서는 prefix 1번만 붙여 위임합니다.
     # ---------------------------------------------------------------------
     path("accounts/", include(("accounts.urls", "accounts"), namespace="accounts")),
-    path("api/accounts/search-user/", accounts_views.api_search_user, name="api_accounts_search_user"),
-
 ]
 
 # -------------------------------------------------------------------------

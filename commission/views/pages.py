@@ -1,16 +1,23 @@
 # django_ma/commission/views/pages.py
 from __future__ import annotations
 
+from datetime import date
+from typing import Tuple
+
 from django.shortcuts import redirect, render
 from django.urls import reverse
+from django.utils import timezone
 
 from accounts.decorators import grade_required
 from accounts.models import CustomUser
 
-from commission.models import DepositUploadLog
+from commission.models import DepositUploadLog, ApprovalPending, EfficiencyPayExcess
 from commission.upload_handlers.registry import supported_upload_types
 
 
+# ---------------------------------------------------------------------
+# Deposit upload types (fixed order for UI)
+# ---------------------------------------------------------------------
 UPLOAD_TYPES_ORDER = [
     "최종지급액",
     "환수지급예상",
@@ -24,71 +31,183 @@ UPLOAD_TYPES_ORDER = [
 ]
 
 
-def redirect_to_deposit(request):
-    return redirect("commission:deposit_home")
-
-
-@grade_required("staff", "admin", "superuser")
-def deposit_home(request):
-    # 1) 행: 현재 등록 유저들의 part 목록
-    parts = (
+# =============================================================================
+# Shared helpers (SSOT)
+# =============================================================================
+def _list_parts_excluding_centers() -> list[str]:
+    qs = (
         CustomUser.objects
         .exclude(part__isnull=True)
         .exclude(part__exact="")
-        .exclude(part__icontains="센터")   # ✅ 추가
+        .exclude(part__icontains="센터")
         .values_list("part", flat=True)
         .distinct()
         .order_by("part")
     )
-    parts = list(parts)
+    return list(qs)
 
-    # 2) 열: 업로드 구분 목록 (고정 순서)
-    #   - registry 기반으로 하고 싶으면 supported_upload_types()를 쓰되, 순서 유지를 위해 ORDER를 권장
+
+def _ym_from_year_month(year: int, month: int) -> str:
+    return f"{year:04d}-{month:02d}"
+
+
+def _parse_year_month(request) -> Tuple[int, int]:
+    """
+    GET year/month 파싱:
+    - 없으면 현재 날짜 기반
+    - month 범위 방어 (1~12)
+    """
+    today = timezone.localdate()
+    raw_year = (request.GET.get("year") or "").strip()
+    raw_month = (request.GET.get("month") or "").strip()
+
+    year = int(raw_year) if raw_year.isdigit() else today.year
+    month = int(raw_month) if raw_month.isdigit() else today.month
+
+    if month < 1:
+        month = 1
+    elif month > 12:
+        month = 12
+    return year, month
+
+
+def _year_options(selected_year: int, back_years: int = 5) -> list[int]:
+    """
+    연도 드롭다운 옵션 생성:
+    - 기본: 현재연도 기준 최근 back_years년 + 현재 포함
+    - 사용자가 과거/미래 연도를 직접 GET으로 넣어도 옵션에 포함되게 방어
+    """
+    today = timezone.localdate()
+    base_year = today.year
+    years = list(range(base_year, base_year - back_years - 1, -1))
+    if selected_year not in years:
+        years.append(selected_year)
+        years = sorted(set(years), reverse=True)
+    return years
+
+
+def _month_options() -> list[int]:
+    return list(range(1, 13))
+
+
+# =============================================================================
+# Redirect
+# =============================================================================
+def redirect_to_deposit(request):
+    return redirect("commission:deposit_home")
+
+
+# =============================================================================
+# Deposit Home
+# =============================================================================
+@grade_required("staff", "admin", "superuser")
+def deposit_home(request):
+    parts = _list_parts_excluding_centers()
+
     supported = set(supported_upload_types())
     upload_types = [x for x in UPLOAD_TYPES_ORDER if x in supported]
-    # 혹시 registry에 없는 항목도 보여야 한다면 위 필터를 제거하세요:
-    # upload_types = UPLOAD_TYPES_ORDER
 
-    # 3) 셀 데이터: (part, upload_type) -> uploaded_at
     logs = (
         DepositUploadLog.objects
         .filter(part__in=parts, upload_type__in=upload_types)
         .only("part", "upload_type", "uploaded_at")
     )
 
-    # upload_dates[part][upload_type] = "YYYY-MM-DD HH:MM"
-    upload_dates = {p: {} for p in parts}
+    upload_dates: dict[str, dict[str, str]] = {p: {} for p in parts}
     for row in logs:
         ts = getattr(row, "uploaded_at", None)
         upload_dates[row.part][row.upload_type] = ts.strftime("%Y-%m-%d") if ts else "-"
 
-    # 빈 셀도 "-"로 채우고 싶으면:
     for p in parts:
         for ut in upload_types:
             upload_dates[p].setdefault(ut, "-")
 
     ctx = {
-        "parts": parts,                 # 열 (부서목록)
-        "upload_types": upload_types,   # 행 (업로드구분)
-        "upload_dates": upload_dates,   # dict[part][upload_type] = date str
-        "supported_upload_types": upload_types,  # 템플릿에서 data-upload-date 부여용
-        # ✅ 공용 대상자 검색 모달 SSOT (deposit_home.html에서 include 시 사용)
+        "parts": parts,
+        "upload_types": upload_types,
+        "upload_dates": upload_dates,
+        "supported_upload_types": upload_types,
         "accounts_search_url": reverse("accounts:api_search_user"),
-        # 기존 deposit_home이 쓰는 다른 ctx들도 그대로 유지
     }
     return render(request, "commission/deposit_home.html", ctx)
 
+
+# =============================================================================
+# Approval Home (수수료결재)
+# =============================================================================
 @grade_required("staff", "admin", "superuser")
 def approval_home(request):
-    return render(request, "commission/approval_home.html")
+    """
+    ✅ approval_home.html이 기대하는 키(SSOT)
+      - years, months
+      - selected_year, selected_month
+      - parts, selected_part
+      - selected_ym (YYYY-MM)
+      - pending_rows, efficiency_rows (둘 다 select_related('user'))
+
+    GET 컨트롤은 year/month/part로 유지.
+    """
+    parts = _list_parts_excluding_centers()
+
+    year, month = _parse_year_month(request)
+    selected_ym = _ym_from_year_month(year, month)
+
+    selected_part = (request.GET.get("part") or "").strip()
+    if selected_part and selected_part not in parts:
+        selected_part = ""
+
+    pending_qs = (
+        ApprovalPending.objects
+        .select_related("user")
+        .filter(
+            ym=selected_ym,
+            user__isnull=False,
+            approval_flag="N",  # ✅ 결재 N
+            user__regist__in=["손생등록", "손보등록", "생보등록"],  # ✅ 유자격 조건
+        )
+    )
+    
+    efficiency_qs = (
+        EfficiencyPayExcess.objects
+        .select_related("user")
+        .filter(
+            ym=selected_ym,
+            user__isnull=False,
+            pay_amount_sum__gt=10_000_000,   # ✅ 1천만원 이상만
+        )
+    )
+
+    if selected_part:
+        pending_qs = pending_qs.filter(user__part=selected_part)
+        efficiency_qs = efficiency_qs.filter(user__part=selected_part)
+
+    pending_rows = pending_qs.order_by("user__part", "user__branch", "user__name", "user__id")
+    efficiency_rows = efficiency_qs.order_by("user__part", "user__branch", "user__name", "user__id")
+
+    ctx = {
+        # controls options
+        "years": _year_options(year, back_years=5),
+        "months": _month_options(),
+        # selected values (template compares to these)
+        "selected_year": year,
+        "selected_month": month,
+        "parts": parts,
+        "selected_part": selected_part,
+        # reference key
+        "selected_ym": selected_ym,
+        # rows
+        "pending_rows": pending_rows,
+        "efficiency_rows": efficiency_rows,
+        # common
+        "accounts_search_url": reverse("accounts:api_search_user"),
+    }
+    return render(request, "commission/approval_home.html", ctx)
 
 
+# =============================================================================
+# Support Home
+# =============================================================================
 @grade_required("staff", "admin", "superuser")
 def support_home(request):
-    """
-    support 페이지가 별도로 존재한다면 템플릿을 연결.
-    템플릿이 없다면(운영중 미사용) deposit으로 보내도 안전.
-    """
-    # 실제 템플릿이 생기면 아래로 교체:
-    # return render(request, "commission/support_home.html")
+    # 미사용이면 안전하게 deposit으로 보냄
     return redirect("commission:deposit_home")

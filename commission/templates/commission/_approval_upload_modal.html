@@ -1,0 +1,111 @@
+{# commission/templates/commission/_approval_upload_modal.html #}
+<div class="modal fade" id="approvalExcelUploadModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+
+      <form
+        id="approvalUploadForm"
+        class="needs-validation"
+        method="post"
+        enctype="multipart/form-data"
+        action="{% url 'commission:approval_upload_excel' %}"
+        novalidate
+      >
+        {% csrf_token %}
+
+        <div class="modal-header">
+          <h5 class="modal-title">수수료결재 엑셀 업로드</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="닫기"></button>
+        </div>
+
+        <div class="modal-body">
+
+          <div class="row g-2 align-items-start">
+            <!-- 월도 -->
+            <div class="col-12 col-md-4">
+              <label class="form-label mb-1">월도 (YYYY-MM)</label>
+              <input
+                name="ym"
+                class="form-control"
+                value="{{ selected_ym|default:'' }}"
+                placeholder="예: 2026-02"
+                autocomplete="off"
+                required
+              >
+              <div class="form-text">현재 조회 월도가 자동 입력됩니다. 필요 시 수정하세요.</div>
+              <div class="invalid-feedback">월도를 입력하세요. (예: 2026-02)</div>
+            </div>
+
+            <!-- 부서 -->
+            <div class="col-12 col-md-4">
+              <label class="form-label mb-1">부서</label>
+              <select name="part" class="form-select">
+                <option value="" {% if not selected_part %}selected{% endif %}>전체</option>
+                {% for p in parts %}
+                  <option value="{{ p }}" {% if p == selected_part %}selected{% endif %}>{{ p }}</option>
+                {% endfor %}
+              </select>
+              <div class="form-text">전체 업로드가 필요하면 “전체”로 두세요.</div>
+            </div>
+
+            <!-- 구분 -->
+            <div class="col-12 col-md-4">
+              <label class="form-label mb-1">구분</label>
+              <select name="kind" class="form-select" required>
+                <option value="approval" selected>수수료결재</option>
+                <option value="efficiency">지점효율</option>
+              </select>
+              <div class="invalid-feedback">구분을 선택하세요.</div>
+            </div>
+          </div>
+
+          <hr class="my-3">
+
+          <!-- 파일 -->
+          <div class="mb-2">
+            <label class="form-label mb-1">엑셀 파일</label>
+            <input
+              type="file"
+              name="excel_file"
+              class="form-control"
+              accept=".xlsx,.xls"
+              required
+            >
+            <div class="invalid-feedback">업로드할 엑셀 파일을 선택하세요.</div>
+          </div>
+
+          <div class="alert alert-secondary small mb-0">
+            업로드가 완료되면 결과가 페이지에 반영됩니다.
+            <span class="text-muted d-block">※ 업로드 중에는 창을 닫지 마세요.</span>
+          </div>
+
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">닫기</button>
+          <button type="submit" class="btn btn-primary" id="approvalUploadSubmitBtn">
+            업로드
+          </button>
+        </div>
+      </form>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  // Bootstrap validation (가벼운 클라이언트 방어)
+  // - JS 모듈(approval_excel_upload.js)과 충돌하지 않도록 "검증만" 수행
+  (function () {
+    const form = document.getElementById("approvalUploadForm");
+    if (!form) return;
+
+    form.addEventListener("submit", function (e) {
+      if (!form.checkValidity()) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      form.classList.add("was-validated");
+    }, { passive: false });
+  })();
+</script>

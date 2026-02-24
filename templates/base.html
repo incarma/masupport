@@ -70,11 +70,11 @@
               <a class="nav-link dropdown-toggle {% if '/dash' in request.path %}active{% else %}inactive{% endif %}"
                  href="#" id="dashMenu" data-bs-toggle="dropdown">대시보드</a>
               <ul class="dropdown-menu" aria-labelledby="dashMenu">
-                <li><a class="dropdown-item" href="{% url 'dash_sales' %}">매출현황</a></li>
-                <li><a class="dropdown-item" href="{% url 'dash_recruit' %}">리쿠르팅</a></li>
-                <li><a class="dropdown-item" href="{% url 'dash_retention' %}">유지율</a></li>
+                <li><a class="dropdown-item" href="{% url 'dash:dash_sales' %}">매출현황</a></li>
+                <li><a class="dropdown-item" href="{% url 'dash:dash_recruit' %}">리쿠르팅</a></li>
+                <li><a class="dropdown-item" href="{% url 'dash:dash_retention' %}">유지율</a></li>
                 {% if user.grade == 'superuser' %}
-                  <li><a class="dropdown-item" href="{% url 'dash_goals' %}">목표관리</a></li>
+                  <li><a class="dropdown-item" href="{% url 'dash:dash_goals' %}">목표관리</a></li>
                 {% endif %}
               </ul>
             </li>
@@ -207,11 +207,11 @@
             </h2>
             <div id="mDash" class="accordion-collapse collapse" aria-labelledby="mDashHead" data-bs-parent="#mobileMenuAccordion">
               <div class="accordion-body pt-0">
-                <a class="d-block py-2" href="{% url 'dash_sales' %}">매출현황</a>
-                <a class="d-block py-2" href="{% url 'dash_recruit' %}">리쿠르팅</a>
-                <a class="d-block py-2" href="{% url 'dash_retention' %}">유지율</a>
+                <a class="d-block py-2" href="{% url 'dash:dash_sales' %}">매출현황</a>
+                <a class="d-block py-2" href="{% url 'dash:dash_recruit' %}">리쿠르팅</a>
+                <a class="d-block py-2" href="{% url 'dash:dash_retention' %}">유지율</a>
                 {% if user.grade == 'superuser' %}
-                  <a class="d-block py-2" href="{% url 'dash_goals' %}">목표관리</a>
+                  <a class="d-block py-2" href="{% url 'dash:dash_goals' %}">목표관리</a>
                 {% endif %}
               </div>
             </div>

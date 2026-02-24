@@ -21,6 +21,14 @@
    * ========================================================== */
   const root = document.getElementById("deposit-home");
   if (!root) return;
+  // ✅ FIX:
+  // - 일부 data-bind 섹션이 #deposit-home 바깥에 있을 수 있어
+  //   바인딩 탐색 범위를 document로 확장한다.
+  // - 이 스크립트는 #deposit-home 존재 시에만 실행되므로 안전.
+
+  console.log("[DepositHome] loaded", { href: location.href });
+  
+  const bindRoot = document;
 
   const DEBUG = false;
   const log = (...args) => DEBUG && console.log("[DepositHome]", ...args);
@@ -264,17 +272,21 @@
     async summary(userId) {
       const url = `${URLS.summary}?user=${encodeURIComponent(userId)}`;
       const data = await Net.fetchJSON(url);
+
+      // ✅ backend가 {"ok":true,"rows":[{...}]}로 주는 케이스 흡수
+      if (Array.isArray(data?.rows)) return data.rows[0] || null;
+
       return Net.unwrapFirstObject(data, ["summary", "data", "result", "item"]);
     },
     async surety(userId) {
       const url = `${URLS.surety}?user=${encodeURIComponent(userId)}`;
       const data = await Net.fetchJSON(url);
-      return Net.unwrapFirstArray(data, ["items", "results", "data", "list"]);
+      return Net.unwrapFirstArray(data, ["rows", "items", "results", "data", "list"]);
     },
     async other(userId) {
       const url = `${URLS.other}?user=${encodeURIComponent(userId)}`;
       const data = await Net.fetchJSON(url);
-      return Net.unwrapFirstArray(data, ["items", "results", "data", "list"]);
+      return Net.unwrapFirstArray(data, ["rows", "items", "results", "data", "list"]);
     },
   };
 
@@ -299,9 +311,37 @@
       "summary.month1": "summary.div_1m",
       "summary.month2": "summary.div_2m",
       "summary.month3": "summary.div_3m",
+
+      // ✅ FIX: prefix 없이 쓰인 data-bind도 summary 기준으로 매핑
+      // (deposit_home.html에서 final_payment 같은 키를 그대로 쓰는 케이스 대응)
+      "final_payment": "summary.final_payment",
+      "sales_total": "summary.sales_total",
+      "refund_expected": "summary.refund_expected",
+      "pay_expected": "summary.pay_expected",
+      "maint_total": "summary.maint_total",
+      "debt_total": "summary.debt_total",
+      "surety_total": "summary.surety_total",
+      "other_total": "summary.other_total",
+      "required_debt": "summary.required_debt",
+      "final_excess_amount": "summary.final_excess_amount",
+      // 유지합계/유지채권합계(백엔드 패치 반영 시)
+      "surety_keep_total": "summary.surety_keep_total",
+      "other_keep_total": "summary.other_keep_total",
+      "debt_keep_total": "summary.debt_keep_total",
     };
 
-    const resolveBindKey = (key) => BIND_ALIAS[key] || key;
+    function resolveBindKey(key) {
+      const k = String(key || "").trim();
+      if (!k) return k;
+      if (BIND_ALIAS[k]) return BIND_ALIAS[k];
+
+      // ✅ FIX: prefix 없는 키는 summary → target 순으로 자동 탐색하도록 변환
+      // ex) "final_payment" -> "summary.final_payment"
+      if (!k.includes(".")) {
+        return `summary.${k}`;
+      }
+      return k;
+    }
 
     const getByPath = (obj, path) => {
       const parts = String(path || "").split(".");
@@ -321,7 +361,7 @@
     function renderBinds({ target, summary }) {
       const ctx = { target: target || {}, summary: summary || {} };
 
-      root.querySelectorAll("[data-bind]").forEach((node) => {
+      bindRoot.querySelectorAll("[data-bind]").forEach((node) => {
         const rawKey = node.getAttribute("data-bind");
         const key = resolveBindKey(rawKey);
         const type = (node.getAttribute("data-type") || "").trim(); // money/percent/plain
@@ -407,7 +447,7 @@
     }
 
     function clearUI() {
-      root.querySelectorAll("[data-bind]").forEach((n) => (n.textContent = "-"));
+      bindRoot.querySelectorAll("[data-bind]").forEach((n) => (n.textContent = "-"));
 
       if (els.suretyTbody) {
         els.suretyTbody.innerHTML = `
@@ -450,6 +490,26 @@
         api.other(uid),
       ]);
 
+      // ✅ 1회 강제 확인(운영에서 거슬리면 확인 후 제거)
+      if (!window.__depositSummaryOnce) {
+        window.__depositSummaryOnce = true;
+        console.log("[DepositHome] summary keys:", Object.keys(summary || {}));
+        console.log("[DepositHome] summary sample:", summary);
+      }
+
+      // DEBUG helper: 템플릿이 요구하는 summary.* 키가 응답에 없는 경우 경고
+      if (DEBUG) {
+        const keys = new Set(Object.keys(summary || {}));
+        const missing = [];
+        bindRoot.querySelectorAll("[data-bind^='summary.']").forEach((el) => {
+          const k = (el.getAttribute("data-bind") || "").trim().slice("summary.".length);
+          if (k && !keys.has(k)) missing.push(k);
+        });
+        if (missing.length) {
+          console.warn("[DepositHome] summary missing keys:", Array.from(new Set(missing)));
+        }
+      }
+
       Binder.renderBinds({ target: user, summary });
       Tables.renderSurety(surety);
       Tables.renderOther(other);
@@ -475,21 +535,50 @@
    * ========================================================== */
   function getSelectedUserIdFromEvent(e) {
     const d = e?.detail || {};
-    return (
+
+    // 1) 가장 흔한 케이스: detail에 id가 직접 들어오는 경우
+    const direct =
       d.id ||
       d.user_id ||
       d.userId ||
-      d.user ||
       d.empId ||
       d.emp_id ||
-      d.employee_id ||
-      ""
-    );
+      d.employee_id;
+
+    if (direct) return String(direct).trim();
+
+    // 2) ✅ 버그 원인: detail.user / detail.target / detail.payload 등이 "객체"로 오는 경우
+    //    (search_user_modal이 user 객체를 그대로 detail에 실어 보내는 패턴)
+    const obj =
+      d.user ||
+      d.target ||
+      d.payload ||
+      d.data ||
+      d.result ||
+      null;
+
+    if (obj && typeof obj === "object") {
+      const oid =
+        obj.id ||
+        obj.user_id ||
+        obj.userId ||
+        obj.empId ||
+        obj.emp_id ||
+        obj.employee_id;
+
+      if (oid) return String(oid).trim();
+    }
+
+    // 3) detail.user가 문자열로 오는 케이스 방어
+    if (typeof d.user === "string") return d.user.trim();
+
+    return "";
   }
 
   function bindUserSelected() {
     const handler = (e) => {
       const userId = getSelectedUserIdFromEvent(e);
+      if (userId === "[object Object]" || userId.includes("object Object")) return;
       if (!userId) return;
 
       pushUserToUrl(userId);

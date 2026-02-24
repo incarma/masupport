@@ -28,84 +28,62 @@
   border-bottom: 1px solid #eef2f7;
 }
 
-/* 테이블: 내용 기준(max-content) */
-#suretyTable,
-#otherTable {
-  width: max-content;
-  min-width: 100%;
-  table-layout: auto;
-}
+/* ----------------------------------------------------------
+  * ✅ 보증보험/기타채권: colgroup(%) 기반 컬럼폭 고정
+  * - table-layout: fixed + width:100% 가 필수
+  * - 전체 폭은 부모(.table-responsive) 폭을 그대로 따라감
+  * ---------------------------------------------------------- */
+ #suretyTable,
+ #otherTable {
+   width: 100%;
+   min-width: 100%;
+   table-layout: fixed;
+ }
 
 /* 기본: 줄바꿈 금지 */
 #suretyTable th, #suretyTable td,
 #otherTable th,  #otherTable td {
   white-space: nowrap;
   word-break: keep-all;
-  overflow: visible;
-  text-overflow: clip;
+  overflow: hidden;          /* fixed 레이아웃에서 overflow-visible이면 컬럼폭이 깨질 수 있음 */
+  text-overflow: ellipsis;   /* 기본은 말줄임(필요시 컬럼별로 override 가능) */
   vertical-align: middle;
 }
 
-/* ---------- surety 컬럼 폭 ---------- */
-#suretyTable th:nth-child(1),
-#suretyTable td:nth-child(1) { min-width: 110px; }
+/* ---------- surety: colgroup 비율(%) 설정 ---------- */
+/* 필요하면 여기 숫자만 바꾸면 됨 (합계 100% 권장) */
+#suretyColGroup col[data-col="product"] { width: 14% !important; }
+#suretyColGroup col[data-col="policy"]  { width: 32% !important; }
+#suretyColGroup col[data-col="amount"]  { width: 14% !important; }
+#suretyColGroup col[data-col="status"]  { width: 10% !important; }
+#suretyColGroup col[data-col="start"]   { width: 15% !important; }
+#suretyColGroup col[data-col="end"]     { width: 15% !important; }
 
-#suretyTable th:nth-child(2),
-#suretyTable td:nth-child(2) {
-  width: 100px;
-  max-width: 100px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  cursor: pointer;
-}
-
+/* 금액 우측 정렬 */
 #suretyTable th:nth-child(3),
-#suretyTable td:nth-child(3) {
-  width: 100px;
-  min-width: 100px;
-  text-align: right;
-}
+#suretyTable td:nth-child(3) { text-align: right; }
 
-#suretyTable th:nth-child(4),
-#suretyTable td:nth-child(4) { min-width: 80px; }
+/* 증권번호는 hover/tooltip 용도로 cursor 유지 */
+#suretyTable th:nth-child(2),
+#suretyTable td:nth-child(2) { cursor: pointer; }
 
-#suretyTable th:nth-child(5),
-#suretyTable td:nth-child(5) { min-width: 110px; }
-
-#suretyTable th:nth-child(6),
-#suretyTable td:nth-child(6) { min-width: 110px; }
-
-/* ---------- other 컬럼 폭 ---------- */
-#otherTable th:nth-child(1),
-#otherTable td:nth-child(1) { min-width: 110px; }
-
-#otherTable th:nth-child(2),
-#otherTable td:nth-child(2) { min-width: 110px; }
-
+/* ---------- other: colgroup 비율(%) 설정 ---------- */
+/* 필요하면 여기 숫자만 바꾸면 됨 (합계 100% 권장) */
+#otherColGroup col[data-col="product"] { width: 10% !important; }
+#otherColGroup col[data-col="type"]    { width: 10% !important; }
+#otherColGroup col[data-col="amount"]  { width: 12% !important; }
+#otherColGroup col[data-col="status"]  { width: 10% !important; }
+#otherColGroup col[data-col="bond"]    { width: 10% !important; }
+#otherColGroup col[data-col="start"]   { width: 10% !important; }
+#otherColGroup col[data-col="memo"]    { width: 38% !important; }
+ 
+/* 금액 우측 정렬 */
 #otherTable th:nth-child(3),
-#otherTable td:nth-child(3) {
-  width: 100px;
-  min-width: 100px;
-  text-align: right;
-}
+#otherTable td:nth-child(3) { text-align: right; }
 
-#otherTable th:nth-child(4),
-#otherTable td:nth-child(4) { min-width: 80px; }
-
-#otherTable th:nth-child(5),
-#otherTable td:nth-child(5) { min-width: 110px; }
-
-#otherTable th:nth-child(6),
-#otherTable td:nth-child(6) { min-width: 95px; }
-
+/* 비고는 hover/tooltip 용도로 cursor 유지 */
 #otherTable th:nth-child(7),
-#otherTable td:nth-child(7) {
-  width: 200px;
-  max-width: 200px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  cursor: pointer;
-}
+#otherTable td:nth-child(7) { cursor: pointer; }
 
 /* ellipsis cell 내부 span */
 .ellipsis-cell {

@@ -4,7 +4,7 @@
 # ------------------------------------------------------------
 
 from django.shortcuts import redirect, render
-from django.urls import reverse
+from django.urls import reverse, NoReverseMatch
 from django.contrib.auth.decorators import login_required
 
 from accounts.decorators import grade_required
@@ -12,7 +12,6 @@ from partner.models import SubAdminTemp
 
 from .context import build_manage_context
 from .constants import BRANCH_PARTS
-from .utils import find_part_by_branch
 
 
 @login_required
@@ -35,7 +34,7 @@ def manage_calculate(request):
         update_process_name="partner:efficiency_update_process_date",
         boot_key="ManageefficiencyBoot",
         extra_context={
-            "search_user_url": reverse("api_accounts_search_user"),
+            "search_user_url": _get_search_user_url(),
             "efficiency_confirm_groups_url": reverse("partner:efficiency_confirm_groups"),
         },
     )
@@ -65,6 +64,31 @@ def manage_tables(request):
     return render(request, "partner/manage_tables.html")
 
 
+def _get_search_user_url() -> str:
+    """
+    accounts 검색 API URL name이 환경/리팩터에 따라 달라져도 partner 페이지가 죽지 않게 방어.
+    """
+    candidates = [
+        # ✅ SSOT (accounts/urls.py)
+        "accounts:api_search_user",
+        # ✅ Legacy alias (accounts/urls.py)
+        "accounts:search_user_legacy",
+        # (혹시 namespace 없이 등록된 환경 대비)
+        "api_search_user",
+        "search_user_legacy",
+        # (과거/오타/구버전 대비)
+        "accounts:api_accounts_search_user",
+        "api_accounts_search_user",
+    ]
+    for name in candidates:
+        try:
+            return reverse(name)
+        except NoReverseMatch:
+            continue
+    # 최후의 보루: 기준 엔드포인트(프로젝트에서 이미 사용 중인 경로)
+    return "/api/accounts/search-user/"
+
+
 @login_required
 @grade_required("superuser", "head", "leader")
 def manage_charts(request):
@@ -86,7 +110,7 @@ def manage_charts(request):
             "branches": sorted(list(BRANCH_PARTS.keys())),
             "selected_branch": selected_branch,
             "subadmin_info": subadmin_info,
-            "search_user_url": reverse("api_accounts_search_user"),
+            "search_user_url": _get_search_user_url(),
         },
     )
 

@@ -7,23 +7,18 @@
 {% block content %}
 <!-- =========================================================
   Approval Home (수수료 결재)
-  - 기능 변경 없음
   - CSS 정합성 유지 (commission.css)
-  - 가독성/유지보수 리팩토링 완료
+  - view/pages.py와 컨텍스트 키 계약(SSOT) 일치 버전
 ========================================================== -->
 
 <div class="container my-4">
 
-  <!-- =========================
-    Page Title
-  ========================== -->
+  <!-- Page Title -->
   <h3 class="text-center fw-bold mb-4" style="color:#003f7d;">
     수수료 결재 페이지
   </h3>
 
-  <!-- =====================================================
-    1) Search Controls (연 / 월 / 부서)
-  ====================================================== -->
+  <!-- 1) Search Controls (연 / 월 / 부서) -->
   <div class="card shadow p-3 border-0 rounded-4 mb-3 deposit-maxw mx-auto">
     <form id="controlsForm" class="row g-2 align-items-end" method="get">
 
@@ -39,12 +34,11 @@
 
       <!-- 월 -->
       <div class="col-6 col-md-2">
-        <label class="form-label mb-1">월도</label>
+        <label class="form-label mb-1">월</label>
         <select name="month" class="form-select">
-          {% for m in "123456789101112"|make_list %}
-            <option value="{{ forloop.counter }}"
-              {% if selected_month == forloop.counter %}selected{% endif %}>
-              {{ forloop.counter|stringformat:"02d" }}
+          {% for m in months %}
+            <option value="{{ m }}" {% if m == selected_month %}selected{% endif %}>
+              {{ m|stringformat:"02d" }}
             </option>
           {% endfor %}
         </select>
@@ -54,7 +48,7 @@
       <div class="col-12 col-md-4">
         <label class="form-label mb-1">부서</label>
         <select name="part" class="form-select">
-          <option value="">전체</option>
+          <option value="" {% if not selected_part %}selected{% endif %}>전체</option>
           {% for p in parts %}
             <option value="{{ p }}" {% if p == selected_part %}selected{% endif %}>{{ p }}</option>
           {% endfor %}
@@ -63,15 +57,13 @@
 
       <!-- 조회 -->
       <div class="col-12 col-md-2 d-grid">
-        <button class="btn btn-primary">조회</button>
+        <button class="btn btn-primary" type="submit">조회</button>
       </div>
 
     </form>
   </div>
 
-  <!-- =====================================================
-    2) Result Tables
-  ====================================================== -->
+  <!-- 2) Result Tables -->
   <div class="card shadow p-3 border-0 rounded-4 deposit-maxw mx-auto">
 
     <!-- Excel Upload -->
@@ -81,9 +73,7 @@
       </button>
     </div>
 
-    <!-- =========================
-      2-1) 지점효율 초과
-    ========================== -->
+    <!-- 2-1) 지점효율 초과 -->
     <div class="text-center fw-bold mb-2">지점효율지급 초과현황</div>
 
     <div class="table-responsive commission-table-scroll">
@@ -111,9 +101,7 @@
 
     <hr class="my-4">
 
-    <!-- =========================
-      2-2) 수수료 미결
-    ========================== -->
+    <!-- 2-2) 수수료 미결 -->
     <div class="text-center fw-bold mb-2">수수료 미결현황</div>
 
     <div class="table-responsive commission-table-scroll">
@@ -147,9 +135,6 @@
   </div>
 </div>
 
-<!-- =========================
-  Excel Upload Modal / Toast
-========================== -->
 {% include "commission/_approval_upload_modal.html" %}
 <script src="{% static 'js/commission/approval_excel_upload.js' %}"></script>
 {% endblock %}

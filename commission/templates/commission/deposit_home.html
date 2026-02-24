@@ -14,7 +14,8 @@
 -------------------------------------------------------------- -->
 
 <!-- Deposit Home 전용 CSS -->
-<link rel="stylesheet" href="{% static 'css/apps/commission.css' %}">
+<link rel="stylesheet" href="{% static 'css/apps/commission.css' %}{% if STATIC_VERSION %}?v={{ STATIC_VERSION }}{% endif %}">
+
 
 <div class="container mt-5">
   <div class="mx-auto deposit-maxw">
@@ -633,6 +634,14 @@
 
           <div class="table-responsive mb-3">
             <table id="suretyTable" class="table table-sm align-middle mb-0 info-table">
+              <colgroup id="suretyColGroup">
+                <col data-col="product">
+                <col data-col="policy">
+                <col data-col="amount">
+                <col data-col="status">
+                <col data-col="start">
+                <col data-col="end">
+              </colgroup>
               <thead>
                 <tr>
                   <th class="text-nowrap">상품명</th>
@@ -660,6 +669,15 @@
 
           <div class="table-responsive">
             <table id="otherTable" class="table table-sm align-middle mb-0 info-table">
+              <colgroup id="otherColGroup">
+                <col data-col="product">
+                <col data-col="type">
+                <col data-col="amount">
+                <col data-col="status">
+                <col data-col="bond">
+                <col data-col="start">
+                <col data-col="memo">
+              </colgroup>
               <thead>
                 <tr>
                   <th class="text-nowrap">상품명</th>
