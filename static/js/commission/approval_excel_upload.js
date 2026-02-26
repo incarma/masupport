@@ -16,12 +16,15 @@
   /* ==========================================================
    * 0) Guard
    * ========================================================== */
-  const form = document.getElementById("approvalExcelUploadForm");
+  // ✅ 템플릿 SSOT: _approval_upload_modal.html
+  const form = document.getElementById("approvalUploadForm");
   if (!form) return;
 
   const resultEl = document.getElementById("approvalUploadResult");
   const toastEl = document.getElementById("approvalUploadToast");
   const modalEl = document.getElementById("approvalExcelUploadModal");
+  const failWrap = document.getElementById("approvalFailDownloadWrap");
+  const failLink = document.getElementById("approvalFailDownloadLink");
 
   /* ==========================================================
    * 1) Tiny DOM utils
@@ -66,6 +69,18 @@
     resultEl.className = `mt-3 small text-center text-${type}`;
   };
 
+  const setFailDownload = (url) => {
+    if (!failWrap || !failLink) return;
+    const u = (url || "").toString().trim();
+    if (!u) {
+      failWrap.classList.add("d-none");
+      failLink.setAttribute("href", "#");
+      return;
+    }
+    failLink.setAttribute("href", u);
+    failWrap.classList.remove("d-none");
+  };
+
   /* ==========================================================
    * 4) Robust input readers (템플릿 변경 대응)
    * ========================================================== */
@@ -91,10 +106,12 @@
   /* ==========================================================
    * 5) Validation
    * ========================================================== */
-  const validate = ({ year, month, kind, fileEl }) => {
-    if (!year) return { ok: false, msg: "연도를 선택해주세요." };
-    if (!month) return { ok: false, msg: "월도를 선택해주세요." };
-    // ✅ part는 '전체' 업로드도 가능하므로 필수 체크 제거 (기존 유지)
+  const validate = ({ ym, kind, fileEl }) => {
+    // ✅ 템플릿 SSOT: ym(YYYY-MM) 입력을 사용 (서버도 ym 지원)
+    if (!ym) return { ok: false, msg: "월도를 입력해주세요. (예: 2026-02)" };
+    if (!/^\d{4}-\d{2}$/.test(ym)) {
+      return { ok: false, msg: "월도 형식이 올바르지 않습니다. (예: 2026-02)" };
+    }
     if (!kind) return { ok: false, msg: "구분을 선택해주세요." };
     if (!fileEl) return { ok: false, msg: "엑셀 파일을 선택해주세요." };
 
@@ -123,11 +140,10 @@
     return parts.join(" · ");
   };
 
-  const buildFormData = ({ year, month, part, kind, fileEl }) => {
-    // ✅ FormData 구성 + 값 강제 set (name 누락/폼 밖 배치/브라우저 이슈 대비) - 기존 유지
+  const buildFormData = ({ ym, part, kind, fileEl }) => {
+    // ✅ SSOT: form에 있는 ym/part/kind/excel_file 기반 + 값 강제 set
     const fd = new FormData(form);
-    fd.set("year", year);
-    fd.set("month", month);
+    fd.set("ym", ym);
     fd.set("part", part);
     fd.set("kind", kind);
 
@@ -144,7 +160,10 @@
   const postFormData = async (fd) => {
     const res = await fetch(form.action, {
       method: "POST",
-      headers: { "X-CSRFToken": getCSRFToken() },
+      headers: {
+        "X-CSRFToken": getCSRFToken(),
+        "X-Requested-With": "XMLHttpRequest",
+      },
       body: fd,
     });
 
@@ -159,9 +178,11 @@
     e.preventDefault();
     if (isSubmitting()) return;
 
-    // (중요) 템플릿 id/name이 바뀌어도 최대한 살아남게 selector 여러 개 지원 - 기존 유지
-    const year = readSelectValue(['select[name="year"]', "#year", "#approvalYear"]);
-    const month = readSelectValue(['select[name="month"]', "#month", "#approvalMonth"]);
+    // 모달 재사용 시 이전 상태 초기화
+    setFailDownload("");
+
+    // ✅ 템플릿 SSOT 값 읽기
+    const ym = readSelectValue(['input[name="ym"]', "#ym", "#approvalYm"]);
     const part = readSelectValue(['select[name="part"]', "#part", "#approvalPart"]);
     const kind = readSelectValue(['select[name="kind"]', "#kind", "#approvalKind"]);
 
@@ -173,7 +194,7 @@
       'input[type="file"]',
     ]);
 
-    const v = validate({ year, month, kind, fileEl });
+    const v = validate({ ym, kind, fileEl });
     if (!v.ok) {
       showResult(v.msg, "danger");
       return;
@@ -182,7 +203,7 @@
     setSubmitting(true);
     showResult("업로드 중...", "muted");
 
-    const fd = buildFormData({ year, month, part, kind, fileEl });
+    const fd = buildFormData({ ym, part, kind, fileEl });
 
     try {
       const { res, data } = await postFormData(fd);
@@ -194,6 +215,8 @@
       }
 
       showResult(buildSuccessMessage(data), "success");
+      // ✅ missing_sample이 있으면 서버가 fail_download_url 내려줌
+      setFailDownload(data?.fail_download_url || "");
       showToast();
 
       // ✅ 모달 닫고, 쿼리스트링 유지한 채 새로고침 - 기존 유지

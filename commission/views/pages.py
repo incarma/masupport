@@ -1,23 +1,23 @@
 # django_ma/commission/views/pages.py
 from __future__ import annotations
 
-from datetime import date
 from typing import Tuple
 
 from django.shortcuts import redirect, render
-from django.urls import reverse
+from django.urls import NoReverseMatch, reverse
 from django.utils import timezone
 
 from accounts.decorators import grade_required
 from accounts.models import CustomUser
-
-from commission.models import DepositUploadLog, ApprovalPending, EfficiencyPayExcess
+from commission.models import ApprovalPending, DepositUploadLog, EfficiencyPayExcess
 from commission.upload_handlers.registry import supported_upload_types
 
+from .constants import EXCESS_THRESHOLD
 
-# ---------------------------------------------------------------------
-# Deposit upload types (fixed order for UI)
-# ---------------------------------------------------------------------
+# =============================================================================
+# UI order (fixed)
+# =============================================================================
+
 UPLOAD_TYPES_ORDER = [
     "최종지급액",
     "환수지급예상",
@@ -30,14 +30,14 @@ UPLOAD_TYPES_ORDER = [
     "응당손보",
 ]
 
-
 # =============================================================================
 # Shared helpers (SSOT)
 # =============================================================================
+
+
 def _list_parts_excluding_centers() -> list[str]:
     qs = (
-        CustomUser.objects
-        .exclude(part__isnull=True)
+        CustomUser.objects.exclude(part__isnull=True)
         .exclude(part__exact="")
         .exclude(part__icontains="센터")
         .values_list("part", flat=True)
@@ -73,12 +73,11 @@ def _parse_year_month(request) -> Tuple[int, int]:
 
 def _year_options(selected_year: int, back_years: int = 5) -> list[int]:
     """
-    연도 드롭다운 옵션 생성:
-    - 기본: 현재연도 기준 최근 back_years년 + 현재 포함
+    연도 드롭다운 옵션:
+    - 현재연도 기준 최근 back_years년 + 현재 포함
     - 사용자가 과거/미래 연도를 직접 GET으로 넣어도 옵션에 포함되게 방어
     """
-    today = timezone.localdate()
-    base_year = today.year
+    base_year = timezone.localdate().year
     years = list(range(base_year, base_year - back_years - 1, -1))
     if selected_year not in years:
         years.append(selected_year)
@@ -90,9 +89,35 @@ def _month_options() -> list[int]:
     return list(range(1, 13))
 
 
+def _accounts_search_url() -> str:
+    """
+    Accounts 사용자 검색 API URL (SSOT + 안전 fallback)
+
+    배포/브랜치마다 url name이 달라질 수 있어 reverse 실패(=500) 방지를 위해:
+      1) 여러 후보 name을 순차 reverse 시도
+      2) 전부 실패하면 하드코딩 경로로 fallback
+    """
+    candidates = (
+        "accounts:api_search_user",
+        "accounts:search_user_legacy",
+        "accounts:api_accounts_search_user",
+        "api_accounts_search_user",
+        "api_search_user",
+        "search_user_legacy",
+    )
+    for name in candidates:
+        try:
+            return reverse(name)
+        except NoReverseMatch:
+            continue
+    return "/api/accounts/search-user/"
+
+
 # =============================================================================
 # Redirect
 # =============================================================================
+
+
 def redirect_to_deposit(request):
     return redirect("commission:deposit_home")
 
@@ -100,6 +125,8 @@ def redirect_to_deposit(request):
 # =============================================================================
 # Deposit Home
 # =============================================================================
+
+
 @grade_required("staff", "admin", "superuser")
 def deposit_home(request):
     parts = _list_parts_excluding_centers()
@@ -108,9 +135,7 @@ def deposit_home(request):
     upload_types = [x for x in UPLOAD_TYPES_ORDER if x in supported]
 
     logs = (
-        DepositUploadLog.objects
-        .filter(part__in=parts, upload_type__in=upload_types)
-        .only("part", "upload_type", "uploaded_at")
+        DepositUploadLog.objects.filter(part__in=parts, upload_type__in=upload_types).only("part", "upload_type", "uploaded_at")
     )
 
     upload_dates: dict[str, dict[str, str]] = {p: {} for p in parts}
@@ -118,6 +143,7 @@ def deposit_home(request):
         ts = getattr(row, "uploaded_at", None)
         upload_dates[row.part][row.upload_type] = ts.strftime("%Y-%m-%d") if ts else "-"
 
+    # 템플릿에서 키 존재를 기대하므로 빈 값도 채워줌
     for p in parts:
         for ut in upload_types:
             upload_dates[p].setdefault(ut, "-")
@@ -127,7 +153,7 @@ def deposit_home(request):
         "upload_types": upload_types,
         "upload_dates": upload_dates,
         "supported_upload_types": upload_types,
-        "accounts_search_url": reverse("accounts:api_search_user"),
+        "accounts_search_url": _accounts_search_url(),
     }
     return render(request, "commission/deposit_home.html", ctx)
 
@@ -135,6 +161,8 @@ def deposit_home(request):
 # =============================================================================
 # Approval Home (수수료결재)
 # =============================================================================
+
+
 @grade_required("staff", "admin", "superuser")
 def approval_home(request):
     """
@@ -145,7 +173,7 @@ def approval_home(request):
       - selected_ym (YYYY-MM)
       - pending_rows, efficiency_rows (둘 다 select_related('user'))
 
-    GET 컨트롤은 year/month/part로 유지.
+    GET 컨트롤: year/month/part
     """
     parts = _list_parts_excluding_centers()
 
@@ -156,24 +184,26 @@ def approval_home(request):
     if selected_part and selected_part not in parts:
         selected_part = ""
 
+    # -------------------------------------------------------------------------
+    # 1) Pending (approval_flag='N' + 유자격 조건)
+    # -------------------------------------------------------------------------
     pending_qs = (
-        ApprovalPending.objects
-        .select_related("user")
-        .filter(
+        ApprovalPending.objects.select_related("user").filter(
             ym=selected_ym,
             user__isnull=False,
-            approval_flag="N",  # ✅ 결재 N
-            user__regist__in=["손생등록", "손보등록", "생보등록"],  # ✅ 유자격 조건
+            approval_flag="N",
+            user__regist__in=["손생등록", "손보등록", "생보등록"],
         )
     )
-    
+
+    # -------------------------------------------------------------------------
+    # 2) Efficiency excess (threshold 이상)
+    # -------------------------------------------------------------------------
     efficiency_qs = (
-        EfficiencyPayExcess.objects
-        .select_related("user")
-        .filter(
+        EfficiencyPayExcess.objects.select_related("user").filter(
             ym=selected_ym,
             user__isnull=False,
-            pay_amount_sum__gt=10_000_000,   # ✅ 1천만원 이상만
+            pay_amount_sum__gt=EXCESS_THRESHOLD,
         )
     )
 
@@ -188,7 +218,7 @@ def approval_home(request):
         # controls options
         "years": _year_options(year, back_years=5),
         "months": _month_options(),
-        # selected values (template compares to these)
+        # selected values
         "selected_year": year,
         "selected_month": month,
         "parts": parts,
@@ -199,14 +229,16 @@ def approval_home(request):
         "pending_rows": pending_rows,
         "efficiency_rows": efficiency_rows,
         # common
-        "accounts_search_url": reverse("accounts:api_search_user"),
+        "accounts_search_url": _accounts_search_url(),
     }
     return render(request, "commission/approval_home.html", ctx)
 
 
 # =============================================================================
-# Support Home
+# Support Home (현재 미사용)
 # =============================================================================
+
+
 @grade_required("staff", "admin", "superuser")
 def support_home(request):
     # 미사용이면 안전하게 deposit으로 보냄

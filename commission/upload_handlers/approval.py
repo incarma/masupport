@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Tuple
+from typing import Dict, List
 
 from accounts.models import CustomUser
 from commission.models import ApprovalPending
@@ -24,6 +24,9 @@ class _ApprovalRowSpec:
 _SPEC = _ApprovalRowSpec()
 
 
+_ELIGIBLE_REGIST = {"손생등록", "생보등록", "손보등록"}
+
+
 def _safe_cell(row, idx: int) -> str:
     if len(row) <= idx:
         return ""
@@ -41,22 +44,27 @@ def handle_upload_commission_approval(file_path: str, original_name: str, ym: st
     조건:
     - N열(실지급액) > 0
     - O열(결재값) == 'N'
+    - ✅ 유자격(DB): user.regist in ['손생등록','생보등록','손보등록']
     - 동일 사번이 여러 행이면 실지급액 합산
 
     part:
     - 주어지면 해당 part 사용자만 저장(스코프 안전장치)
     """
     df = _read_excel_raw_matrix(file_path, original_name=original_name, skiprows=0, header_none=True)
+    if df is None or getattr(df, "empty", False):
+        return {"inserted_or_updated": 0, "missing_users": 0, "missing_sample": []}
 
     bucket: Dict[str, Dict[str, object]] = {}  # uid -> {emp_name:str, paid_sum:int}
 
     for _, row in df.iterrows():
-        uid = _norm_emp_id(_safe_cell(row, _SPEC.idx_user_id))
-        if not uid.isdigit():
+        raw_uid = _safe_cell(row, _SPEC.idx_user_id)
+        uid = _norm_emp_id(raw_uid)
+        # _norm_emp_id 결과가 비거나 숫자 아니면 skip
+        if not uid or not uid.isdigit():
             continue
 
         pay = _to_int(_safe_cell(row, _SPEC.idx_pay), default=0)
-        flag = _safe_cell(row, _SPEC.idx_flag).upper()
+        flag = _safe_cell(row, _SPEC.idx_flag).strip().upper()
 
         if pay <= 0 or flag != "N":
             continue
@@ -74,7 +82,11 @@ def handle_upload_commission_approval(file_path: str, original_name: str, ym: st
     if not bucket:
         return {"inserted_or_updated": 0, "missing_users": 0, "missing_sample": []}
 
-    qs = CustomUser.objects.filter(pk__in=bucket.keys())
+    qs = (
+        CustomUser.objects
+        .filter(pk__in=bucket.keys())
+        .filter(regist__in=_ELIGIBLE_REGIST)  # ✅ 유자격 조건(DB)
+    )
     if part:
         qs = qs.filter(part=part)
     user_map = qs.in_bulk()

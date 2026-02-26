@@ -18,17 +18,16 @@ from .api_deposit_impl import *  # noqa
 
 
 def _import_impl():
-    # 1) 패키지 분리 구조가 있으면 그걸 사용
     try:
         return import_module("commission.views.api.deposit")
     except Exception:
-        # 2) 없으면 단일 모듈 사용
         return import_module("commission.views.api_deposit_impl")
 
 
 def _missing(name: str) -> Callable[..., Any]:
     def _fn(request, *args, **kwargs):
         return JsonResponse({"ok": False, "message": f"{name} is not available"}, status=501)
+
     return _fn
 
 

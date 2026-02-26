@@ -7,17 +7,17 @@ from django.conf import settings
 from django.db import models
 from django.db.models import UniqueConstraint
 
-
 # =============================================================================
 # Deposit (채권현황)
 # =============================================================================
 
+
 class DepositSummary(models.Model):
     """
-    사용자(사번) 단위의 채권 요약 테이블.
+    사용자(사번) 단위의 채권 요약.
 
-    - user는 OneToOne + primary_key 이므로 row PK == user_id(사번 문자열)
-    - 업로드 핸들러 update_or_create(user_id=uid)를 SSOT로 사용
+    - user는 OneToOne + primary_key이므로 row PK == user_id(사번 문자열)
+    - 업로드 핸들러는 update_or_create(user_id=uid)를 SSOT로 사용
     """
 
     DIV_CHOICES = (
@@ -34,13 +34,18 @@ class DepositSummary(models.Model):
         verbose_name="사번",
     )
 
-    # --- 기본/요약 ---
+    # -------------------------------------------------------------------------
+    # 1) 기본/요약
+    # -------------------------------------------------------------------------
     final_payment = models.BigIntegerField(default=0, verbose_name="최종지급액")
     sales_total = models.BigIntegerField(default=0, verbose_name="장기총실적")
     refund_expected = models.BigIntegerField(default=0, verbose_name="환수예상")
     pay_expected = models.BigIntegerField(default=0, verbose_name="지급예상")
     maint_total = models.DecimalField(
-        max_digits=18, decimal_places=2, default=Decimal("0.00"), verbose_name="손생합산통산"
+        max_digits=18,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        verbose_name="손생합산통산",
     )
 
     debt_total = models.BigIntegerField(default=0, verbose_name="채권합계")
@@ -49,20 +54,26 @@ class DepositSummary(models.Model):
     required_debt = models.BigIntegerField(default=0, verbose_name="필요채권")
     final_excess_amount = models.BigIntegerField(default=0, verbose_name="최종초과금액")
 
-    # --- 분급/계속분 ---
+    # -------------------------------------------------------------------------
+    # 2) 분급/계속분
+    # -------------------------------------------------------------------------
     div_1m = models.CharField(max_length=10, blank=True, default="", choices=DIV_CHOICES, verbose_name="1개월전분급")
     div_2m = models.CharField(max_length=10, blank=True, default="", choices=DIV_CHOICES, verbose_name="2개월전분급")
     div_3m = models.CharField(max_length=10, blank=True, default="", choices=DIV_CHOICES, verbose_name="3개월전분급")
     inst_current = models.BigIntegerField(default=0, verbose_name="당월인정계속분")
     inst_prev = models.BigIntegerField(default=0, verbose_name="전월인정계속분")
 
-    # --- 일반 환수/지급 ---
+    # -------------------------------------------------------------------------
+    # 3) 일반 환수/지급
+    # -------------------------------------------------------------------------
     refund_ns = models.BigIntegerField(default=0, verbose_name="환수손보")
     refund_ls = models.BigIntegerField(default=0, verbose_name="환수생보")
     pay_ns = models.BigIntegerField(default=0, verbose_name="지급손보")
     pay_ls = models.BigIntegerField(default=0, verbose_name="지급생보")
 
-    # --- 보증(O/X) 환수/지급 ---
+    # -------------------------------------------------------------------------
+    # 4) 보증(O/X) 환수/지급
+    # -------------------------------------------------------------------------
     surety_o_refund_ns = models.BigIntegerField(default=0, verbose_name="보증(O) 환수손보")
     surety_o_refund_ls = models.BigIntegerField(default=0, verbose_name="보증(O) 환수생보")
     surety_o_refund_total = models.BigIntegerField(default=0, verbose_name="보증(O) 환수합계")
@@ -79,13 +90,17 @@ class DepositSummary(models.Model):
     surety_x_pay_ls = models.BigIntegerField(default=0, verbose_name="보증(X) 지급생보")
     surety_x_pay_total = models.BigIntegerField(default=0, verbose_name="보증(X) 지급합계")
 
-    # --- 장기 총수수료 ---
+    # -------------------------------------------------------------------------
+    # 5) 장기 총수수료
+    # -------------------------------------------------------------------------
     comm_3m = models.BigIntegerField(default=0, verbose_name="3개월총수수료")
     comm_6m = models.BigIntegerField(default=0, verbose_name="6개월총수수료")
     comm_9m = models.BigIntegerField(default=0, verbose_name="9개월총수수료")
     comm_12m = models.BigIntegerField(default=0, verbose_name="12개월총수수료")
 
-    # --- 통산 회차/통산 유지(파일 기반 업로드) ---
+    # -------------------------------------------------------------------------
+    # 6) 통산 회차/통산 유지(파일 기반 업로드)
+    # -------------------------------------------------------------------------
     ns_13_round = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal("0.00"), verbose_name="13회손보회차")
     ns_18_round = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal("0.00"), verbose_name="18회손보회차")
     ls_13_round = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal("0.00"), verbose_name="13회생보회차")
@@ -96,7 +111,9 @@ class DepositSummary(models.Model):
     ls_18_total = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal("0.00"), verbose_name="18회생보통산")
     ls_25_total = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal("0.00"), verbose_name="25회생보통산")
 
-    # --- 응당(DF 업로드) ---
+    # -------------------------------------------------------------------------
+    # 7) 응당(DF 업로드)
+    # -------------------------------------------------------------------------
     ns_2_6_due = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal("0.00"), verbose_name="2-6회손보응당")
     ns_2_13_due = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal("0.00"), verbose_name="2-13회손보응당")
     ls_2_6_due = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal("0.00"), verbose_name="2-6회생보응당")
@@ -167,6 +184,8 @@ class DepositOther(models.Model):
 
 
 class DepositUploadLog(models.Model):
+    """Deposit 업로드 로그(part + upload_type unique)."""
+
     part = models.CharField(max_length=50, db_index=True, verbose_name="부서")
     upload_type = models.CharField(max_length=50, db_index=True, verbose_name="업로드 구분")
     uploaded_at = models.DateTimeField(auto_now=True, verbose_name="마지막 업로드 일시")
@@ -187,6 +206,7 @@ class DepositUploadLog(models.Model):
 # =============================================================================
 # Approval / Efficiency (수수료결재 / 지점효율)
 # =============================================================================
+
 
 class ApprovalExcelUploadLog(models.Model):
     """결재/효율 업로드 로그(월도 + 부서 + kind unique)."""
@@ -211,7 +231,6 @@ class ApprovalExcelUploadLog(models.Model):
         related_name="approval_excel_upload_logs",
         verbose_name="업로드 사용자",
     )
-
     uploaded_at = models.DateTimeField(auto_now=True, verbose_name="업로드 일시")
     row_count = models.IntegerField(default=0, verbose_name="행 수(추정)")
     file_name = models.CharField(max_length=255, blank=True, default="", verbose_name="파일명")

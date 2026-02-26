@@ -47,10 +47,25 @@
 
   const csrfToken = getCSRFTokenFromForm(csrfForm);
 
-  const boot = window.ManualListBoot || {};
-  const reorderUrl = toStr(boot.reorderUrl);
-  const deleteUrl = toStr(boot.deleteUrl);
-  const bulkUpdateUrl = toStr(boot.bulkUpdateUrl);
+  // Boot: prefer DOM dataset, fallback to window.ManualListBoot (legacy)
+  const bootEl =
+    document.getElementById("manualListBoot") ||
+    document.getElementById("manual-list-boot");
+
+  // dataset은 kebab-case(data-reorder-url) → camelCase(dataset.reorderUrl)
+  const bootFromDom = bootEl?.dataset || {};
+  const bootFromWin = window.ManualListBoot || {};
+
+  const reorderUrl = toStr(bootFromDom.reorderUrl || bootFromWin.reorderUrl);
+  const deleteUrl = toStr(bootFromDom.deleteUrl || bootFromWin.deleteUrl);
+  const bulkUpdateUrl = toStr(
+    bootFromDom.bulkUpdateUrl || bootFromWin.bulkUpdateUrl
+  );
+
+  // superuser인데 boot url이 비면 템플릿 주입 누락/라우팅 name 오류
+  if (!reorderUrl || !deleteUrl || !bulkUpdateUrl) {
+    console.error("[manual_list_edit] boot urls missing", { reorderUrl, deleteUrl, bulkUpdateUrl, bootFromDom, bootFromWin });
+  }
 
   const api = {
     json: (url, body) => postJson(url, body, csrfToken),

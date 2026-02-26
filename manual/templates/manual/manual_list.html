@@ -68,7 +68,7 @@
 
   <!-- 3) Boot Data (superuser only) -->
   {% if user.is_authenticated and user.grade == "superuser" %}
-    <div id="manualListBoot"
+    <div id="manual-list-boot"
          class="d-none"
          data-reorder-url="{% url 'manual:manual_reorder_ajax' %}"
          data-delete-url="{% url 'manual:manual_delete_ajax' %}"

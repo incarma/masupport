@@ -8,12 +8,12 @@ class CommissionConfig(AppConfig):
     Commission app config
 
     도메인:
-    - Deposit(채권현황)
-    - Approval(수수료 결재/미결)
-    - Efficiency(지점효율 지급 초과)
+    - Deposit: 채권현황 (DepositSummary / Surety / Other)
+    - Approval: 수수료 결재/미결 (ApprovalPending)
+    - Efficiency: 지점효율 지급 초과 (EfficiencyPayExcess)
 
-    현재는 signals 사용 없음.
-    (필요 시 ready()에서 signals import 패턴으로 확장)
+    현재 signals 사용 없음.
+    필요 시 ready()에서 signals import 패턴으로 확장 가능.
     """
 
     default_auto_field = "django.db.models.BigAutoField"

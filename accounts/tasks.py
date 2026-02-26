@@ -32,6 +32,9 @@ from .services.users_excel_import import (
 
 logger = logging.getLogger(__name__)
 
+# NOTE:
+# part(소속부서) 값 치환/정규화는 users_excel_import.py의 SSOT(build_defaults_from_row/normalize_part)에서 처리한다.
+
 
 # =============================================================================
 # 0) 정책/상수

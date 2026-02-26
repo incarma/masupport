@@ -59,6 +59,21 @@ def normalize_emp_id(v: Any) -> str:
     return s
 
 
+def normalize_part(v: Any) -> str:
+    """
+    엑셀 업로드 시 part(소속부서) 값 정규화(SSOT).
+
+    요구사항:
+      - '1인GA사업부' -> 'MA사업4부'
+    """
+    s = _to_str(v)
+    if not s:
+        return ""
+    if s == "1인GA사업부":
+        return "MA사업4부"
+    return s
+
+
 def parse_excel_date(value: Any) -> Optional[date]:
     """
     엑셀 날짜가 datetime/date/문자열 혼합으로 올 수 있어 안전 변환.
@@ -189,7 +204,7 @@ def build_defaults_from_row(headers: Iterable[str], row: Tuple[Any, ...]) -> Tup
     emp_id = normalize_emp_id(row_data.get("사원번호"))
     name = _to_str(row_data.get("성명"))
     employed = _to_str(row_data.get("재직여부"))
-    part = _to_str(row_data.get("소속부서"))
+    part = normalize_part(row_data.get("소속부서"))
     branch = _to_str(row_data.get("영업가족명"))
 
     channel = infer_channel(part)

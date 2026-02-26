@@ -11,7 +11,10 @@
   - view/pages.py와 컨텍스트 키 계약(SSOT) 일치 버전
 ========================================================== -->
 
-<div class="container my-4">
+<div class="container my-4"
+     id="approval-home"
+     data-selected-ym="{{ selected_ym|default:'' }}"
+     data-selected-part="{{ selected_part|default:'' }}">
 
   <!-- Page Title -->
   <h3 class="text-center fw-bold mb-4" style="color:#003f7d;">
@@ -75,9 +78,18 @@
 
     <!-- 2-1) 지점효율 초과 -->
     <div class="text-center fw-bold mb-2">지점효율지급 초과현황</div>
+    <div class="d-flex align-items-center justify-content-between mb-2">
+      <div class="text-center fw-bold flex-grow-1">지점효율지급 초과현황</div>
+      <button type="button"
+              class="btn btn-sm btn-outline-success ms-2"
+              data-export-table="#efficiencyExcessTable"
+              data-export-name="지점효율지급_초과현황">
+        엑셀 다운로드
+      </button>
+    </div>
 
     <div class="table-responsive commission-table-scroll">
-      <table class="table table-bordered table-sm text-center commission-nowrap-table">
+      <table id="efficiencyExcessTable" class="table table-bordered table-sm text-center commission-nowrap-table">
         <thead class="table-light">
           <tr>
             <th>부서</th><th>영업가족</th><th>성명</th><th>사번</th><th>지급합계</th>
@@ -102,10 +114,18 @@
     <hr class="my-4">
 
     <!-- 2-2) 수수료 미결 -->
-    <div class="text-center fw-bold mb-2">수수료 미결현황</div>
+    <div class="d-flex align-items-center justify-content-between mb-2">
+      <div class="text-center fw-bold flex-grow-1">수수료 미결현황</div>
+      <button type="button"
+              class="btn btn-sm btn-outline-success ms-2"
+              data-export-table="#approvalPendingTable"
+              data-export-name="수수료_미결현황">
+        엑셀 다운로드
+      </button>
+    </div>
 
     <div class="table-responsive commission-table-scroll">
-      <table class="table table-bordered table-sm commission-nowrap-table">
+      <table id="approvalPendingTable" class="table table-bordered table-sm commission-nowrap-table">
         <thead class="table-light">
           <tr>
             <th>부서</th><th>영업가족</th><th>사원명</th><th>성명</th>
@@ -137,4 +157,5 @@
 
 {% include "commission/_approval_upload_modal.html" %}
 <script src="{% static 'js/commission/approval_excel_upload.js' %}"></script>
+<script src="{% static 'js/commission/approval_home_export.js' %}?v=20260226_01"></script>
 {% endblock %}

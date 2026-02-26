@@ -1,25 +1,21 @@
 # django_ma/commission/views/api_deposit_impl.py
 from __future__ import annotations
 
-from io import BytesIO
-from datetime import datetime
 from decimal import Decimal
-from typing import Any, Dict, Optional
-from urllib.parse import quote
+from typing import Any, Dict, Optional, Tuple
 
-from django.conf import settings
 from django.db.models import Q, Sum
 from django.db.models.functions import Coalesce
-from django.http import HttpResponse, JsonResponse
+from django.http import JsonResponse
 from django.views.decorators.http import require_GET
 
 from accounts.models import CustomUser
 from commission.models import DepositOther, DepositSummary, DepositSurety
 
+# =============================================================================
+# 0) Common helpers
+# =============================================================================
 
-# =============================================================================
-# Basic Helpers
-# =============================================================================
 
 def _to_str(v: Any) -> str:
     return ("" if v is None else str(v)).strip()
@@ -40,6 +36,7 @@ def _to_iso(d) -> str:
 
 
 def _decimal_str(v: Any, default: str = "0.00") -> str:
+    """Decimal/float/int/str → 화면 표시 안전을 위해 문자열로 통일."""
     if v is None:
         return default
     if isinstance(v, Decimal):
@@ -51,10 +48,10 @@ def _decimal_str(v: Any, default: str = "0.00") -> str:
 
 
 def _int0(v: Any) -> int:
+    """None/Decimal/float/int/str → int 안전 변환."""
     if v is None:
         return 0
     try:
-        # Decimal/str/float/int 모두 흡수
         return int(Decimal(str(v)))
     except Exception:
         try:
@@ -62,21 +59,18 @@ def _int0(v: Any) -> int:
         except Exception:
             return 0
 
-def _dstr(v: Any, default: str = "0.00") -> str:
-    # Decimal 계열은 문자열로 내려서 프론트에서 percent 포맷을 안정적으로 적용
-    return _decimal_str(v, default=default)
-
-
 
 def _json_err(message: str, *, status: int = 400) -> JsonResponse:
     return JsonResponse({"ok": False, "message": message}, status=status)
 
 
 # =============================================================================
-# User Resolver
+# 1) Request → target user resolver
 # =============================================================================
 
+
 def _get_user_id_from_request(request) -> str:
+    """레거시/호환을 위해 다양한 키를 허용."""
     return _to_str(
         request.GET.get("user")
         or request.GET.get("id")
@@ -89,22 +83,23 @@ def _get_user_id_from_request(request) -> str:
 
 
 def _find_user_by_any_id(user_id: str) -> Optional[CustomUser]:
+    """
+    - 기본은 CustomUser.pk(id=사번)
+    - 레거시 필드(emp_id/regist/username)도 방어적으로 탐색
+    - 조회 필드는 only()로 최소화(성능/보안)
+    """
     user_id = _to_str(user_id)
     if not user_id:
         return None
 
-    base = CustomUser.objects.only(
-        "id", "name", "part", "branch",
-        "enter", "quit", "regist", "grade"
-    )
+    base = CustomUser.objects.only("id", "name", "part", "branch", "enter", "quit", "regist", "grade")
 
-    try:
-        u = base.filter(Q(pk=user_id) | Q(id=user_id)).first()
-        if u:
-            return u
-    except Exception:
-        pass
+    # 1) pk/id
+    u = base.filter(Q(pk=user_id) | Q(id=user_id)).first()
+    if u:
+        return u
 
+    # 2) optional legacy ids
     if hasattr(CustomUser, "emp_id"):
         u = base.filter(emp_id=user_id).first()
         if u:
@@ -123,8 +118,56 @@ def _find_user_by_any_id(user_id: str) -> Optional[CustomUser]:
 
 
 # =============================================================================
-# Payload Builders
+# 2) Permission
 # =============================================================================
+
+
+def _can_view_target(request, target: CustomUser) -> bool:
+    """Deposit(채권현황)은 개인정보/정산정보 성격 → 열람 권한 제한."""
+    u = getattr(request, "user", None)
+    if not u or not u.is_authenticated:
+        return False
+
+    grade = getattr(u, "grade", "")
+    if grade in ("superuser", "main_admin", "head"):
+        return True
+
+    # 본인만
+    return str(u.pk) == str(target.pk)
+
+
+def _require_view_permission(request, target: CustomUser) -> Optional[JsonResponse]:
+    if _can_view_target(request, target):
+        return None
+    return _json_err("권한이 없습니다.", status=403)
+
+
+def _resolve_target_or_err(request) -> Tuple[Optional[CustomUser], Optional[JsonResponse], str]:
+    """
+    공통 흐름:
+      1) user 파라미터 파싱
+      2) 대상자 조회
+      3) 권한 체크(403)
+    """
+    user_id = _get_user_id_from_request(request)
+    if not user_id:
+        return None, _json_err("user 파라미터가 필요합니다."), ""
+
+    target = _find_user_by_any_id(user_id)
+    if not target:
+        return None, _json_err("대상자를 찾지 못했습니다.", status=404), user_id
+
+    perm = _require_view_permission(request, target)
+    if perm:
+        return None, perm, user_id
+
+    return target, None, user_id
+
+
+# =============================================================================
+# 3) Payload builders
+# =============================================================================
+
 
 def _user_to_payload(u: CustomUser) -> Dict[str, Any]:
     return {
@@ -140,74 +183,77 @@ def _user_to_payload(u: CustomUser) -> Dict[str, Any]:
 
 
 def _summary_to_payload(s: DepositSummary) -> Dict[str, Any]:
-    # NOTE:
-    # - 템플릿(data-bind)이 요구하는 키들을 최대한 그대로 내려준다.
-    # - 모델에 필드가 없는 경우도 있을 수 있으므로 getattr로 방어한다.
+    """
+    템플릿(data-bind)이 요구하는 키들을 그대로 내려준다.
+    모델 필드가 없을 수 있어 getattr 방어.
+    """
+    g = lambda k, default=None: getattr(s, k, default)
+
     return {
         # --- 주요지표
-        "final_payment": _int0(getattr(s, "final_payment", None)),
-        "sales_total": _int0(getattr(s, "sales_total", None)),
-        "refund_expected": _int0(getattr(s, "refund_expected", None)),
-        "pay_expected": _int0(getattr(s, "pay_expected", None)),
-        "maint_total": _dstr(getattr(s, "maint_total", None)),  # percent용 문자열(예: "86.90")
+        "final_payment": _int0(g("final_payment")),
+        "sales_total": _int0(g("sales_total")),
+        "refund_expected": _int0(g("refund_expected")),
+        "pay_expected": _int0(g("pay_expected")),
+        "maint_total": _decimal_str(g("maint_total"), default="0.00"),
 
-        "debt_total": _int0(getattr(s, "debt_total", None)),
-        "surety_total": _int0(getattr(s, "surety_total", None)),
-        "other_total": _int0(getattr(s, "other_total", None)),
-        "required_debt": _int0(getattr(s, "required_debt", None)),
-        "final_excess_amount": _int0(getattr(s, "final_excess_amount", None)),
+        "debt_total": _int0(g("debt_total")),
+        "surety_total": _int0(g("surety_total")),
+        "other_total": _int0(g("other_total")),
+        "required_debt": _int0(g("required_debt")),
+        "final_excess_amount": _int0(g("final_excess_amount")),
 
-        # --- 분급여부(템플릿: summary.div_1m~3m)
-        "div_1m": getattr(s, "div_1m", "") or "",
-        "div_2m": getattr(s, "div_2m", "") or "",
-        "div_3m": getattr(s, "div_3m", "") or "",
+        # --- 분급여부
+        "div_1m": g("div_1m", "") or "",
+        "div_2m": g("div_2m", "") or "",
+        "div_3m": g("div_3m", "") or "",
 
-        # --- 인정계속분(템플릿: inst_current/inst_prev)
-        "inst_current": _int0(getattr(s, "inst_current", None)),
-        "inst_prev": _int0(getattr(s, "inst_prev", None)),
+        # --- 인정계속분
+        "inst_current": _int0(g("inst_current")),
+        "inst_prev": _int0(g("inst_prev")),
 
-        # --- 환수/지급(손생) (refund_ns/ls, pay_ns/ls)
-        "refund_ns": _int0(getattr(s, "refund_ns", None)),
-        "refund_ls": _int0(getattr(s, "refund_ls", None)),
-        "pay_ns": _int0(getattr(s, "pay_ns", None)),
-        "pay_ls": _int0(getattr(s, "pay_ls", None)),
+        # --- 환수/지급(손생)
+        "refund_ns": _int0(g("refund_ns")),
+        "refund_ls": _int0(g("refund_ls")),
+        "pay_ns": _int0(g("pay_ns")),
+        "pay_ls": _int0(g("pay_ls")),
 
-        # --- 보증(O/X) 환수·지급 (surety_o_*, surety_x_*)
-        "surety_o_refund_ns": _int0(getattr(s, "surety_o_refund_ns", None)),
-        "surety_o_refund_ls": _int0(getattr(s, "surety_o_refund_ls", None)),
-        "surety_o_refund_total": _int0(getattr(s, "surety_o_refund_total", None)),
-        "surety_o_pay_ns": _int0(getattr(s, "surety_o_pay_ns", None)),
-        "surety_o_pay_ls": _int0(getattr(s, "surety_o_pay_ls", None)),
-        "surety_o_pay_total": _int0(getattr(s, "surety_o_pay_total", None)),
+        # --- 보증(O/X)
+        "surety_o_refund_ns": _int0(g("surety_o_refund_ns")),
+        "surety_o_refund_ls": _int0(g("surety_o_refund_ls")),
+        "surety_o_refund_total": _int0(g("surety_o_refund_total")),
+        "surety_o_pay_ns": _int0(g("surety_o_pay_ns")),
+        "surety_o_pay_ls": _int0(g("surety_o_pay_ls")),
+        "surety_o_pay_total": _int0(g("surety_o_pay_total")),
 
-        "surety_x_refund_ns": _int0(getattr(s, "surety_x_refund_ns", None)),
-        "surety_x_refund_ls": _int0(getattr(s, "surety_x_refund_ls", None)),
-        "surety_x_refund_total": _int0(getattr(s, "surety_x_refund_total", None)),
-        "surety_x_pay_ns": _int0(getattr(s, "surety_x_pay_ns", None)),
-        "surety_x_pay_ls": _int0(getattr(s, "surety_x_pay_ls", None)),
-        "surety_x_pay_total": _int0(getattr(s, "surety_x_pay_total", None)),
+        "surety_x_refund_ns": _int0(g("surety_x_refund_ns")),
+        "surety_x_refund_ls": _int0(g("surety_x_refund_ls")),
+        "surety_x_refund_total": _int0(g("surety_x_refund_total")),
+        "surety_x_pay_ns": _int0(g("surety_x_pay_ns")),
+        "surety_x_pay_ls": _int0(g("surety_x_pay_ls")),
+        "surety_x_pay_total": _int0(g("surety_x_pay_total")),
 
-        # --- 3~12개월 총수수료(템플릿: comm_3m/6m/9m/12m)
-        "comm_3m": _int0(getattr(s, "comm_3m", None)),
-        "comm_6m": _int0(getattr(s, "comm_6m", None)),
-        "comm_9m": _int0(getattr(s, "comm_9m", None)),
-        "comm_12m": _int0(getattr(s, "comm_12m", None)),
+        # --- 3~12개월 총수수료
+        "comm_3m": _int0(g("comm_3m")),
+        "comm_6m": _int0(g("comm_6m")),
+        "comm_9m": _int0(g("comm_9m")),
+        "comm_12m": _int0(g("comm_12m")),
 
-        # --- 유지율/수금율 라운드/합계/응당(템플릿: ns_13_round 등)
-        "ns_13_round": _dstr(getattr(s, "ns_13_round", None), default="0.00"),
-        "ns_18_round": _dstr(getattr(s, "ns_18_round", None), default="0.00"),
-        "ls_13_round": _dstr(getattr(s, "ls_13_round", None), default="0.00"),
-        "ls_18_round": _dstr(getattr(s, "ls_18_round", None), default="0.00"),
+        # --- 유지율/수금율(문자열)
+        "ns_13_round": _decimal_str(g("ns_13_round"), default="0.00"),
+        "ns_18_round": _decimal_str(g("ns_18_round"), default="0.00"),
+        "ls_13_round": _decimal_str(g("ls_13_round"), default="0.00"),
+        "ls_18_round": _decimal_str(g("ls_18_round"), default="0.00"),
 
-        "ns_18_total": _dstr(getattr(s, "ns_18_total", None), default="0.00"),
-        "ns_25_total": _dstr(getattr(s, "ns_25_total", None), default="0.00"),
-        "ls_18_total": _dstr(getattr(s, "ls_18_total", None), default="0.00"),
-        "ls_25_total": _dstr(getattr(s, "ls_25_total", None), default="0.00"),
+        "ns_18_total": _decimal_str(g("ns_18_total"), default="0.00"),
+        "ns_25_total": _decimal_str(g("ns_25_total"), default="0.00"),
+        "ls_18_total": _decimal_str(g("ls_18_total"), default="0.00"),
+        "ls_25_total": _decimal_str(g("ls_25_total"), default="0.00"),
 
-        "ns_2_6_due": _dstr(getattr(s, "ns_2_6_due", None), default="0.00"),
-        "ns_2_13_due": _dstr(getattr(s, "ns_2_13_due", None), default="0.00"),
-        "ls_2_6_due": _dstr(getattr(s, "ls_2_6_due", None), default="0.00"),
-        "ls_2_13_due": _dstr(getattr(s, "ls_2_13_due", None), default="0.00"),
+        "ns_2_6_due": _decimal_str(g("ns_2_6_due"), default="0.00"),
+        "ns_2_13_due": _decimal_str(g("ns_2_13_due"), default="0.00"),
+        "ls_2_6_due": _decimal_str(g("ls_2_6_due"), default="0.00"),
+        "ls_2_13_due": _decimal_str(g("ls_2_13_due"), default="0.00"),
     }
 
 
@@ -235,67 +281,53 @@ def _other_to_payload(x: DepositOther) -> Dict[str, Any]:
 
 
 # =============================================================================
-# 유지 상태 금액 합계 계산
+# 4) Business rules: filtered totals
 # =============================================================================
 
-def _calc_kept_amounts(user_pk: str) -> tuple[int, int]:
 
-    surety_keep = (
-        DepositSurety.objects
-        .filter(user_id=user_pk, status="유지")
+def _calc_filtered_totals(user_pk: str) -> Tuple[int, int]:
+    """
+    요구사항 기준 합계:
+    - 보증합계: DepositSurety / 상품명 'GA개인' 포함 + 상태 '유지' 합계
+    - 기타합계: DepositOther  / 보증내용 '수수료' 포함 + 상태 ('유지','유지인') 합계
+    """
+    surety_total = (
+        DepositSurety.objects.filter(user_id=user_pk, product_name__icontains="GA개인", status="유지")
         .aggregate(total=Coalesce(Sum("amount"), 0))["total"]
     )
-
-    other_keep = (
-        DepositOther.objects
-        .filter(user_id=user_pk, status="유지")
+    other_total = (
+        DepositOther.objects.filter(user_id=user_pk, product_type__icontains="수수료", status__in=["유지인", "유지"])
         .aggregate(total=Coalesce(Sum("amount"), 0))["total"]
     )
-
-    return int(surety_keep or 0), int(other_keep or 0)
-
-
-# =============================================================================
-# Permission
-# =============================================================================
-
-def _can_view_target(request, target: CustomUser) -> bool:
-    u = getattr(request, "user", None)
-    if not u or not u.is_authenticated:
-        return False
-
-    grade = getattr(u, "grade", "")
-    if grade in ("superuser", "main_admin", "head"):
-        return True
-
-    return str(u.pk) == str(target.pk)
+    return int(surety_total or 0), int(other_total or 0)
 
 
-def _require_view_permission(request, target):
-    if _can_view_target(request, target):
-        return None
-    return _json_err("권한이 없습니다.", status=403)
+def _calc_keep_totals_all(user_pk: str) -> Tuple[int, int]:
+    """(호환/표기용) 상태='유지' 전체 합계."""
+    surety_keep_all = (
+        DepositSurety.objects.filter(user_id=user_pk, status="유지")
+        .aggregate(total=Coalesce(Sum("amount"), 0))["total"]
+    )
+    other_keep_all = (
+        DepositOther.objects.filter(user_id=user_pk, status="유지")
+        .aggregate(total=Coalesce(Sum("amount"), 0))["total"]
+    )
+    return int(surety_keep_all or 0), int(other_keep_all or 0)
 
 
 # =============================================================================
-# APIs
+# 5) APIs
 # =============================================================================
+
 
 @require_GET
 def api_user_detail(request):
-    user_id = _get_user_id_from_request(request)
-    if not user_id:
-        return _json_err("user 파라미터가 필요합니다.")
+    target, err, _ = _resolve_target_or_err(request)
+    if err:
+        return err
 
-    u = _find_user_by_any_id(user_id)
-    if not u:
-        return _json_err("대상자를 찾지 못했습니다.", status=404)
-
-    perm = _require_view_permission(request, u)
-    if perm:
-        return perm
-
-    payload = _user_to_payload(u)
+    payload = _user_to_payload(target)
+    # legacy: data + user 둘 다 내려줌(기존 유지)
     return JsonResponse({"ok": True, "data": payload, "user": payload})
 
 
@@ -305,104 +337,39 @@ def api_deposit_summary(request):
     if not user_id:
         return _json_err("user 파라미터가 필요합니다.")
 
-    u = _find_user_by_any_id(user_id)
-    if not u:
-        return JsonResponse({"ok": True, "rows": []})
-
-    perm = _require_view_permission(request, u)
-    if perm:
-        return perm
-    
-    from django.db import connection
-    print("[deposit_summary] DB:", connection.settings_dict.get("NAME"))
-    print("[deposit_summary] user_id:", u.pk)
-    print("[deposit_summary] summary_count:", DepositSummary.objects.count())
-
-    s = DepositSummary.objects.filter(user_id=u.pk).first()
-    if not s:
-        return JsonResponse({"ok": True, "rows": []})
-    
-    from django.db import connection
-    print("[deposit_summary] DB:", connection.settings_dict.get("NAME"))
-    print("[deposit_summary] user_id:", u.pk)
-    print("[deposit_summary] summary_count:", DepositSummary.objects.count())
-
-    payload = _summary_to_payload(s)
-
-    # ✅ 유지 합계 반영
-    surety_keep, other_keep = _calc_kept_amounts(u.pk)
-    # NOTE:
-    # - surety_total / other_total 는 "원본 합계"로 유지(모델 값)
-    # - 유지합계는 별도 키로 제공(프론트에서 표기 선택 가능)
-    payload["surety_keep_total"] = int(surety_keep or 0)
-    payload["other_keep_total"] = int(other_keep or 0)
-
-    # 유지합계를 포함한 "유지 기준 채권합계"도 필요하면 같이 제공
-    # (기존 debt_total 정의가 무엇인지 애매할 수 있어서 별도 제공)
-    try:
-        payload["debt_keep_total"] = int(payload.get("surety_keep_total", 0)) + int(payload.get("other_keep_total", 0))
-    except Exception:
-        payload["debt_keep_total"] = 0
-
-    resp = JsonResponse({"ok": True, "rows": [payload], "_debug_view": "api_deposit_impl.api_deposit_summary"})
-    resp["X-Deposit-View"] = "api_deposit_impl"
-    return resp
-
-
-@require_GET
-def api_support_pdf(request):
-
-    user_id = _get_user_id_from_request(request)
-    if not user_id:
-        return _json_err("user 파라미터가 필요합니다.")
-
     target = _find_user_by_any_id(user_id)
     if not target:
-        return _json_err("대상자를 찾지 못했습니다.", status=404)
+        # 기존 동작 유지: 대상자 없으면 ok+rows:[]
+        return JsonResponse({"ok": True, "rows": []})
 
     perm = _require_view_permission(request, target)
     if perm:
         return perm
 
-    summary = DepositSummary.objects.filter(user_id=target.pk).first()
+    s = DepositSummary.objects.filter(user_id=target.pk).first()
+    if not s:
+        return JsonResponse({"ok": True, "rows": []})
 
-    surety_keep, other_keep = _calc_kept_amounts(target.pk)
+    payload = _summary_to_payload(s)
 
-    from reportlab.lib.pagesizes import A4
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
-    from reportlab.lib.styles import getSampleStyleSheet
-    from reportlab.lib.units import mm
+    # 요구사항 기준 합계로 교체 (템플릿/JS 수정 최소화를 위해 여기서 덮어씀)
+    surety_filtered, other_filtered = _calc_filtered_totals(target.pk)
 
-    buf = BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=A4)
-    styles = getSampleStyleSheet()
-    story = []
+    # 원본 보존(검증/표기용)
+    payload["surety_total_all"] = int(payload.get("surety_total", 0) or 0)
+    payload["other_total_all"] = int(payload.get("other_total", 0) or 0)
 
-    story.append(Paragraph("지원신청서", styles["Title"]))
-    story.append(Spacer(1, 10))
+    payload["surety_total"] = int(surety_filtered or 0)
+    payload["other_total"] = int(other_filtered or 0)
 
-    story.append(Paragraph(f"성명: {target.name}", styles["Normal"]))
-    story.append(Paragraph(f"보증합계(유지): {surety_keep:,}", styles["Normal"]))
-    story.append(Paragraph(f"기타합계(유지): {other_keep:,}", styles["Normal"]))
+    # 유지 전체 합계도 함께 제공(필요 시 화면 표기/디버그용)
+    surety_keep_all, other_keep_all = _calc_keep_totals_all(target.pk)
+    payload["surety_keep_total"] = int(surety_keep_all or 0)
+    payload["other_keep_total"] = int(other_keep_all or 0)
+    payload["debt_keep_total"] = int(payload["surety_keep_total"]) + int(payload["other_keep_total"])
 
-    if summary:
-        story.append(Paragraph(f"채권합계: {int(summary.debt_total or 0):,}", styles["Normal"]))
+    return JsonResponse({"ok": True, "rows": [payload]})
 
-    doc.build(story)
-
-    pdf_bytes = buf.getvalue()
-    buf.close()
-
-    filename = f"지원신청서_{target.id}.pdf"
-
-    resp = HttpResponse(pdf_bytes, content_type="application/pdf")
-    resp["Content-Disposition"] = f"attachment; filename*=UTF-8''{quote(filename)}"
-    return resp
-
-
-# =============================================================================
-# APIs (Missing: surety / other list)
-# =============================================================================
 
 @require_GET
 def api_deposit_surety_list(request):
@@ -410,21 +377,16 @@ def api_deposit_surety_list(request):
     if not user_id:
         return _json_err("user 파라미터가 필요합니다.")
 
-    u = _find_user_by_any_id(user_id)
-    if not u:
+    target = _find_user_by_any_id(user_id)
+    if not target:
         return JsonResponse({"ok": True, "rows": []})
 
-    perm = _require_view_permission(request, u)
+    perm = _require_view_permission(request, target)
     if perm:
         return perm
 
-    qs = (
-        DepositSurety.objects
-        .filter(user_id=u.pk)
-        .order_by("-id")
-    )
-    rows = [_surety_to_payload(x) for x in qs]
-    return JsonResponse({"ok": True, "rows": rows})
+    qs = DepositSurety.objects.filter(user_id=target.pk).order_by("-id")
+    return JsonResponse({"ok": True, "rows": [_surety_to_payload(x) for x in qs]})
 
 
 @require_GET
@@ -433,18 +395,13 @@ def api_deposit_other_list(request):
     if not user_id:
         return _json_err("user 파라미터가 필요합니다.")
 
-    u = _find_user_by_any_id(user_id)
-    if not u:
+    target = _find_user_by_any_id(user_id)
+    if not target:
         return JsonResponse({"ok": True, "rows": []})
 
-    perm = _require_view_permission(request, u)
+    perm = _require_view_permission(request, target)
     if perm:
         return perm
 
-    qs = (
-        DepositOther.objects
-        .filter(user_id=u.pk)
-        .order_by("-id")
-    )
-    rows = [_other_to_payload(x) for x in qs]
-    return JsonResponse({"ok": True, "rows": rows})
+    qs = DepositOther.objects.filter(user_id=target.pk).order_by("-id")
+    return JsonResponse({"ok": True, "rows": [_other_to_payload(x) for x in qs]})

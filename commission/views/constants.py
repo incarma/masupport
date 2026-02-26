@@ -26,6 +26,7 @@ def _build_supported_upload_types() -> frozenset[str]:
     """
     try:
         from commission.upload_handlers.registry import supported_upload_types
+
         return frozenset(supported_upload_types())
     except Exception:
         # fallback (마지막 안전망)

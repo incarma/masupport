@@ -15,6 +15,10 @@ from .constants import SUPPORTED_UPLOAD_TYPES
 from .utils_fail_excel import store_fail_rows_as_excel
 from .utils_json import _json_error, _json_ok
 
+# =============================================================================
+# Helpers
+# =============================================================================
+
 
 def _get_uploaded_n(result: dict) -> int:
     """
@@ -42,6 +46,26 @@ def _build_fail_excel_token(*, part: str, upload_type: str, result: dict) -> tup
     return token, missing_sample
 
 
+def _save_temp_upload(fs: FileSystemStorage, uploaded_file) -> tuple[str, str]:
+    """
+    업로드 파일을 FileSystemStorage에 저장하고 (saved_name, file_path) 반환.
+    """
+    saved_name = fs.save(uploaded_file.name, uploaded_file)
+    return saved_name, fs.path(saved_name)
+
+
+def _safe_delete(fs: FileSystemStorage, saved_name: str) -> None:
+    try:
+        fs.delete(saved_name)
+    except Exception:
+        pass
+
+
+# =============================================================================
+# Upload API (Deposit)
+# =============================================================================
+
+
 @csrf_exempt
 @require_POST
 @grade_required("superuser")
@@ -57,11 +81,14 @@ def upload_excel(request):
     upload_type = (request.POST.get("upload_type") or "").strip()
     excel_file = request.FILES.get("excel_file")
 
+    # -------------------------------------------------------------------------
+    # Input validation
+    # -------------------------------------------------------------------------
     if not part:
         return _json_error("부서를 선택해주세요.", status=400)
 
-    # ✅ constants.SUPPORTED_UPLOAD_TYPES는 registry 기반 자동 생성으로 바뀌므로,
-    # 여기 검증은 곧바로 SSOT 검증과 동일해진다.
+    # constants.SUPPORTED_UPLOAD_TYPES는 registry 기반 자동 생성(SSOT)로 바뀌었으므로
+    # 이 검증은 곧 SSOT 검증과 동일해진다.
     if upload_type not in SUPPORTED_UPLOAD_TYPES:
         return _json_error(
             f"현재는 {sorted(SUPPORTED_UPLOAD_TYPES)} 업로드만 지원됩니다.",
@@ -71,9 +98,9 @@ def upload_excel(request):
     if not excel_file:
         return _json_error("엑셀 파일이 전달되지 않았습니다.", status=400)
 
-    # ------------------------------------------------------------------
-    # SSOT registry에서 spec 조회 (없으면 500이 아니라 400이 맞음)
-    # ------------------------------------------------------------------
+    # -------------------------------------------------------------------------
+    # SSOT registry에서 spec 조회 (없으면 500이 아니라 400)
+    # -------------------------------------------------------------------------
     try:
         spec = get_upload_spec(upload_type)
     except KeyError:
@@ -84,13 +111,12 @@ def upload_excel(request):
         )
 
     fs = FileSystemStorage()
-    saved_name = fs.save(excel_file.name, excel_file)
-    file_path = fs.path(saved_name)
+    saved_name, file_path = _save_temp_upload(fs, excel_file)
 
     df = None
     try:
         with transaction.atomic():
-            # handler 실행
+            # 1) handler 실행
             if spec.mode == "df":
                 df = _read_excel_safely(file_path, original_name=excel_file.name)
                 result = spec.fn(df)
@@ -101,7 +127,7 @@ def upload_excel(request):
 
             uploaded_n = _get_uploaded_n(result)
 
-            # 업로드 로그 갱신 (SSOT)
+            # 2) 업로드 로그 갱신 (SSOT)
             uploaded_date = _update_upload_log(
                 part=part,
                 upload_type=upload_type,
@@ -109,13 +135,14 @@ def upload_excel(request):
                 count=uploaded_n,
             )
 
-        # 실패 목록 엑셀(token) 생성 (missing_sample 기반)
+        # 3) 실패 목록 엑셀(token) 생성 (missing_sample 기반)
         fail_token, missing_sample = _build_fail_excel_token(
             part=part,
             upload_type=upload_type,
             result=result,
         )
 
+        # 4) success response
         return _json_ok(
             spec.msg_tpl.format(n=uploaded_n),
             uploaded=uploaded_n,
@@ -138,11 +165,7 @@ def upload_excel(request):
                 detected_columns = [str(c) for c in df.columns]
             except Exception:
                 detected_columns = []
-        return _json_error(
-            str(ve),
-            status=400,
-            detected_columns=detected_columns,
-        )
+        return _json_error(str(ve), status=400, detected_columns=detected_columns)
 
     except Exception as e:
         # 엑셀 형식 오류 힌트
@@ -156,7 +179,4 @@ def upload_excel(request):
         return _json_error(f"⚠️ 업로드 실패: {msg}", status=500)
 
     finally:
-        try:
-            fs.delete(saved_name)
-        except Exception:
-            pass
+        _safe_delete(fs, saved_name)
