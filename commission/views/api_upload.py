@@ -1,7 +1,14 @@
 # django_ma/commission/views/api_upload.py
 from __future__ import annotations
 
-from django.core.files.storage import FileSystemStorage
+"""
+Deposit(채권) Excel Upload API (superuser only)
+
+리팩토링 포인트(기능 변화 없음):
+- 임시 업로드 파일 저장/삭제 로직을 views/_files.py로 SSOT화
+- 결과 건수 산정/실패목록 토큰 생성 로직은 그대로 유지
+"""
+
 from django.db import transaction
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
@@ -11,13 +18,10 @@ from commission.upload_handlers import _update_upload_log
 from commission.upload_handlers.registry import get_upload_spec, supported_upload_types
 from commission.upload_utils import _read_excel_safely
 
+from ._files import save_temp_upload, safe_delete
 from .constants import SUPPORTED_UPLOAD_TYPES
 from .utils_fail_excel import store_fail_rows_as_excel
 from .utils_json import _json_error, _json_ok
-
-# =============================================================================
-# Helpers
-# =============================================================================
 
 
 def _get_uploaded_n(result: dict) -> int:
@@ -46,26 +50,6 @@ def _build_fail_excel_token(*, part: str, upload_type: str, result: dict) -> tup
     return token, missing_sample
 
 
-def _save_temp_upload(fs: FileSystemStorage, uploaded_file) -> tuple[str, str]:
-    """
-    업로드 파일을 FileSystemStorage에 저장하고 (saved_name, file_path) 반환.
-    """
-    saved_name = fs.save(uploaded_file.name, uploaded_file)
-    return saved_name, fs.path(saved_name)
-
-
-def _safe_delete(fs: FileSystemStorage, saved_name: str) -> None:
-    try:
-        fs.delete(saved_name)
-    except Exception:
-        pass
-
-
-# =============================================================================
-# Upload API (Deposit)
-# =============================================================================
-
-
 @csrf_exempt
 @require_POST
 @grade_required("superuser")
@@ -81,14 +65,10 @@ def upload_excel(request):
     upload_type = (request.POST.get("upload_type") or "").strip()
     excel_file = request.FILES.get("excel_file")
 
-    # -------------------------------------------------------------------------
-    # Input validation
-    # -------------------------------------------------------------------------
     if not part:
         return _json_error("부서를 선택해주세요.", status=400)
 
-    # constants.SUPPORTED_UPLOAD_TYPES는 registry 기반 자동 생성(SSOT)로 바뀌었으므로
-    # 이 검증은 곧 SSOT 검증과 동일해진다.
+    # ✅ constants.SUPPORTED_UPLOAD_TYPES는 registry 기반 자동 생성(SSOT)
     if upload_type not in SUPPORTED_UPLOAD_TYPES:
         return _json_error(
             f"현재는 {sorted(SUPPORTED_UPLOAD_TYPES)} 업로드만 지원됩니다.",
@@ -98,9 +78,9 @@ def upload_excel(request):
     if not excel_file:
         return _json_error("엑셀 파일이 전달되지 않았습니다.", status=400)
 
-    # -------------------------------------------------------------------------
-    # SSOT registry에서 spec 조회 (없으면 500이 아니라 400)
-    # -------------------------------------------------------------------------
+    # ------------------------------------------------------------------
+    # SSOT registry에서 spec 조회 (없으면 500이 아니라 400이 맞음)
+    # ------------------------------------------------------------------
     try:
         spec = get_upload_spec(upload_type)
     except KeyError:
@@ -110,39 +90,39 @@ def upload_excel(request):
             supported=sorted(supported_upload_types()),
         )
 
-    fs = FileSystemStorage()
-    saved_name, file_path = _save_temp_upload(fs, excel_file)
-
+    # ------------------------------------------------------------------
+    # 1) 임시 저장 → 2) 처리 → 3) finally에서 삭제
+    # ------------------------------------------------------------------
+    temp = save_temp_upload(excel_file)
     df = None
+
     try:
         with transaction.atomic():
-            # 1) handler 실행
             if spec.mode == "df":
-                df = _read_excel_safely(file_path, original_name=excel_file.name)
+                df = _read_excel_safely(temp.file_path, original_name=temp.original_name)
                 result = spec.fn(df)
             elif spec.mode == "file":
-                result = spec.fn(file_path, excel_file.name)
+                result = spec.fn(temp.file_path, temp.original_name)
             else:
                 return _json_error(f"핸들러 mode가 올바르지 않습니다: {spec.mode}", status=500)
 
             uploaded_n = _get_uploaded_n(result)
 
-            # 2) 업로드 로그 갱신 (SSOT)
+            # 업로드 로그 갱신 (SSOT)
             uploaded_date = _update_upload_log(
                 part=part,
                 upload_type=upload_type,
-                excel_file_name=excel_file.name,
+                excel_file_name=temp.original_name,
                 count=uploaded_n,
             )
 
-        # 3) 실패 목록 엑셀(token) 생성 (missing_sample 기반)
+        # 실패 목록 엑셀(token) 생성 (missing_sample 기반)
         fail_token, missing_sample = _build_fail_excel_token(
             part=part,
             upload_type=upload_type,
             result=result,
         )
 
-        # 4) success response
         return _json_ok(
             spec.msg_tpl.format(n=uploaded_n),
             uploaded=uploaded_n,
@@ -165,10 +145,14 @@ def upload_excel(request):
                 detected_columns = [str(c) for c in df.columns]
             except Exception:
                 detected_columns = []
-        return _json_error(str(ve), status=400, detected_columns=detected_columns)
+        return _json_error(
+            str(ve),
+            status=400,
+            detected_columns=detected_columns,
+        )
 
     except Exception as e:
-        # 엑셀 형식 오류 힌트
+        # 엑셀 형식 오류 힌트(기존 유지)
         msg = str(e)
         if ("Expected BOF record" in msg) or ("Unsupported format" in msg) or ("XLRDError" in msg):
             return _json_error(
@@ -179,4 +163,4 @@ def upload_excel(request):
         return _json_error(f"⚠️ 업로드 실패: {msg}", status=500)
 
     finally:
-        _safe_delete(fs, saved_name)
+        safe_delete(temp)

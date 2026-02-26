@@ -1,21 +1,22 @@
 # django_ma/commission/views/downloads.py
 from __future__ import annotations
 
-import io
-from datetime import datetime
-from typing import Iterable
+"""
+Downloads (Excel)
 
-import pandas as pd
+리팩토링 포인트(기능 변화 없음):
+- rows -> xlsx -> HttpResponse 빌더를 views/_excel_export.py로 SSOT화
+- Content-Disposition 한글 파일명 처리 로직은 utils_json._set_attachment_filename을 계속 사용
+"""
+
+from datetime import datetime
+
 from django.core.cache import cache
-from django.http import HttpResponse
 from django.views.decorators.http import require_GET
 
 from ..models import ApprovalPending, EfficiencyPayExcess
-from .utils_json import _json_error, _set_attachment_filename
-
-# =============================================================================
-# Fail token download
-# =============================================================================
+from ._excel_export import rows_to_excel_response
+from .utils_json import _json_error
 
 
 @require_GET
@@ -38,43 +39,9 @@ def download_upload_fail_excel(request):
     if not content:
         return _json_error("파일 데이터가 비어있습니다.", status=404)
 
-    resp = HttpResponse(
-        content,
-        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    )
-    _set_attachment_filename(resp, filename)
-    return resp
-
-
-# =============================================================================
-# Common excel builder
-# =============================================================================
-
-
-def _rows_to_excel_response(*, rows: list[dict], sheet_name: str, filename: str) -> HttpResponse:
-    df = pd.DataFrame(rows)
-    out = io.BytesIO()
-    with pd.ExcelWriter(out, engine="openpyxl") as writer:
-        df.to_excel(writer, index=False, sheet_name=sheet_name)
-
-    resp = HttpResponse(
-        out.getvalue(),
-        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    )
-    _set_attachment_filename(resp, filename)
-    return resp
-
-
-def _latest_ym_or_404(qs, *, err_msg: str):
-    latest = qs.order_by("-ym").values_list("ym", flat=True).first()
-    if not latest:
-        return None, _json_error(err_msg, status=404)
-    return latest, None
-
-
-# =============================================================================
-# Approval pending download
-# =============================================================================
+    # 기존 동작 유지: cache에 저장된 bytes를 그대로 내려준다.
+    from ._excel_export import xlsx_bytes_response
+    return xlsx_bytes_response(content=content, filename=filename)
 
 
 @require_GET
@@ -86,13 +53,16 @@ def download_approval_pending_excel(request):
     """
     ym = (request.GET.get("ym") or "").strip()
 
-    base_qs = ApprovalPending.objects.all().select_related("user")
-    if not ym:
-        ym, err = _latest_ym_or_404(base_qs, err_msg="다운로드할 데이터가 없습니다.")
-        if err:
-            return err
+    qs = ApprovalPending.objects.all().select_related("user")
+    if ym:
+        qs = qs.filter(ym=ym)
+    else:
+        latest = qs.order_by("-ym").values_list("ym", flat=True).first()
+        if not latest:
+            return _json_error("다운로드할 데이터가 없습니다.", status=404)
+        ym = latest
+        qs = qs.filter(ym=ym)
 
-    qs = base_qs.filter(ym=ym)
     rows = [
         {
             "ym": r.ym,
@@ -107,16 +77,11 @@ def download_approval_pending_excel(request):
     if not rows:
         return _json_error("해당 조건의 데이터가 없습니다.", status=404)
 
-    return _rows_to_excel_response(
+    return rows_to_excel_response(
         rows=rows,
         sheet_name="approval_pending",
         filename=f"approval_pending_{ym}.xlsx",
     )
-
-
-# =============================================================================
-# Efficiency excess download
-# =============================================================================
 
 
 @require_GET
@@ -128,13 +93,16 @@ def download_efficiency_excess_excel(request):
     """
     ym = (request.GET.get("ym") or "").strip()
 
-    base_qs = EfficiencyPayExcess.objects.all().select_related("user")
-    if not ym:
-        ym, err = _latest_ym_or_404(base_qs, err_msg="다운로드할 데이터가 없습니다.")
-        if err:
-            return err
+    qs = EfficiencyPayExcess.objects.all().select_related("user")
+    if ym:
+        qs = qs.filter(ym=ym)
+    else:
+        latest = qs.order_by("-ym").values_list("ym", flat=True).first()
+        if not latest:
+            return _json_error("다운로드할 데이터가 없습니다.", status=404)
+        ym = latest
+        qs = qs.filter(ym=ym)
 
-    qs = base_qs.filter(ym=ym)
     rows = [
         {
             "ym": r.ym,
@@ -147,7 +115,7 @@ def download_efficiency_excess_excel(request):
     if not rows:
         return _json_error("해당 조건의 데이터가 없습니다.", status=404)
 
-    return _rows_to_excel_response(
+    return rows_to_excel_response(
         rows=rows,
         sheet_name="efficiency_excess",
         filename=f"efficiency_excess_{ym}.xlsx",

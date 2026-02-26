@@ -4,13 +4,21 @@ from __future__ import annotations
 """
 commission.upload_handlers public API
 
-SSOT:
-- _update_upload_log 는 deposit handler의 구현을 단일 진실로 사용한다.
+SSOT(단일 진실) 정책:
+- DepositUploadLog 갱신 로직은 deposit._update_upload_log 를 SSOT로 사용한다.
+- 외부(views 등)에서는 commission.upload_handlers.* 로 import 하는 것을 권장한다.
+  (내부 구현 파일 위치 변경 시에도 import surface 유지 가능)
 """
 
-from .deposit import _update_upload_log  # SSOT: DepositUploadLog 갱신
+# ---------------------------------------------------------------------
+# SSOT: DepositUploadLog 갱신
+# ---------------------------------------------------------------------
+from .deposit import _update_upload_log  # SSOT
 
-# approval/efficiency handler들도 여기서 re-export (기존 코드 호환)
+# ---------------------------------------------------------------------
+# Backward-compatible re-exports
+# - 기존 코드 호환을 위해 underscore alias를 계속 제공한다.
+# ---------------------------------------------------------------------
 from .approval import _handle_upload_commission_approval  # noqa: F401
 from .efficiency import _handle_upload_efficiency_pay_excess  # noqa: F401
 

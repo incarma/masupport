@@ -1,8 +1,13 @@
-{# commission/templates/commission/_approval_upload_modal.html #}
+<!-- commission/templates/commission/_approval_upload_modal.html -->
 <div class="modal fade" id="approvalExcelUploadModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-lg modal-dialog-scrollable">
     <div class="modal-content">
 
+      <!-- =========================================================
+        Approval Excel Upload Form
+        - id/name/action: JS(approval_excel_upload.js) 의존 요소 → 변경 금지
+        - client validation: "검증만" 수행 (업로드 로직/submit lock은 JS 모듈 담당)
+      ========================================================== -->
       <form
         id="approvalUploadForm"
         class="needs-validation"
@@ -13,6 +18,7 @@
       >
         {% csrf_token %}
 
+        <!-- Header -->
         <div class="modal-header">
           <h5 class="modal-title">수수료결재 엑셀 업로드</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="닫기"></button>
@@ -20,7 +26,11 @@
 
         <div class="modal-body">
 
+          <!-- =========================================================
+            1) Upload Options (ym / part / kind)
+          ========================================================== -->
           <div class="row g-2 align-items-start">
+
             <!-- 월도 -->
             <div class="col-12 col-md-4">
               <label class="form-label mb-1">월도 (YYYY-MM)</label>
@@ -57,11 +67,14 @@
               </select>
               <div class="invalid-feedback">구분을 선택하세요.</div>
             </div>
+
           </div>
 
           <hr class="my-3">
 
-          <!-- 파일 -->
+          <!-- =========================================================
+            2) Excel File
+          ========================================================== -->
           <div class="mb-2">
             <label class="form-label mb-1">엑셀 파일</label>
             <input
@@ -74,18 +87,24 @@
             <div class="invalid-feedback">업로드할 엑셀 파일을 선택하세요.</div>
           </div>
 
-          <!-- ✅ 업로드 결과/실패목록 다운로드 (JS에서 제어) -->
+          <!-- =========================================================
+            3) Result / Fail Download (controlled by JS)
+          ========================================================== -->
           <div id="approvalUploadResult" class="mt-3 small text-center text-muted"></div>
+
           <div id="approvalFailDownloadWrap" class="mt-2 text-center d-none">
-            <a id="approvalFailDownloadLink"
-               class="btn btn-outline-danger btn-sm"
-               href="#"
-               target="_blank"
-               rel="noopener">
+            <a
+              id="approvalFailDownloadLink"
+              class="btn btn-outline-danger btn-sm"
+              href="#"
+              target="_blank"
+              rel="noopener"
+            >
               실패목록 다운로드
             </a>
           </div>
 
+          <!-- Note -->
           <div class="alert alert-secondary small mb-0">
             업로드가 완료되면 결과가 페이지에 반영됩니다.
             <span class="text-muted d-block">※ 업로드 중에는 창을 닫지 마세요.</span>
@@ -93,11 +112,10 @@
 
         </div>
 
+        <!-- Footer -->
         <div class="modal-footer">
           <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">닫기</button>
-          <button type="submit" class="btn btn-primary" id="approvalUploadSubmitBtn">
-            업로드
-          </button>
+          <button type="submit" class="btn btn-primary" id="approvalUploadSubmitBtn">업로드</button>
         </div>
       </form>
 
@@ -106,18 +124,24 @@
 </div>
 
 <script>
-  // Bootstrap validation (가벼운 클라이언트 방어)
-  // - JS 모듈(approval_excel_upload.js)과 충돌하지 않도록 "검증만" 수행
+  // Bootstrap validation (light defense)
+  // - 업로드 로직/중복제출 방지는 approval_excel_upload.js가 담당
+  // - 여기서는 checkValidity() 실패 시 submit만 막고 was-validated만 표시
+
   (function () {
     const form = document.getElementById("approvalUploadForm");
     if (!form) return;
 
-    form.addEventListener("submit", function (e) {
-      if (!form.checkValidity()) {
-        e.preventDefault();
-        e.stopPropagation();
-      }
-      form.classList.add("was-validated");
-    }, { passive: false });
+    form.addEventListener(
+      "submit",
+      function (e) {
+        if (!form.checkValidity()) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        form.classList.add("was-validated");
+      },
+      { passive: false }
+    );
   })();
 </script>

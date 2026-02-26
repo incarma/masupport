@@ -2,6 +2,10 @@
 (function () {
   "use strict";
 
+  const C = window.CommissionCommon || {};
+  const Dom = C.dom || null;
+  const text = Dom?.text || ((v) => (v === null || v === undefined ? "" : String(v)).trim());
+
   function pad2(n) {
     n = String(n || "");
     return n.length === 1 ? "0" + n : n;
@@ -23,11 +27,9 @@
     return String(s || "").replace(/\s+/g, " ").trim();
   }
 
-  // input/select/textarea가 테이블에 있으면 "현재 값"으로 치환
   function normalizeInteractiveCells(tableEl) {
     const clone = tableEl.cloneNode(true);
 
-    // input
     clone.querySelectorAll("input").forEach((inp) => {
       const td = inp.closest("td,th");
       if (!td) return;
@@ -36,43 +38,36 @@
       td.textContent = val;
     });
 
-    // select
     clone.querySelectorAll("select").forEach((sel) => {
       const td = sel.closest("td,th");
       if (!td) return;
-      const opt = sel.options && sel.selectedIndex >= 0 ? sel.options[sel.selectedIndex] : null;
+      const opt =
+        sel.options && sel.selectedIndex >= 0 ? sel.options[sel.selectedIndex] : null;
       td.textContent = opt ? safeText(opt.textContent) : "";
     });
 
-    // textarea
     clone.querySelectorAll("textarea").forEach((ta) => {
       const td = ta.closest("td,th");
       if (!td) return;
       td.textContent = safeText(ta.value);
     });
 
-    // 버튼류 제거(엑셀에 필요 없음)
     clone.querySelectorAll("button, a.btn").forEach((b) => b.remove());
 
     return clone;
   }
 
   function buildExcelHtml(tableEl, title) {
-    // Excel 호환 HTML (xls)
-    const htmlTable = tableEl.outerHTML;
-
-    return (
-      `<!DOCTYPE html>
+    return `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8" />
 <title>${title}</title>
 </head>
 <body>
-${htmlTable}
+${tableEl.outerHTML}
 </body>
-</html>`
-    );
+</html>`;
   }
 
   function downloadAsXls(filename, contentHtml) {
@@ -94,7 +89,6 @@ ${htmlTable}
     const part = safeText(root?.dataset?.selectedPart);
     const stamp = nowStamp();
 
-    // 예: 2026-02_프로사업단_수수료_미결현황_20260226_1320.xls
     const pieces = [];
     if (ym) pieces.push(ym);
     if (part) pieces.push(part);
@@ -108,20 +102,18 @@ ${htmlTable}
     const btn = e.target.closest("[data-export-table]");
     if (!btn) return;
 
-    const selector = btn.getAttribute("data-export-table");
-    const baseName = btn.getAttribute("data-export-name") || "export";
+    const selector = text(btn.getAttribute("data-export-table"));
+    const baseName = text(btn.getAttribute("data-export-name")) || "export";
     const root = document.getElementById("approval-home") || document;
 
-    const table = document.querySelector(selector);
+    const table = selector ? document.querySelector(selector) : null;
     if (!table) {
       alert("내보낼 테이블을 찾지 못했습니다: " + selector);
       return;
     }
 
-    // 현재 페이지에 보이는 DOM 그대로(=DB 재조회 없음)
     const normalized = normalizeInteractiveCells(table);
-    const title = baseName;
-    const html = buildExcelHtml(normalized, title);
+    const html = buildExcelHtml(normalized, baseName);
     const filename = buildFilename(root, baseName);
 
     downloadAsXls(filename, html);

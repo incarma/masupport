@@ -6,28 +6,32 @@ from typing import Dict, List
 
 from accounts.models import CustomUser
 from commission.models import ApprovalPending
-from commission.upload_utils import _to_int, _norm_emp_id, _read_excel_raw_matrix
-
+from commission.upload_utils import _norm_emp_id, _read_excel_raw_matrix, _to_int
 
 # =============================================================================
-# ApprovalPending Upload
+# ApprovalPending Upload (kind=approval)
 # =============================================================================
 
-@dataclass
+@dataclass(frozen=True)
 class _ApprovalRowSpec:
+    """raw matrix 기반 컬럼 인덱스(0-based)."""
     idx_emp_name: int = 1   # B
     idx_user_id: int = 2    # C
-    idx_pay: int = 13       # N (0-based)
+    idx_pay: int = 13       # N
     idx_flag: int = 14      # O
 
 
 _SPEC = _ApprovalRowSpec()
 
-
+# ✅ 유자격 조건(DB)
 _ELIGIBLE_REGIST = {"손생등록", "생보등록", "손보등록"}
 
 
 def _safe_cell(row, idx: int) -> str:
+    """
+    raw matrix row에서 cell을 안전하게 문자열로 변환한다.
+    - None / NaN / "none" / "nan" -> ""
+    """
     if len(row) <= idx:
         return ""
     v = row[idx]
@@ -37,7 +41,12 @@ def _safe_cell(row, idx: int) -> str:
     return "" if s.lower() in ("nan", "none") else s
 
 
-def handle_upload_commission_approval(file_path: str, original_name: str, ym: str, part: str = ""):
+def handle_upload_commission_approval(
+    file_path: str,
+    original_name: str,
+    ym: str,
+    part: str = "",
+) -> Dict[str, object]:
     """
     수수료결재(kind=approval) 업로드
 
@@ -54,12 +63,12 @@ def handle_upload_commission_approval(file_path: str, original_name: str, ym: st
     if df is None or getattr(df, "empty", False):
         return {"inserted_or_updated": 0, "missing_users": 0, "missing_sample": []}
 
-    bucket: Dict[str, Dict[str, object]] = {}  # uid -> {emp_name:str, paid_sum:int}
+    # uid -> {emp_name:str, paid_sum:int}
+    bucket: Dict[str, Dict[str, object]] = {}
 
     for _, row in df.iterrows():
         raw_uid = _safe_cell(row, _SPEC.idx_user_id)
         uid = _norm_emp_id(raw_uid)
-        # _norm_emp_id 결과가 비거나 숫자 아니면 skip
         if not uid or not uid.isdigit():
             continue
 
@@ -75,6 +84,7 @@ def handle_upload_commission_approval(file_path: str, original_name: str, ym: st
         if rec is None:
             bucket[uid] = {"emp_name": emp_name, "paid_sum": pay}
         else:
+            # emp_name이 비어있던 경우만 채움
             if emp_name and not rec.get("emp_name"):
                 rec["emp_name"] = emp_name
             rec["paid_sum"] = int(rec.get("paid_sum") or 0) + pay
@@ -82,13 +92,15 @@ def handle_upload_commission_approval(file_path: str, original_name: str, ym: st
     if not bucket:
         return {"inserted_or_updated": 0, "missing_users": 0, "missing_sample": []}
 
+    # ✅ 유자격 + (선택) part 스코프
     qs = (
         CustomUser.objects
         .filter(pk__in=bucket.keys())
-        .filter(regist__in=_ELIGIBLE_REGIST)  # ✅ 유자격 조건(DB)
+        .filter(regist__in=_ELIGIBLE_REGIST)
     )
     if part:
         qs = qs.filter(part=part)
+
     user_map = qs.in_bulk()
 
     missing = [uid for uid in bucket.keys() if uid not in user_map]
@@ -127,5 +139,7 @@ def handle_upload_commission_approval(file_path: str, original_name: str, ym: st
     }
 
 
+# ---------------------------------------------------------------------
 # Backward-compatible alias
+# ---------------------------------------------------------------------
 _handle_upload_commission_approval = handle_upload_commission_approval

@@ -4,24 +4,34 @@
 
 {% block title %}수수료결재{% endblock %}
 
+{% block app_css %}
+  <!-- Commission app CSS -->
+  <link
+    rel="stylesheet"
+    href="{% static 'css/apps/commission.css' %}{% if STATIC_VERSION %}?v={{ STATIC_VERSION }}{% endif %}"
+  >
+{% endblock %}
+
 {% block content %}
 <!-- =========================================================
   Approval Home (수수료 결재)
-  - CSS 정합성 유지 (commission.css)
-  - view/pages.py와 컨텍스트 키 계약(SSOT) 일치 버전
+  - view/pages.py 컨텍스트 키(SSOT)와 정합성 유지
+  - 표 export: approval_home_export.js가 data-export-*를 사용
 ========================================================== -->
 
-<div class="container my-4"
-     id="approval-home"
-     data-selected-ym="{{ selected_ym|default:'' }}"
-     data-selected-part="{{ selected_part|default:'' }}">
+<div
+  class="container my-4"
+  id="approval-home"
+  data-selected-ym="{{ selected_ym|default:'' }}"
+  data-selected-part="{{ selected_part|default:'' }}"
+>
 
   <!-- Page Title -->
-  <h3 class="text-center fw-bold mb-4" style="color:#003f7d;">
-    수수료 결재 페이지
-  </h3>
+  <h3 class="text-center fw-bold mb-4" style="color:#003f7d;">수수료 결재 페이지</h3>
 
-  <!-- 1) Search Controls (연 / 월 / 부서) -->
+  <!-- =========================================================
+    1) Search Controls (연 / 월 / 부서)
+  ========================================================== -->
   <div class="card shadow p-3 border-0 rounded-4 mb-3 deposit-maxw mx-auto">
     <form id="controlsForm" class="row g-2 align-items-end" method="get">
 
@@ -66,24 +76,30 @@
     </form>
   </div>
 
-  <!-- 2) Result Tables -->
+  <!-- =========================================================
+    2) Result Tables
+  ========================================================== -->
   <div class="card shadow p-3 border-0 rounded-4 deposit-maxw mx-auto">
 
-    <!-- Excel Upload -->
+    <!-- 2-0) Excel Upload -->
     <div class="d-flex justify-content-between mb-3">
       <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#approvalExcelUploadModal">
         엑셀업로드
       </button>
     </div>
 
-    <!-- 2-1) 지점효율 초과 -->
-    <div class="text-center fw-bold mb-2">지점효율지급 초과현황</div>
+    <!-- =========================================================
+      2-1) 지점효율 초과
+      - table id: #efficiencyExcessTable (export 버튼이 참조)
+    ========================================================== -->
     <div class="d-flex align-items-center justify-content-between mb-2">
       <div class="text-center fw-bold flex-grow-1">지점효율지급 초과현황</div>
-      <button type="button"
-              class="btn btn-sm btn-outline-success ms-2"
-              data-export-table="#efficiencyExcessTable"
-              data-export-name="지점효율지급_초과현황">
+      <button
+        type="button"
+        class="btn btn-sm btn-outline-success ms-2"
+        data-export-table="#efficiencyExcessTable"
+        data-export-name="지점효율지급_초과현황"
+      >
         엑셀 다운로드
       </button>
     </div>
@@ -113,13 +129,18 @@
 
     <hr class="my-4">
 
-    <!-- 2-2) 수수료 미결 -->
+    <!-- =========================================================
+      2-2) 수수료 미결
+      - table id: #approvalPendingTable (export 버튼이 참조)
+    ========================================================== -->
     <div class="d-flex align-items-center justify-content-between mb-2">
       <div class="text-center fw-bold flex-grow-1">수수료 미결현황</div>
-      <button type="button"
-              class="btn btn-sm btn-outline-success ms-2"
-              data-export-table="#approvalPendingTable"
-              data-export-name="수수료_미결현황">
+      <button
+        type="button"
+        class="btn btn-sm btn-outline-success ms-2"
+        data-export-table="#approvalPendingTable"
+        data-export-name="수수료_미결현황"
+      >
         엑셀 다운로드
       </button>
     </div>
@@ -155,7 +176,21 @@
   </div>
 </div>
 
+<!-- Upload Modal -->
 {% include "commission/_approval_upload_modal.html" %}
+
+<!-- Page Scripts -->
+<!---------------------------------------------------------------------------
+  Commission common (기능 영향 0)
+  - window.CommissionCommon.* 전역 유틸만 "추가"
+  - STATIC_VERSION이 있으면 그 값을 우선 사용(프로젝트 규칙 통일)
+  - 없으면 기존처럼 고정 v 유지(기능 영향 0)
+----------------------------------------------------------------------------->
+<script src="{% static 'js/commission/_dom.js' %}{% if STATIC_VERSION %}?v={{ STATIC_VERSION }}{% else %}?v=20260226_01{% endif %}"></script>
+<script src="{% static 'js/commission/_format.js' %}{% if STATIC_VERSION %}?v={{ STATIC_VERSION }}{% else %}?v=20260226_01{% endif %}"></script>
+<script src="{% static 'js/commission/_net_json.js' %}{% if STATIC_VERSION %}?v={{ STATIC_VERSION }}{% else %}?v=20260226_01{% endif %}"></script>
+<script src="{% static 'js/commission/_modals.js' %}{% if STATIC_VERSION %}?v={{ STATIC_VERSION }}{% else %}?v=20260226_01{% endif %}"></script>
+
 <script src="{% static 'js/commission/approval_excel_upload.js' %}"></script>
-<script src="{% static 'js/commission/approval_home_export.js' %}?v=20260226_01"></script>
+<script src="{% static 'js/commission/approval_home_export.js' %}{% if STATIC_VERSION %}?v={{ STATIC_VERSION }}{% else %}?v=20260226_01{% endif %}"></script>
 {% endblock %}

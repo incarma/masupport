@@ -1,17 +1,14 @@
 /* django_ma/static/js/commission/deposit_home.js
- * Deposit Home (채권현황) - FINAL (Refactor)
+ * Deposit Home (채권현황) - FINAL (Refactor + Common Util Extraction)
  *
- * ✅ 주요 기능
- * - 대상자 선택(userSelected) → pushState로 URL만 변경 + 즉시 fetch&render (새로고침 없음)
- * - 뒤로가기(popstate) → URL의 user 파라미터로 재렌더
- * - data-bind 자동 바인딩(legacy key alias 흡수)
- * - surety/other 테이블 렌더 + 말줄임(.ellipsis-cell) 클릭 시 전체보기 모달
- * - ✅ 지원신청서 버튼: PDF 생성 제거 → "텍스트 지원신청서" 부트스트랩 모달 출력
+ * ✅ 기존 기능 유지
+ * - userSelected → pushState + fetch&render
+ * - popstate → re-render
+ * - data-bind alias
+ * - surety/other table render + ellipsis modal
+ * - 지원신청서: PDF 제거 → 텍스트 모달
  *
- * ✅ 리팩토링 목표
- * - 중복 제거(fetch/unwrap, summary rows 처리 등)
- * - 기능별 모듈화 + 주석 보강
- * - 전역 중복 바인딩 가드 유지
+ * ✅ 공용 유틸 사용(있으면) + fallback 유지(없어도 동작)
  */
 (() => {
   "use strict";
@@ -22,48 +19,78 @@
   const root = document.getElementById("deposit-home");
   if (!root) return;
 
-  // 일부 data-bind가 root 밖에 있을 수 있으므로 탐색 범위를 document로 확장
   const bindRoot = document;
-
   const ds = root.dataset || {};
 
   /* ==========================================================
-   * 1) URL config (dataset 우선, 없으면 기본값)
+   * 1) Optional Common Utils
+   * ========================================================== */
+  const C = window.CommissionCommon || {};
+  const Dom = C.dom || null;
+  const F = C.format || null;
+  const NetCommon = C.net || null;
+  const Modals = C.modals || null;
+
+  /* ==========================================================
+   * 2) URL config
    * ========================================================== */
   const URLS = {
     userDetail: ds.userDetailUrl || "/commission/api/user-detail/",
     summary: ds.depositSummaryUrl || "/commission/api/deposit-summary/",
     surety: ds.depositSuretyUrl || "/commission/api/deposit-surety/",
     other: ds.depositOtherUrl || "/commission/api/deposit-other/",
-    // supportPdfUrl은 더 이상 사용하지 않음 (PDF 생성 기능 제거)
   };
 
   /* ==========================================================
-   * 2) DOM refs
+   * 3) DOM refs
    * ========================================================== */
   const els = {
-    supportBtn: document.getElementById("supportPdfBtn"), // id는 그대로 유지(템플릿 영향 최소화)
+    supportBtn: document.getElementById("supportPdfBtn"),
     resetBtn: document.getElementById("resetUserBtn"),
-    empIdSpan: document.getElementById("target_emp_id"), // fallback
-
+    empIdSpan: document.getElementById("target_emp_id"),
     suretyTbody: document.getElementById("suretyTableBody"),
     otherTbody: document.getElementById("otherTableBody"),
   };
 
-    /* ==========================================================
-   * 3) Utils
+  /* ==========================================================
+   * 4) Utils (fallback 포함)
    * ========================================================== */
   const U = (() => {
-    const toText = (v) => (v === null || v === undefined ? "" : String(v));
+    const toText = F?.toText || ((v) => (v === null || v === undefined ? "" : String(v)));
+    const stripCommas = F?.stripCommas || ((v) => toText(v).replace(/,/g, "").trim());
+    const comma = F?.comma || ((v) => {
+      const s = toText(v).trim();
+      if (!s || s === "-" || s.toLowerCase() === "nan") return "-";
+      const cleaned = s.replace(/,/g, "");
+      const num = Number(cleaned);
+      if (!Number.isFinite(num)) return s;
+      return Math.trunc(num).toLocaleString("ko-KR");
+    });
+    const percent = F?.percent || ((v) => {
+      const s = toText(v).trim();
+      if (!s || s === "-" || s.toLowerCase() === "nan") return "-";
+      const cleaned = s.replace(/,/g, "");
+      const num = Number(cleaned);
+      if (!Number.isFinite(num)) return s;
+      return `${num.toFixed(2)}%`;
+    });
+    const escapeHtml = F?.escapeHtml || ((str) =>
+      String(str ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;")
+    );
 
-    // 채권번호(bond_no)처럼 "식별자" 값은 천단위 콤마가 있으면 불편 → 제거 표시
-    const stripCommas = (v) => toText(v).replace(/,/g, "").trim();
-
-    const safeSetText = (node, text) => {
-      if (!node) return;
-      node.textContent =
-        text === null || text === undefined || text === "" ? "-" : String(text);
-    };
+    const safeSetText =
+      F?.safeSetText ||
+      Dom?.safeSetText ||
+      ((node, value) => {
+        if (!node) return;
+        node.textContent =
+          value === null || value === undefined || value === "" ? "-" : String(value);
+      });
 
     const readTextOrValue = (el) => {
       if (!el) return "";
@@ -74,55 +101,17 @@
       return String(el.textContent || "").trim();
     };
 
-    const qsUser = () =>
-      new URL(window.location.href).searchParams.get("user") || "";
+    const qsUser = () => new URL(window.location.href).searchParams.get("user") || "";
 
-    // money/percent 안전 포맷 (문자열은 그대로 통과)
-    const comma = (v) => {
-      const s = toText(v).trim();
-      if (!s || s === "-" || s.toLowerCase() === "nan") return "-";
-
-      const cleaned = s.replace(/,/g, "");
-      const num = Number(cleaned);
-      if (!Number.isFinite(num)) return s;
-      return Math.trunc(num).toLocaleString("ko-KR");
-    };
-
-    const percent = (v) => {
-      const s = toText(v).trim();
-      if (!s || s === "-" || s.toLowerCase() === "nan") return "-";
-
-      const cleaned = s.replace(/,/g, "");
-      const num = Number(cleaned);
-      if (!Number.isFinite(num)) return s;
-      return `${num.toFixed(2)}%`;
-    };
-
-    // HTML escape
-    const escapeHtml = (str) =>
-      String(str ?? "")
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#39;");
-
-    return {
-      toText,
-      stripCommas,
-      safeSetText,
-      readTextOrValue,
-      qsUser,
-      comma,
-      percent,
-      escapeHtml,
-    };
+    return { toText, stripCommas, comma, percent, escapeHtml, safeSetText, readTextOrValue, qsUser };
   })();
 
   /* ==========================================================
-   * 4) Modal: ellipsis-cell 전체보기 (공용)
+   * 5) Modals (공용 있으면 사용, 없으면 기존 fallback)
    * ========================================================== */
   const TextViewer = (() => {
+    if (Modals?.TextViewer) return Modals.TextViewer;
+
     const hasBS = () => !!(window.bootstrap && window.bootstrap.Modal);
 
     function ensureModal() {
@@ -181,11 +170,9 @@
     return { open, bindEllipsisClickOnce };
   })();
 
-    /* ==========================================================
-   * 5) Support Preview Modal (지원신청서 텍스트)
-   * - ✅ PDF 생성 기능 삭제 → 이 모달이 대체
-   * ========================================================== */
   const SupportModal = (() => {
+    if (Modals?.SupportModal) return Modals.SupportModal;
+
     const hasBS = () => !!(window.bootstrap && window.bootstrap.Modal);
 
     function ensureModal() {
@@ -217,9 +204,9 @@
         </div>`;
       document.body.appendChild(modal);
 
-      // copy handler (1회만 바인딩)
       if (!window.__depositSupportCopyBound) {
         window.__depositSupportCopyBound = true;
+
         document.addEventListener("click", async (e) => {
           const btn = e.target.closest("#supportPreviewCopyBtn");
           if (!btn) return;
@@ -253,143 +240,14 @@
       return modal;
     }
 
-    function buildText({ target, summary, suretyItems, otherItems }) {
-      const name = (target?.name || "").trim() || "-";
-      const empId = (target?.id || "").trim() || "-";
-      const part = (target?.part || "").trim() || "-";
-      const branch = (target?.branch || "").trim() || "-";
-      const joinDate = (target?.join_date_display || "").trim() || "-";
-
-      // 화면 표기 기준(summary.*)
-      const suretyTotal = U.comma(summary?.surety_total);
-      const otherTotal = U.comma(summary?.other_total);
-      const debtTotal = U.comma(summary?.debt_total);
-
-      // ------------------------------------------------------------
-      // helpers: number/status normalize
-      // ------------------------------------------------------------
-      const toNum = (v) => {
-        const s = U.toText(v).trim().replace(/,/g, "");
-        const n = Number(s);
-        return Number.isFinite(n) ? n : 0;
-      };
-      const normStatus = (v) => U.toText(v).replace(/\s+/g, "").trim(); // "유지 인" 같은 케이스 방어
-      const isKeep = (st) => ["유지", "유지인"].includes(normStatus(st));
-
-      // ✅ 요구 포맷: "가. 대상 : {소속} {성명} FA ({사번}, {입사일} 입사)"
-      const targetLine = `가. 대상 : ${branch} ${name} FA (${empId}, ${joinDate} 입사)`;
-
-      // ------------------------------------------------------------
-      // 다. 채권관리 - 데이터 리스트 기반(화면에서 이미 fetch한 surety/other 재사용)
-      // ------------------------------------------------------------
-      const S = Array.isArray(suretyItems) ? suretyItems : [];
-      const O = Array.isArray(otherItems) ? otherItems : [];
-
-      // 1) 보증보험: GA개인 + 유지 + 금액>0
-      const suretyFiltered = S.filter((x) => {
-        const pn = U.toText(x?.product_name).trim();
-        const st = x?.status;
-        const amt = toNum(x?.amount);
-        return pn.includes("GA개인") && isKeep(st) && amt > 0;
-      });
-
-      // ✅ 보증보험 표기 금액: (요구사항) "대상금액"이 0이면 기간 생략 가능
-      // - summary.surety_total 이 0이더라도 리스트에 남아있을 수 있고(또는 반대),
-      //   표기 기준을 확실히 하려면 필터된 리스트 합계를 쓰는 게 가장 일관적임.
-      const suretyFilteredSum = suretyFiltered.reduce((acc, x) => acc + toNum(x?.amount), 0);
-      const suretyDisplay = U.comma(suretyFilteredSum);
-
-      // 기간: start_date(min) ~ end_date(max)
-      const dateKey = (s) => {
-        // payload가 "YYYY-MM-DD" 또는 "-" 형태임
-        const t = U.toText(s).trim();
-        if (!t || t === "-") return "";
-        // YYYY-MM-DD 정렬 가능 키
-        return t;
-      };
-      const starts = suretyFiltered.map((x) => dateKey(x?.start_date)).filter(Boolean).sort();
-      const ends = suretyFiltered.map((x) => dateKey(x?.end_date)).filter(Boolean).sort();
-      const suretyRangeRaw =
-        starts.length || ends.length
-          ? `(${starts[0] || "-"} - ${ends[ends.length - 1] || "-"})`
-          : "";
-      // ✅ 보증보험 대상금액이 0이면 기간 표기 생략
-      const suretyRange = suretyFilteredSum > 0 ? suretyRangeRaw : "";
-
-      // 2) 기타채권 리스트: 보증내용=수수료 + 금액>0 + 상태=유지인 (전부 출력)
-      const otherFiltered = O.filter((x) => {
-        const pt = U.toText(x?.product_type).trim();
-        const st = x?.status;
-        const amt = toNum(x?.amount);
-        // ✅ '유지'/'유지인' 모두 포함 (실데이터 변형 방어)
-        return pt.includes("수수료") && isKeep(st) && amt > 0;
-      });
-
-      const otherLines =
-        otherFiltered.length > 0
-          ? otherFiltered.map((x) => {
-              // ✅ 요청 포맷: 상품명(채권번호) : 가입금액원 (가입일 : YYYY-MM-DD)
-              // ※ 메모는 표시하지 않음
-              const pname = U.toText(x?.product_name).trim() || "-";
-              const bondNo = U.stripCommas(x?.bond_no || "");
-              const bondLabel = bondNo ? `(${bondNo})` : "";
-
-              const amtNum = toNum(x?.amount);
-              const amt = `${U.comma(amtNum)}원`;
-
-              const start = U.toText(x?.start_date).trim() || "-";
-
-              return `      ${pname}${bondLabel} : ${amt} (가입일 : ${start})`;
-            })
-          : ["      - (해당 없음)"];
-
-      return [
-        targetLine,
-        "",
-        "나. 요청사항 : ",
-        "",
-        "다. 채권관리",
-        `   1. 채권합계 : ${debtTotal}원`,
-        `   2. 보증보험 : ${suretyDisplay}원${suretyRange ? " " + suretyRange : ""}`,
-        `   3. 기타채권 : ${otherTotal}원`,
-        ...otherLines,
-        "",
-        "라. 리스크관리",
-        `   1. 최종지급액 : ${U.comma(summary?.payment)}원`,
-        `   2. 환수예상수수료 및 지급예상수수료`,
-        `      - 환수예상수수료 : ${U.comma(summary?.refund_expected)}원`,
-        `      - 지급예상수수료 : ${U.comma(summary?.pay_expected)}원`,
-        `   3. 직전 3개월 장기총수수료 : ${U.comma(summary?.comm_3m)}원`,
-        `   4. 응당수금률 (2-13회차 합산)`,
-        `      - 생보 : ${U.percent(summary?.ls_2_13_due)}`,
-        `      - 손보 : ${U.percent(summary?.ns_2_13_due)}`,
-        `   5. 통산유지율 (25회차 통산)`,
-        `      - 생보 : ${U.percent(summary?.ls_25_total)}`,
-        `      - 손보 : ${U.percent(summary?.ns_25_total)}`,
-        "",
-        "※ 별첨",
-        `   - ${branch} 업무요청서 1부.`,
-        `   - ${name} FA 지표현황 1부.`,
-        `   - ${name} FA 기타채권 캡처본 1부.`,
-        `   - ${name} FA 환수리스트 캡처본 1부.`,
-        "",
-        "",
-        "  끝.",
-      ].join("\n");
-    }
-
-    function open({ target, summary, suretyItems, otherItems }) {
-      const text = buildText({ target, summary, suretyItems, otherItems });
-
+    function open({ textValue }) {
       if (!hasBS()) {
-        alert(text);
+        alert(textValue || "-");
         return;
       }
-
       const modal = ensureModal();
       const body = modal.querySelector("#supportPreviewBody");
-      if (body) body.textContent = text || "-";
-
+      if (body) body.textContent = textValue || "-";
       new bootstrap.Modal(modal).show();
     }
 
@@ -397,9 +255,13 @@
   })();
 
   /* ==========================================================
-   * 6) Network helpers
+   * 6) Network helpers (공용 있으면 사용 + fallback)
    * ========================================================== */
   const Net = (() => {
+    if (NetCommon?.fetchJSON && NetCommon?.firstObject && NetCommon?.arrayRows) {
+      return NetCommon;
+    }
+
     async function fetchJSON(url) {
       const res = await fetch(url, {
         headers: { "X-Requested-With": "XMLHttpRequest" },
@@ -415,10 +277,8 @@
       }
 
       const data = await res.json();
-
       if (!res.ok) throw new Error(data?.message || `요청 실패 (${res.status})`);
       if (data && data.ok === false) throw new Error(data.message || "요청 실패");
-
       return data;
     }
 
@@ -468,17 +328,15 @@
     },
   };
 
-    /* ==========================================================
-   * 7) Binder: data-bind 렌더 (legacy alias 흡수)
+  /* ==========================================================
+   * 7) Binder: data-bind 렌더 (legacy alias 흡수) - 기존 유지
    * ========================================================== */
   const Binder = (() => {
     const BIND_ALIAS = {
-      // target.*
       "target.emp_id": "target.id",
       "target.join_date": "target.join_date_display",
       "target.leave_date": "target.retire_date_display",
 
-      // summary.* legacy
       "summary.final_pay": "summary.final_payment",
       "summary.long_term": "summary.sales_total",
       "summary.loss_asset": "summary.maint_total",
@@ -490,7 +348,6 @@
       "summary.month2": "summary.div_2m",
       "summary.month3": "summary.div_3m",
 
-      // prefix 없이 쓰인 키를 summary.*로 매핑
       "final_payment": "summary.final_payment",
       "sales_total": "summary.sales_total",
       "refund_expected": "summary.refund_expected",
@@ -501,7 +358,7 @@
       "other_total": "summary.other_total",
       "required_debt": "summary.required_debt",
       "final_excess_amount": "summary.final_excess_amount",
-      // 유지합계
+
       "surety_keep_total": "summary.surety_keep_total",
       "other_keep_total": "summary.other_keep_total",
       "debt_keep_total": "summary.debt_keep_total",
@@ -536,9 +393,9 @@
       bindRoot.querySelectorAll("[data-bind]").forEach((node) => {
         const rawKey = node.getAttribute("data-bind");
         const key = resolveKey(rawKey);
-        const type = (node.getAttribute("data-type") || "").trim(); // money/percent/plain
-        const v = getByPath(ctx, key);
+        const type = (node.getAttribute("data-type") || "").trim();
 
+        const v = getByPath(ctx, key);
         if (type === "percent") U.safeSetText(node, U.percent(v));
         else if (type === "money") U.safeSetText(node, U.comma(v));
         else U.safeSetText(node, U.toText(v).trim() || "-");
@@ -551,7 +408,7 @@
   })();
 
   /* ==========================================================
-   * 8) Tables: surety / other 렌더
+   * 8) Tables: surety / other 렌더 - 기존 유지
    * ========================================================== */
   const Tables = (() => {
     function renderSurety(items) {
@@ -602,7 +459,6 @@
             ? `<span class="ellipsis-cell" data-full-text="${U.escapeHtml(memo)}">${U.escapeHtml(memo)}</span>`
             : "-";
 
-          // ✅ 채권번호 콤마 제거 표시
           const bondNo = U.stripCommas(x.bond_no || "");
 
           return `
@@ -641,7 +497,7 @@
   })();
 
   /* ==========================================================
-   * 9) Main flow: load → render
+   * 9) Main flow state
    * ========================================================== */
   let currentUserId = "";
   let lastTarget = null;
@@ -655,6 +511,8 @@
       currentUserId = "";
       lastTarget = null;
       lastSummary = null;
+      lastSurety = [];
+      lastOther = [];
       Tables.clearUI();
       return;
     }
@@ -676,12 +534,11 @@
       lastOther = Array.isArray(other) ? other : [];
 
       Binder.render({ target: lastTarget, summary: lastSummary });
-      Tables.renderSurety(surety);
-      Tables.renderOther(other);
+      Tables.renderSurety(lastSurety);
+      Tables.renderOther(lastOther);
     } catch (err) {
       console.error(err);
       alert(err?.message || "데이터 조회 중 오류가 발생했습니다.");
-      // UX: 일부라도 표시된 상태를 깨지 않기 위해 clearUI()는 호출하지 않음
     }
   }
 
@@ -694,21 +551,119 @@
   }
 
   /* ==========================================================
-   * 10) Events
+   * 10) Support text builder (기존 규칙 그대로 유지)
+   * ========================================================== */
+  function buildSupportText({ target, summary, suretyItems, otherItems }) {
+    const name = (target?.name || "").trim() || "-";
+    const empId = (target?.id || "").trim() || "-";
+    const branch = (target?.branch || "").trim() || "-";
+    const joinDate = (target?.join_date_display || "").trim() || "-";
+
+    const suretyTotal = U.comma(summary?.surety_total);
+    const otherTotal = U.comma(summary?.other_total);
+    const debtTotal = U.comma(summary?.debt_total);
+
+    const toNum = (v) => {
+      const s = U.toText(v).trim().replace(/,/g, "");
+      const n = Number(s);
+      return Number.isFinite(n) ? n : 0;
+    };
+    const normStatus = (v) => U.toText(v).replace(/\s+/g, "").trim();
+    const isKeep = (st) => ["유지", "유지인"].includes(normStatus(st));
+
+    const targetLine = `가. 대상 : ${branch} ${name} FA (${empId}, ${joinDate} 입사)`;
+
+    const S = Array.isArray(suretyItems) ? suretyItems : [];
+    const O = Array.isArray(otherItems) ? otherItems : [];
+
+    const suretyFiltered = S.filter((x) => {
+      const pn = U.toText(x?.product_name).trim();
+      const amt = toNum(x?.amount);
+      return pn.includes("GA개인") && isKeep(x?.status) && amt > 0;
+    });
+
+    const suretyFilteredSum = suretyFiltered.reduce((acc, x) => acc + toNum(x?.amount), 0);
+    const suretyDisplay = U.comma(suretyFilteredSum);
+
+    const dateKey = (s) => {
+      const t = U.toText(s).trim();
+      if (!t || t === "-") return "";
+      return t;
+    };
+    const starts = suretyFiltered.map((x) => dateKey(x?.start_date)).filter(Boolean).sort();
+    const ends = suretyFiltered.map((x) => dateKey(x?.end_date)).filter(Boolean).sort();
+    const suretyRangeRaw =
+      starts.length || ends.length
+        ? `(${starts[0] || "-"} - ${ends[ends.length - 1] || "-"})`
+        : "";
+    const suretyRange = suretyFilteredSum > 0 ? suretyRangeRaw : "";
+
+    const otherFiltered = O.filter((x) => {
+      const pt = U.toText(x?.product_type).trim();
+      const amt = toNum(x?.amount);
+      return pt.includes("수수료") && isKeep(x?.status) && amt > 0;
+    });
+
+    const otherLines =
+      otherFiltered.length > 0
+        ? otherFiltered.map((x) => {
+            const pname = U.toText(x?.product_name).trim() || "-";
+            const bondNo = U.stripCommas(x?.bond_no || "");
+            const bondLabel = bondNo ? `(${bondNo})` : "";
+            const amtNum = toNum(x?.amount);
+            const amt = `${U.comma(amtNum)}원`;
+            const start = U.toText(x?.start_date).trim() || "-";
+            return `      ${pname}${bondLabel} : ${amt} (가입일 : ${start})`;
+          })
+        : ["      - (해당 없음)"];
+
+    return [
+      targetLine,
+      "",
+      "나. 요청사항 : ",
+      "",
+      "다. 채권관리",
+      `   1. 채권합계 : ${debtTotal}원`,
+      `   2. 보증보험 : ${suretyDisplay}원${suretyRange ? " " + suretyRange : ""}`,
+      `   3. 기타채권 : ${otherTotal}원`,
+      ...otherLines,
+      "",
+      "라. 리스크관리",
+      `   1. 최종지급액 : ${U.comma(summary?.payment)}원`,
+      `   2. 환수예상수수료 및 지급예상수수료`,
+      `      - 환수예상수수료 : ${U.comma(summary?.refund_expected)}원`,
+      `      - 지급예상수수료 : ${U.comma(summary?.pay_expected)}원`,
+      `   3. 직전 3개월 장기총수수료 : ${U.comma(summary?.comm_3m)}원`,
+      `   4. 응당수금률 (2-13회차 합산)`,
+      `      - 생보 : ${U.percent(summary?.ls_2_13_due)}`,
+      `      - 손보 : ${U.percent(summary?.ns_2_13_due)}`,
+      `   5. 통산유지율 (25회차 통산)`,
+      `      - 생보 : ${U.percent(summary?.ls_25_total)}`,
+      `      - 손보 : ${U.percent(summary?.ns_25_total)}`,
+      "",
+      "※ 별첨",
+      `   - ${branch} 업무요청서 1부.`,
+      `   - ${name} FA 지표현황 1부.`,
+      `   - ${name} FA 기타채권 캡처본 1부.`,
+      `   - ${name} FA 환수리스트 캡처본 1부.`,
+      "",
+      "",
+      "  끝.",
+    ].join("\n");
+  }
+
+  /* ==========================================================
+   * 11) Events
    * ========================================================== */
   function getSelectedUserIdFromEvent(e) {
     const d = e?.detail || {};
 
-    // detail에 id가 직접 들어오는 케이스
-    const direct =
-      d.id || d.user_id || d.userId || d.empId || d.emp_id || d.employee_id;
+    const direct = d.id || d.user_id || d.userId || d.empId || d.emp_id || d.employee_id;
     if (direct) return String(direct).trim();
 
-    // detail에 user/target 객체가 들어오는 케이스 방어
     const obj = d.user || d.target || d.payload || d.data || d.result || null;
     if (obj && typeof obj === "object") {
-      const oid =
-        obj.id || obj.user_id || obj.userId || obj.empId || obj.emp_id || obj.employee_id;
+      const oid = obj.id || obj.user_id || obj.userId || obj.empId || obj.emp_id || obj.employee_id;
       if (oid) return String(oid).trim();
     }
 
@@ -751,26 +706,29 @@
         return;
       }
 
-      // ✅ PDF 생성 제거 → 모달 텍스트 출력
-      SupportModal.open({
+      const textValue = buildSupportText({
         target: lastTarget || { id: uid },
         summary: lastSummary || {},
         suretyItems: lastSurety || [],
         otherItems: lastOther || [],
       });
+
+      // 공용 SupportModal이 있으면 "그걸로" 띄우되, 텍스트는 기존 규칙 그대로 전달
+      SupportModal.open({ textValue });
     });
   }
 
-  // 뒤로가기 지원
   window.addEventListener("popstate", () => {
     loadAndRender(U.qsUser());
   });
 
   /* ==========================================================
-   * 11) Init
+   * 12) Init
    * ========================================================== */
   function init() {
-    TextViewer.bindEllipsisClickOnce();
+    // 공용 모달이 있으면 그 안의 1회 바인딩을 쓰게 됨
+    TextViewer.bindEllipsisClickOnce?.();
+
     bindUserSelected();
     bindReset();
     bindSupportModal();

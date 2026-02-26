@@ -1,123 +1,143 @@
 /* django_ma/static/css/apps/commission.css
 ==========================================================
-💳 commission.css — Commission 앱 전용 스타일
+💳 Commission App Styles (FINAL Refactor)
 - 범위: deposit_home + approval_home 테이블 정책/스크롤/ellipsis
+- 목표: 기능 변화 0 + 중복 제거 + 구조화 + 주석 강화
 ========================================================== */
 
 /* ==========================================================
- 1) Deposit Home (채권현황)
+ 0) Shared tokens / layout helpers
 ========================================================== */
 .deposit-maxw { max-width: 1100px; }
 
 .deposit-title { color: #003f7d; }
-.deposit-section-title { color: #000000; }
+.deposit-section-title { color: #000; }
 
-/* info-table 공통 */
-.info-table thead th {
-  font-size: 0.85rem;
-  font-weight: 700;
-  color: #5b6b7a;
-  background: #f6f8fb;
-  border-bottom: 1px solid #e6edf5;
-  padding: 10px 12px;
+/* 공통: 말줄임 처리용 span (JS: .ellipsis-cell 클릭 → 전체보기 모달) */
+.ellipsis-cell{
+  display:block;
+  width:100%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
 }
 
-.info-table tbody td {
-  font-size: 1rem;
-  padding: 10px 12px;
-  border-bottom: 1px solid #eef2f7;
+/* ==========================================================
+ 1) Deposit Home (채권현황)
+========================================================== */
+
+/* ------------------------------
+ 1-1) info-table 공통(상단 지표/인적사항 등)
+------------------------------ */
+.info-table thead th{
+  font-size:0.85rem;
+  font-weight:700;
+  color:#5b6b7a;
+  background:#f6f8fb;
+  border-bottom:1px solid #e6edf5;
+  padding:10px 12px;
+}
+.info-table tbody td{
+  font-size:1rem;
+  padding:10px 12px;
+  border-bottom:1px solid #eef2f7;
 }
 
-/* ----------------------------------------------------------
-  * ✅ 보증보험/기타채권: colgroup(%) 기반 컬럼폭 고정
-  * - table-layout: fixed + width:100% 가 필수
-  * - 전체 폭은 부모(.table-responsive) 폭을 그대로 따라감
-  * ---------------------------------------------------------- */
- #suretyTable,
- #otherTable {
-   width: 100%;
-   min-width: 100%;
-   table-layout: fixed;
- }
+/* ------------------------------
+ 1-2) 보증보험/기타채권 테이블 공통 정책
+ ✅ colgroup(%) 기반 컬럼폭 고정
+ - table-layout: fixed + width/min-width 100% 필수
+ - nowrap + ellipsis 기본값
+------------------------------ */
+#suretyTable,
+#otherTable{
+  width:100%;
+  min-width:100%;
+  table-layout:fixed;
+}
 
-/* 기본: 줄바꿈 금지 */
+/* fixed 레이아웃에서 overflow-visible이면 폭이 깨질 수 있어 기본은 hidden+ellipsis */
 #suretyTable th, #suretyTable td,
-#otherTable th,  #otherTable td {
-  white-space: nowrap;
-  word-break: keep-all;
-  overflow: hidden;          /* fixed 레이아웃에서 overflow-visible이면 컬럼폭이 깨질 수 있음 */
-  text-overflow: ellipsis;   /* 기본은 말줄임(필요시 컬럼별로 override 가능) */
-  vertical-align: middle;
+#otherTable  th, #otherTable  td{
+  white-space:nowrap;
+  word-break:keep-all;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  vertical-align:middle;
 }
 
-/* ---------- surety: colgroup 비율(%) 설정 ---------- */
-/* 필요하면 여기 숫자만 바꾸면 됨 (합계 100% 권장) */
-#suretyColGroup col[data-col="product"] { width: 14% !important; }
-#suretyColGroup col[data-col="policy"]  { width: 32% !important; }
-#suretyColGroup col[data-col="amount"]  { width: 14% !important; }
-#suretyColGroup col[data-col="status"]  { width: 10% !important; }
-#suretyColGroup col[data-col="start"]   { width: 15% !important; }
-#suretyColGroup col[data-col="end"]     { width: 15% !important; }
+/* ------------------------------
+ 1-3) Surety (보증보험) colgroup widths
+ - 필요 시 비율(%)만 조정 (합계 100% 권장)
+------------------------------ */
+#suretyColGroup col[data-col="product"] { width:14% !important; }
+#suretyColGroup col[data-col="policy"]  { width:32% !important; }
+#suretyColGroup col[data-col="amount"]  { width:14% !important; }
+#suretyColGroup col[data-col="status"]  { width:10% !important; }
+#suretyColGroup col[data-col="start"]   { width:15% !important; }
+#suretyColGroup col[data-col="end"]     { width:15% !important; }
 
-/* 금액 우측 정렬 */
+/* 금액 우측 정렬(3열) */
 #suretyTable th:nth-child(3),
-#suretyTable td:nth-child(3) { text-align: right; }
+#suretyTable td:nth-child(3){ text-align:right; }
 
-/* 증권번호는 hover/tooltip 용도로 cursor 유지 */
+/* 증권번호(2열): hover/tooltip/모달 UX 위해 pointer 유지 */
 #suretyTable th:nth-child(2),
-#suretyTable td:nth-child(2) { cursor: pointer; }
+#suretyTable td:nth-child(2){ cursor:pointer; }
 
-/* ---------- other: colgroup 비율(%) 설정 ---------- */
-/* 필요하면 여기 숫자만 바꾸면 됨 (합계 100% 권장) */
-#otherColGroup col[data-col="product"] { width: 9% !important; }
-#otherColGroup col[data-col="type"]    { width: 9% !important; }
-#otherColGroup col[data-col="amount"]  { width: 12% !important; }
-#otherColGroup col[data-col="status"]  { width: 8% !important; }
-#otherColGroup col[data-col="bond"]    { width: 9% !important; }
-#otherColGroup col[data-col="start"]   { width: 12% !important; }
-#otherColGroup col[data-col="memo"]    { width: 41% !important; }
- 
-/* 금액 우측 정렬 */
+/* ------------------------------
+ 1-4) Other (기타채권) colgroup widths
+ - 필요 시 비율(%)만 조정 (합계 100% 권장)
+------------------------------ */
+#otherColGroup col[data-col="product"] { width:9%  !important; }
+#otherColGroup col[data-col="type"]    { width:9%  !important; }
+#otherColGroup col[data-col="amount"]  { width:12% !important; }
+#otherColGroup col[data-col="status"]  { width:8%  !important; }
+#otherColGroup col[data-col="bond"]    { width:9%  !important; }
+#otherColGroup col[data-col="start"]   { width:12% !important; }
+#otherColGroup col[data-col="memo"]    { width:41% !important; }
+
+/* 금액 우측 정렬(3열) */
 #otherTable th:nth-child(3),
-#otherTable td:nth-child(3) { text-align: right; }
+#otherTable td:nth-child(3){ text-align:right; }
 
-/* 비고는 hover/tooltip 용도로 cursor 유지 */
+/* 비고(7열): hover/tooltip/모달 UX 위해 pointer 유지 */
 #otherTable th:nth-child(7),
-#otherTable td:nth-child(7) { cursor: pointer; }
-
-/* ellipsis cell 내부 span */
-.ellipsis-cell {
-  display: block;
-  width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+#otherTable td:nth-child(7){ cursor:pointer; }
 
 /* ==========================================================
  2) Approval Home (approval_home.html)
 ========================================================== */
+
+/* ------------------------------
+ 2-1) 가로 스크롤 래퍼
+------------------------------ */
 .commission-table-scroll{
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  padding-bottom: 6px;
+  overflow-x:auto;
+  -webkit-overflow-scrolling:touch;
+  padding-bottom:6px;
 }
 
+/* ------------------------------
+ 2-2) nowrap 테이블 (폭은 콘텐츠 기준)
+ - approval 테이블은 "내용이 길어도 줄바꿈 없이" 가로 스크롤로 보는 정책
+------------------------------ */
 .commission-nowrap-table{
-  width: max-content;
-  min-width: 100%;
-  table-layout: auto;
+  width:max-content;
+  min-width:100%;
+  table-layout:auto;
 }
 
 .commission-nowrap-table th,
 .commission-nowrap-table td{
-  white-space: nowrap;
-  word-break: keep-all;
-  overflow: visible;
-  text-overflow: clip;
-  vertical-align: middle;
+  white-space:nowrap;
+  word-break:keep-all;
+  overflow:visible;
+  text-overflow:clip;
+  vertical-align:middle;
 }
 
+/* money-cell은 전역(base.css)에도 있지만, approval에서 확실히 고정 */
 .commission-nowrap-table .money-cell{
-  white-space: nowrap !important;
+  white-space:nowrap !important;
 }

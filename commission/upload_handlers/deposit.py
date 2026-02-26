@@ -26,26 +26,30 @@ from commission.upload_utils import (
 )
 
 # =============================================================================
-# Internal helpers
+# Internal helpers (SSOT within this module)
 # =============================================================================
-def _clean_ids(series) -> List[str]:
-    ids = series.apply(_norm_emp_id).astype(str)
-    return [x for x in ids.tolist() if x and x.strip()]
-
 
 def _existing_ids(ids: Sequence[str]) -> Tuple[set, List[str]]:
+    """
+    CustomUser 존재하는 ID를 bulk 조회한다.
+    반환:
+    - existing_set
+    - missing_sample(최대 10개)
+    """
     existing = _bulk_existing_user_ids(ids)
     missing_sample = [x for x in ids if x not in existing][:10]
     return set(existing), missing_sample
 
 
 def _update_summary(uid: str, defaults: Dict):
+    """DepositSummary(user_id=uid) upsert."""
     DepositSummary.objects.update_or_create(user_id=uid, defaults=defaults)
 
 
 # =============================================================================
 # DepositSummary upload handlers (DataFrame)
 # =============================================================================
+
 def handle_upload_final_payment(df):
     """
     최종지급액 업로드
@@ -178,6 +182,7 @@ def handle_upload_refund_pay_expected(df):
 # =============================================================================
 # DepositSummary upload handlers (채권지표 / 보증증액 공용)
 # =============================================================================
+
 _DEPOSIT_METRICS_COL_MAP = {
     "3개월 장기 총수수료(지급월+직전2개월)": "comm_3m",
     "6개월 장기 총수수료(지급월+직전5개월)": "comm_6m",
@@ -295,6 +300,7 @@ def handle_upload_guarantee_increase(df):
 # =============================================================================
 # Due rates (DataFrame)
 # =============================================================================
+
 def _handle_due_common(df, *, field_2_6: str, field_2_13: str):
     col_user = _detect_col(df, must_include=("사원", "코드"), any_include=()) or _detect_emp_id_col(df)
     col_2_6 = _detect_col(df, must_include=("2~6", "합산"), any_include=())
@@ -343,6 +349,7 @@ def handle_upload_ns_due(df):
 # =============================================================================
 # Detail uploads (DataFrame)
 # =============================================================================
+
 def handle_upload_surety(df):
     """
     보증보험 상세 업로드
@@ -516,6 +523,7 @@ def handle_upload_other_debt(df):
 # =============================================================================
 # Raw matrix file handlers (통산손/생보)
 # =============================================================================
+
 def _handle_total_from_file_common(file_path: str, original_name: str, *, prefix: str):
     """
     통산손/생보 raw matrix 업로드 공통
@@ -598,11 +606,15 @@ _handle_upload_ns_total_from_file = handle_upload_ns_total_from_file
 _handle_upload_ls_total_from_file = handle_upload_ls_total_from_file
 
 
+# =============================================================================
+# SSOT: DepositUploadLog update
+# =============================================================================
 def _update_upload_log(part: str, upload_type: str, excel_file_name: str, count: int) -> str:
     """
     DepositUploadLog(part + upload_type unique) 갱신
-    - DB/모델 필드명이 row_count(rows_count) / file_name(filename) 등 환경차가 있을 수 있어
-      _meta.get_field로 안전하게 매핑한다.
+
+    - DB/모델 필드명이 row_count(rows_count) / file_name(filename) 등
+      환경차가 있을 수 있어 _meta.get_field로 안전하게 매핑한다.
     """
     def _pick_field(*candidates: str) -> str:
         for name in candidates:

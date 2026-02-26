@@ -13,8 +13,11 @@ Mode = Literal["df", "file"]
 class UploadSpec:
     """
     SSOT 업로드 스펙
-    - mode == "df"   : read_excel_safely -> DataFrame -> fn(df)
-    - mode == "file" : FileSystemStorage 저장 경로 -> fn(file_path, original_name)
+
+    - mode == "df"
+      views에서 _read_excel_safely로 DataFrame을 만든 후 fn(df) 호출
+    - mode == "file"
+      views에서 임시 저장된 file_path/original_name을 fn(file_path, original_name)로 전달
     """
     upload_type: str
     mode: Mode
@@ -22,11 +25,15 @@ class UploadSpec:
     msg_tpl: str
 
 
-# ---------------------------------------------------------------------
+# =============================================================================
 # SSOT Registry
-# ---------------------------------------------------------------------
+# - upload_type 문자열이 "유일키"
+# - views는 이 레지스트리만 믿고 처리한다.
+# =============================================================================
 _REGISTRY: Dict[str, UploadSpec] = {
-    # DataFrame handlers
+    # -----------------------------------------------------------------
+    # DataFrame 기반(일반 Excel)
+    # -----------------------------------------------------------------
     "최종지급액": UploadSpec(
         upload_type="최종지급액",
         mode="df",
@@ -40,7 +47,7 @@ _REGISTRY: Dict[str, UploadSpec] = {
         msg_tpl="✅ 환수/지급예상 업로드 완료 ({n}건)",
     ),
 
-    # 기존 보증증액(호환 유지) → 내부적으로 채권지표 로직과 동일
+    # 기존 보증증액(호환 유지) → 내부적으로는 채권지표 로직과 동일
     "보증증액": UploadSpec(
         upload_type="보증증액",
         mode="df",
@@ -81,7 +88,9 @@ _REGISTRY: Dict[str, UploadSpec] = {
         msg_tpl="✅ 기타채권 업로드 완료 ({n}건)",
     ),
 
-    # Raw matrix file handlers
+    # -----------------------------------------------------------------
+    # Raw matrix 기반(통산손/생보)
+    # -----------------------------------------------------------------
     "통산손보": UploadSpec(
         upload_type="통산손보",
         mode="file",
@@ -98,6 +107,7 @@ _REGISTRY: Dict[str, UploadSpec] = {
 
 
 def get_upload_spec(upload_type: str) -> UploadSpec:
+    """upload_type -> UploadSpec (없으면 KeyError)"""
     try:
         return _REGISTRY[upload_type]
     except KeyError:
@@ -105,6 +115,7 @@ def get_upload_spec(upload_type: str) -> UploadSpec:
 
 
 def supported_upload_types() -> Iterable[str]:
+    """지원 업로드 타입 목록"""
     return tuple(_REGISTRY.keys())
 
 

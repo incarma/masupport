@@ -3,22 +3,20 @@ from __future__ import annotations
 
 from accounts.models import CustomUser
 from commission.models import EfficiencyPayExcess
+from commission.upload_utils import _norm_emp_id, _read_excel_raw_matrix, _to_int
 
-from commission.upload_utils import (
-    _to_int,
-    _norm_emp_id,
-    _read_excel_raw_matrix,
-)
+# =============================================================================
+# EfficiencyPayExcess Upload (kind=efficiency)
+# =============================================================================
 
-
-# =========================================================
-# 지점효율 초과 업로드 (EfficiencyPayExcess)
-# =========================================================
 def _find_header_row_and_col_indices(df_raw):
     """
     raw matrix(header=None)에서
     - 헤더 행(구분/금액 키워드 포함)을 찾아
-    - 구분열/금액열 index를 리턴
+    - 구분열/금액열 index를 리턴한다.
+
+    탐색 범위:
+    - 상단 0~5행(최대 6행)만 검사(파일 편차 대응)
     """
     def _norm(x):
         s = "" if x is None else str(x).strip()
@@ -47,13 +45,19 @@ def _find_header_row_and_col_indices(df_raw):
     return None, None, None
 
 
-def handle_upload_efficiency_pay_excess(file_path: str, original_name: str, ym: str, part: str = ""):
+def handle_upload_efficiency_pay_excess(
+    file_path: str,
+    original_name: str,
+    ym: str,
+    part: str = "",
+):
     """
     지점효율(kind=efficiency) 업로드
+
     - 사번: 사원번호(E열)
     - 지급금액합계: 구분 == '지급' 인 금액 합계
     - 저장: EfficiencyPayExcess(ym+user unique)
-    + part가 있으면 해당 part 사용자만 저장(안전)
+    - part가 있으면 해당 part 사용자만 저장(스코프 안전장치)
     """
     df = _read_excel_raw_matrix(file_path, original_name=original_name, skiprows=0, header_none=True)
 
@@ -63,7 +67,8 @@ def handle_upload_efficiency_pay_excess(file_path: str, original_name: str, ym: 
     if header_row is None:
         raise ValueError("엑셀에서 '구분'/'금액' 헤더를 찾지 못했습니다. (지점효율 파일 형식을 확인해주세요)")
 
-    bucket = {}  # uid -> sum_amount
+    # uid -> 지급 합계
+    bucket = {}
 
     for r in range(header_row + 1, len(df.index)):
         row = df.iloc[r]
@@ -127,7 +132,7 @@ def handle_upload_efficiency_pay_excess(file_path: str, original_name: str, ym: 
     }
 
 
-# =========================================================
+# ---------------------------------------------------------------------
 # Backward-compatible alias
-# =========================================================
+# ---------------------------------------------------------------------
 _handle_upload_efficiency_pay_excess = handle_upload_efficiency_pay_excess
