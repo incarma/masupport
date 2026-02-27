@@ -21,6 +21,9 @@ from commission.upload_handlers import (
 )
 from commission.upload_utils import _read_excel_raw_matrix
 
+from audit.services import log_action
+from audit.constants import ACTION
+
 from ..models import ApprovalExcelUploadLog, ApprovalPending, EfficiencyPayExcess
 from ._files import save_temp_upload, safe_delete
 from ._ym import resolve_ym
@@ -109,11 +112,39 @@ def approval_upload_excel(request):
         resolved = resolve_ym(ym_param=ym_param, year=year, month=month)
         ym = resolved.ym
     except ValueError as ve:
+        # ✅ AuditLog (failure: bad request)
+        try:
+            log_action(
+                request,
+                ACTION.COMMISSION_EXCEL_UPLOAD,
+                meta={"ym": ym_param, "year": year, "month": month, "part": part, "kind": kind, "error": str(ve)},
+                success=False,
+            )
+        except Exception:
+            pass
         return _json_error(str(ve), status=400)
 
     if kind not in ("efficiency", "approval"):
+        try:
+            log_action(
+                request,
+                ACTION.COMMISSION_EXCEL_UPLOAD,
+                meta={"ym": ym, "part": part, "kind": kind, "error": "invalid kind"},
+                success=False,
+            )
+        except Exception:
+            pass
         return _json_error("구분(kind)을 선택해주세요. (efficiency/approval)", status=400)
     if not excel_file:
+        try:
+            log_action(
+                request,
+                ACTION.COMMISSION_EXCEL_UPLOAD,
+                meta={"ym": ym, "part": part, "kind": kind, "error": "missing excel_file"},
+            success=False,
+            )
+        except Exception:
+            pass
         return _json_error("엑셀 파일이 전달되지 않았습니다.", status=400)
 
     temp = save_temp_upload(excel_file)
@@ -138,6 +169,27 @@ def approval_upload_excel(request):
                 filename=f"upload_fail_{ym}_{part or 'ALL'}_{kind}.xlsx",
             )
 
+        # ✅ AuditLog (success)
+        try:
+            log_action(
+                request,
+                ACTION.COMMISSION_EXCEL_UPLOAD,
+                meta={
+                    "ym": ym,
+                    "part": part,
+                    "kind": kind,
+                    "row_count": row_count,
+                    "inserted": inserted,
+                    "missing_users": int(result.get("missing_users") or 0),
+                    "missing_sample": (missing_sample[:30] if isinstance(missing_sample, list) else []),
+                    "fail_token": fail_token or "",
+                    "file_name": temp.original_name,
+                },
+                success=True,
+            )
+        except Exception:
+            pass
+
         return _json_ok(
             "✅ 업로드가 완료되었습니다.",
             ym=ym,
@@ -153,9 +205,29 @@ def approval_upload_excel(request):
         )
 
     except ValueError as ve:
+        # ✅ AuditLog (failure)
+        try:
+            log_action(
+                request,
+                ACTION.COMMISSION_EXCEL_UPLOAD,
+                meta={"ym": ym, "part": part, "kind": kind, "file_name": temp.original_name, "error": str(ve)},
+                success=False,
+            )
+        except Exception:
+            pass
         return _json_error(str(ve), status=400)
 
     except Exception as e:
+        # ✅ AuditLog (failure)
+        try:
+            log_action(
+                request,
+                ACTION.COMMISSION_EXCEL_UPLOAD,
+                meta={"ym": ym, "part": part, "kind": kind, "file_name": temp.original_name, "error": str(e)},
+                success=False,
+            )
+        except Exception:
+            pass
         return _json_error(f"⚠️ 업로드 실패: {e}", status=500)
 
     finally:

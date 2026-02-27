@@ -110,6 +110,7 @@ INSTALLED_APPS = [
     "django_extensions",
     "ckeditor",
     "ckeditor_uploader",
+    "audit.apps.AuditConfig",
 ]
 
 # =============================================================================
@@ -121,6 +122,7 @@ MIDDLEWARE = [
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
+    "audit.middleware.RequestLogMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     # ✅ login/admin login GET에서 csrftoken 강제 발급(뷰/캐시 의존 제거)
     "web_ma.middleware.ForceCSRFCookieOnLoginMiddleware",

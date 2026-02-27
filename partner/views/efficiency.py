@@ -28,6 +28,9 @@ from partner.models import (
     PartnerChangeLog,
 )
 
+from audit.services import log_action
+from audit.constants import ACTION
+
 from .responses import json_err, json_ok, parse_json_body
 from .utils import (
     build_affiliation_display,
@@ -483,6 +486,7 @@ def efficiency_confirm_upload(request):
         return json_err("superuser는 branch가 필요합니다.", status=400)
 
     group: Optional[EfficiencyConfirmGroup] = None
+    group_created = False
 
     if incoming_group_id:
         group = EfficiencyConfirmGroup.objects.select_for_update().filter(confirm_group_id=incoming_group_id).first()
@@ -510,6 +514,7 @@ def efficiency_confirm_upload(request):
             title="",
             note="",
         )
+        group_created = True
 
     att = EfficiencyConfirmAttachment.objects.create(
         group=group,
@@ -520,6 +525,27 @@ def efficiency_confirm_upload(request):
         file=f,
         original_name=f.name or "",
     )
+
+    # ✅ AuditLog: Efficiency Confirm 업로드(감사 핵심)
+    try:
+        log_action(
+            request,
+            ACTION.EFFICIENCY_CONFIRM_UPLOAD,
+            obj=att,
+            meta={
+                "month": payload_month,
+                "part": part,
+                "branch": branch,
+                "confirm_group_id": getattr(group, "confirm_group_id", ""),
+                "group_created": bool(group_created),
+                "attachment_id": getattr(att, "id", None),
+                "file_name": (att.original_name or ""),
+                "size": getattr(getattr(att, "file", None), "size", None),
+            },
+            success=True,
+        )
+    except Exception:
+        pass
 
     PartnerChangeLog.objects.create(
         user=user,

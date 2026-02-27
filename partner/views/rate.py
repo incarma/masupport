@@ -15,6 +15,9 @@ from accounts.decorators import grade_required
 from accounts.models import CustomUser
 from partner.models import RateChange, RateTable, SubAdminTemp  # ✅ SubAdminTemp 추가
 
+from audit.services import log_action
+from audit.constants import ACTION
+
 from .responses import json_err, json_ok, parse_json_body
 from .utils import (
     find_table_rate,
@@ -128,49 +131,90 @@ def rate_save(request):
     branch = resolve_branch_for_write(user, payload.get("branch") or "")
 
     saved = 0
-    for r in rows:
-        target_id = _to_str(r.get("target_id") or "")
-        if not target_id:
-            continue
+    target_ids = []
 
-        target = CustomUser.objects.filter(id=target_id).first()
-        if not target:
-            continue
+    try:
+        for r in rows:
+            target_id = _to_str(r.get("target_id") or "")
+            if not target_id:
+                continue
 
-        rt = RateTable.objects.filter(user=target).first()
-        before_ftable = rt.non_life_table if rt else ""
-        before_ltable = rt.life_table if rt else ""
+            target = CustomUser.objects.filter(id=target_id).first()
+            if not target:
+                continue
 
-        before_frate = find_table_rate(target.branch, before_ftable)
-        before_lrate = find_table_rate(target.branch, before_ltable)
+            rt = RateTable.objects.filter(user=target).first()
+            before_ftable = rt.non_life_table if rt else ""
+            before_ltable = rt.life_table if rt else ""
 
-        after_ftable = _to_str(r.get("after_ftable") or "")
-        after_ltable = _to_str(r.get("after_ltable") or "")
+            before_frate = find_table_rate(target.branch, before_ftable)
+            before_lrate = find_table_rate(target.branch, before_ltable)
 
-        after_frate = find_table_rate(target.branch, after_ftable)
-        after_lrate = find_table_rate(target.branch, after_ltable)
+            after_ftable = _to_str(r.get("after_ftable") or "")
+            after_ltable = _to_str(r.get("after_ltable") or "")
 
-        memo = _to_str(r.get("memo") or "")
+            after_frate = find_table_rate(target.branch, after_ftable)
+            after_lrate = find_table_rate(target.branch, after_ltable)
 
-        RateChange.objects.create(
-            requester=user,
-            target=target,
-            part=part,
-            branch=branch,
-            month=month,
-            before_ftable=before_ftable,
-            before_frate=before_frate,
-            before_ltable=before_ltable,
-            before_lrate=before_lrate,
-            after_ftable=after_ftable,
-            after_frate=after_frate,
-            after_ltable=after_ltable,
-            after_lrate=after_lrate,
-            memo=memo,
-        )
-        saved += 1
+            memo = _to_str(r.get("memo") or "")
 
-    return json_ok({"saved_count": saved})
+            RateChange.objects.create(
+                requester=user,
+                target=target,
+                part=part,
+                branch=branch,
+                month=month,
+                before_ftable=before_ftable,
+                before_frate=before_frate,
+                before_ltable=before_ltable,
+                before_lrate=before_lrate,
+                after_ftable=after_ftable,
+                after_frate=after_frate,
+                after_ltable=after_ltable,
+                after_lrate=after_lrate,
+                memo=memo,
+            )
+            saved += 1
+            target_ids.append(str(target.id))
+
+        # ✅ AuditLog (success)
+        try:
+            log_action(
+                request,
+                ACTION.PARTNER_RATE_SAVE,
+                meta={
+                    "month": month,
+                    "part": part,
+                    "branch": branch,
+                    "saved_count": saved,
+                    "targets_sample": target_ids[:20],
+                },
+                success=True,
+            )
+        except Exception:
+            pass
+
+        return json_ok({"saved_count": saved})
+
+    except Exception as e:
+        # ✅ AuditLog (failure)
+        try:
+            log_action(
+                request,
+                ACTION.PARTNER_RATE_SAVE,
+                meta={
+                    "month": month,
+                    "part": part,
+                    "branch": branch,
+                    "saved_count": saved,
+                    "targets_sample": target_ids[:20],
+                    "error": str(e),
+                },
+                success=False,
+            )
+        except Exception:
+            pass
+        raise
 
 
 @require_POST
@@ -189,6 +233,27 @@ def rate_delete(request):
 
     if not (user.grade in ["superuser", "head"] or rc.requester_id == user.id):
         return json_err("삭제 권한이 없습니다.", status=403)
+    
+    # ✅ AuditLog: 삭제 직전(삭제 후 객체 소실)
+    try:
+        log_action(
+            request,
+            ACTION.PARTNER_RATE_DELETE,
+            obj=rc,
+            meta={
+                "id": rc.id,
+                "month": getattr(rc, "month", ""),
+                "part": getattr(rc, "part", ""),
+                "branch": getattr(rc, "branch", ""),
+                "requester_id": getattr(rc, "requester_id", None),
+                "target_id": getattr(rc, "target_id", None),
+                "after_ftable": getattr(rc, "after_ftable", ""),
+                "after_ltable": getattr(rc, "after_ltable", ""),
+            },
+            success=True,
+        )
+    except Exception:
+        pass
 
     rc.delete()
     return json_ok({})
