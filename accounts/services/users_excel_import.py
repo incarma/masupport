@@ -69,8 +69,15 @@ def normalize_part(v: Any) -> str:
     s = _to_str(v)
     if not s:
         return ""
-    if s == "1인GA사업부":
+    # ✅ 공백/탭 등으로 '1인 GA사업부'처럼 들어오는 케이스까지 방어
+    # (정규식/추가 import 없이 split/join으로 안전 처리)
+    s_compact = "".join(s.split())
+
+    if s_compact == "1인GA사업부":
         return "MA사업4부"
+    
+    # 원본 표기 유지(공백 포함 입력을 그대로 저장하려면 s,
+    # 공백 정리된 값을 저장하려면 s_compact를 반환)
     return s
 
 

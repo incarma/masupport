@@ -38,3 +38,6 @@ staticfiles/
 local_settings.py
 
 static/pdf/*.pdf
+
+gunicorn.ctl
+celerybeat-schedule

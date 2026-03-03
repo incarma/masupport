@@ -6,7 +6,6 @@ from datetime import datetime
 from django.db import connection
 
 from dash.services.agg import build_daily_agg_for_month
-from dash.ml.forecast import build_train_df, _train_quantile_models, save_models, load_models, predict_month_total, upsert_forecast, CATS
 
 def _scopes_for_run():
     # 운영에서는 all + (part 몇개) + (branch 몇개) 전부 돌리면 무거울 수 있음.
@@ -15,6 +14,12 @@ def _scopes_for_run():
 
 @shared_task
 def dash_refresh_agg_and_forecast(ym: str | None = None, asof_day: int | None = None):
+    # ✅ 선택 의존성(ML) 때문에 worker/beat 부팅이 막히지 않도록 지연 import
+    from dash.ml.forecast import (
+        build_train_df, _train_quantile_models, save_models, load_models,
+        predict_month_total, upsert_forecast, CATS,
+        _last_day, _prev_ym, _prev_year_ym, _cumsum_at, _month_total
+    )
     if ym is None:
         ym = datetime.now().strftime("%Y-%m")
     if asof_day is None:
@@ -38,7 +43,6 @@ def dash_refresh_agg_and_forecast(ym: str | None = None, asof_day: int | None = 
 
             # 3) 피처 구성(현재월)
             #   - 집계테이블 기반으로 asof 누적, 전월/전년 동일 asof 누적, 전월/전년 총액
-            from dash.ml.forecast import _last_day, _prev_ym, _prev_year_ym, _cumsum_at, _month_total
             last_day = _last_day(ym)
             asof = min(asof_day, last_day)
 

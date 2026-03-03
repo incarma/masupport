@@ -256,4 +256,6 @@ def rate_delete(request):
         pass
 
     rc.delete()
+
+    
     return json_ok({})
