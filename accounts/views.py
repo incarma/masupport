@@ -3,7 +3,11 @@ from __future__ import annotations
 from pathlib import Path
 
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth.views import LoginView
+from django.contrib.auth.views import (
+    LoginView,
+    PasswordChangeView,
+    PasswordChangeDoneView,
+)
 from django.core.cache import cache
 from django.http import HttpRequest, HttpResponse, JsonResponse, FileResponse, Http404
 from django.urls import reverse
@@ -18,7 +22,7 @@ from .constants import (
     CACHE_STATUS_PREFIX,
     cache_key,
 )
-from .forms import ActiveOnlyAuthenticationForm
+from .forms import ActiveOnlyAuthenticationForm, StrictPasswordChangeForm
 from .search_api import search_users_for_api
 
 import logging
@@ -50,6 +54,39 @@ def _set_no_store_headers(response: HttpResponse) -> HttpResponse:
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
     return response
+
+
+# =============================================================================
+# Password Change (로그인 사용자 비밀번호 변경)
+# =============================================================================
+@method_decorator(login_required, name="dispatch")
+class UserPasswordChangeView(PasswordChangeView):
+    """
+    ✅ 1단계: 로그인 사용자가 직접 비밀번호를 변경할 수 있는 페이지
+
+    - Django 표준 PasswordChangeView 사용
+    - 성공 시 done 페이지로 이동
+    - template은 registration/password_change_form.html 사용
+    """
+    template_name = "registration/password_change_form.html"
+    form_class = StrictPasswordChangeForm
+
+    def get_success_url(self) -> str:
+        return reverse("accounts:password_change_done")
+
+
+@method_decorator(login_required, name="dispatch")
+class UserPasswordChangeDoneView(PasswordChangeDoneView):
+    """
+    ✅ 비밀번호 변경 완료 페이지
+    - template은 registration/password_change_done.html 사용
+    """
+    template_name = "registration/password_change_done.html"
+
+
+# 함수형 alias (urls.py에서 직접 참조)
+password_change_view = UserPasswordChangeView.as_view()
+password_change_done_view = UserPasswordChangeDoneView.as_view()
 
 
 # =============================================================================

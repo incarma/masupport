@@ -1,0 +1,1 @@
+// django_ma/static/js/accounts/policy_console.js

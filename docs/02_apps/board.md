@@ -2,120 +2,143 @@
 
 # Board 앱 가이드 (board.md)
 
-## 1. Board 앱 개요
+------------------------------------------------------------------------
 
-board 앱은 django_ma 내부 운영을 위한 **업무 처리 중심 앱**이다.  
-단순 게시판이 아니라, 다음과 같은 역할을 수행한다.
+# 1. Board 앱 개요
 
-- 업무요청(Post) 등록/처리/이력 관리
-- 직원업무(Task) 내부 처리(superuser 전용)
-- 댓글 기반 커뮤니케이션
-- 첨부파일 업로드/보안 다운로드
-- 상태/담당자 인라인 업데이트(AJAX)
-- 업무요청서 / FA 소명서 PDF 출력
+board 앱은 **django_ma 내부 운영을 위한 업무 처리 중심 앱**이다.
 
-> ⚠️ **운영 시스템 앱**이므로  
-> 보안(권한/첨부 다운로드)과 UX(인라인 처리)가 핵심 설계 포인트이다.
+일반 게시판이 아니라 다음 기능을 수행하는 **운영 업무 플랫폼** 역할을
+한다.
 
----
+### 주요 기능
 
-## 2. 디렉터리 구조 (최종 기준)
+-   업무요청(Post) 등록 / 처리 / 이력 관리
+-   직원업무(Task) 내부 처리 (superuser 전용)
+-   댓글 기반 커뮤니케이션
+-   첨부파일 업로드 및 보안 다운로드
+-   상태 / 담당자 인라인 업데이트 (AJAX)
+-   업무요청서 / FA 소명서 PDF 출력
 
-board/
-├── models.py
-├── urls.py
-├── views/
-│   ├── __init__.py              # re-export (단일 진입점)
-│   ├── posts.py                 # Post CRUD + detail
-│   ├── tasks.py                 # Task CRUD (superuser only)
-│   ├── forms.py                 # support_form / states_form / PDF
-│   └── attachments.py           # 첨부 다운로드 (보안 SSOT)
-├── services/
-│   ├── listing.py               # 목록 공용(검색/필터/페이지네이션)
-│   ├── inline_update.py         # 상태/담당자 인라인 업데이트
-│   ├── comments.py              # 댓글 공용(Post/Task)
-│   └── attachments.py           # 첨부 저장/다운로드 로직
-├── templates/
-│   └── board/
-│       ├── base_board.html
-│       ├── post_list.html
-│       ├── post_detail.html
-│       ├── post_create.html
-│       ├── post_edit.html
-│       ├── task_list.html
-│       ├── task_detail.html
-│       ├── task_create.html
-│       ├── task_edit.html
-│       ├── support_form.html
-│       ├── states_form.html
-│       └── includes/
-│           ├── _edit_form.html
-│           ├── _form_common.html
-│           ├── _comment_form.html
-│           ├── _comment_list.html
-│           ├── _inline_handler_status_list.html
-│           └── pagination.html
-└── static/
-    ├── css/apps/board.css
-    └── js/
-        ├── common/
-        │   └── forms/
-        │       ├── dom.js
-        │       ├── rows.js
-        │       └── premium.js
-        └── board/
-            ├── states_form.js
-            ├── support_form.js
-            └── common/
-                ├── status_ui.js
-                ├── inline_update.js
-                ├── detail_inline_update.js
-                └── comment_edit.js
-└── templatetags/
-    ├── board_filters.py
-    ├── querystring.py
-    └── attachments.py
+> ⚠️ Board 앱은 **운영 시스템 핵심 앱**이므로\
+> **보안 / 권한 / 첨부 다운로드 / UX**가 설계의 핵심이다.
 
----
+------------------------------------------------------------------------
 
-## 3. URL 구조
+# 2. 디렉터리 구조 (최종 기준)
 
-### 3-1. Post (업무요청)
+    board/
+    ├── models.py
+    ├── urls.py
+    │
+    ├── views/
+    │   ├── __init__.py
+    │   ├── posts.py
+    │   ├── tasks.py
+    │   ├── forms.py
+    │   └── attachments.py
+    │
+    ├── services/
+    │   ├── listing.py
+    │   ├── inline_update.py
+    │   ├── comments.py
+    │   └── attachments.py
+    │
+    ├── templates/
+    │   └── board/
+    │       ├── base_board.html
+    │       ├── post_list.html
+    │       ├── post_detail.html
+    │       ├── post_create.html
+    │       ├── post_edit.html
+    │       ├── task_list.html
+    │       ├── task_detail.html
+    │       ├── task_create.html
+    │       ├── task_edit.html
+    │       ├── support_form.html
+    │       ├── states_form.html
+    │       └── includes/
+    │           ├── _edit_form.html
+    │           ├── _form_common.html
+    │           ├── _comment_form.html
+    │           ├── _comment_list.html
+    │           ├── _inline_handler_status_list.html
+    │           └── pagination.html
+    │
+    ├── static/
+    │   ├── css/
+    │   │   └── apps/
+    │   │       └── board.css
+    │   │
+    │   └── js/
+    │       ├── board/
+    │       │   ├── post_list.js
+    │       │   ├── post_detail.js
+    │       │   ├── task_list.js
+    │       │   ├── task_detail.js
+    │       │   ├── states_form.js
+    │       │   ├── support_form.js
+    │       │   └── form_submit_lock.js
+    │       │
+    │       └── common/
+    │           ├── status_ui.js
+    │           ├── inline_update.js
+    │           ├── detail_inline_update.js
+    │           └── comment_edit.js
+    │
+    └── templatetags/
+        ├── board_filters.py
+        ├── querystring.py
+        └── attachments.py
 
-| URL | 설명 | 
-|-----|-----|
-| /board/posts/ | 업무요청 목록 |
-| /board/posts/create/ | 요청 등록 |
-| /board/posts/<id>/ | 요청 상세 |
-| /board/posts/<id>/edit/ | 요청 수정 |
-| /board/posts/attachments/<att_id>/download/ | 첨부 다운로드 |
+------------------------------------------------------------------------
 
-### 3-2. Task (직원업무, superuser 전용)
+# 3. URL 구조
 
-| URL | 설명 |
-|-----|-----|
-| /board/tasks/ | 직원업무 목록 |
-| /board/tasks/create/ | 업무 등록 |
-| /board/tasks/<id>/ | 업무 상세 |
-| /board/tasks/<id>/edit/ | 업무 수정 |
-| /board/tasks/attachments/<att_id>/download/ | 첨부 다운로드 |
+## 3.1 Post (업무요청)
 
-### 3-3. 서식 / PDF
+  URL                                                    설명
+  ------------------------------------------------------ ---------------
+  /board/posts/                                          업무요청 목록
+  /board/posts/create/                                   요청 등록
+  /board/posts/`<id>`{=html}/                            요청 상세
+  /board/posts/`<id>`{=html}/edit/                       요청 수정
+  /board/posts/attachments/`<att_id>`{=html}/download/   첨부 다운로드
 
-| URL | 설명 |
-|-----|-----|
-| /board/support-form/ | 업무요청서(PDF) |
-| /board/states-form/	| FA 소명서(PDF) |
-| /board/support-form/pdf/ | PDF 생성 API |
-| /board/states-form/pdf/ | PDF 생성 API |
+------------------------------------------------------------------------
 
----
+## 3.2 Task (직원업무)
 
-## 4. 템플릿 구조 및 상속 규칙
+  URL                                                    설명
+  ------------------------------------------------------ ---------------
+  /board/tasks/                                          직원업무 목록
+  /board/tasks/create/                                   업무 등록
+  /board/tasks/`<id>`{=html}/                            업무 상세
+  /board/tasks/`<id>`{=html}/edit/                       업무 수정
+  /board/tasks/attachments/`<att_id>`{=html}/download/   첨부 다운로드
 
-### 4-1. base_board.html (핵심)
+> Task는 **superuser 전용 기능**
 
+------------------------------------------------------------------------
+
+## 3.3 서식 / PDF
+
+  URL                        설명
+  -------------------------- --------------
+  /board/support-form/       업무요청서
+  /board/states-form/        FA 소명서
+  /board/support-form/pdf/   PDF 생성 API
+  /board/states-form/pdf/    PDF 생성 API
+
+------------------------------------------------------------------------
+
+# 4. 템플릿 구조 및 상속 규칙
+
+## 4.1 base_board.html
+
+``` html
 {% extends "base.html" %}
+{% load static %}
 
 {% block app_css %}
 <link rel="stylesheet" href="{% static 'css/apps/board.css' %}">
@@ -126,136 +149,234 @@ board/
   {{ block.super }}
 </div>
 {% endblock %}
+```
 
-### 핵심 규칙
+------------------------------------------------------------------------
 
-- **모든 board 템플릿은 반드시 board/base_board.html 상속**
-- .board-scope 외부로 CSS 누수 금지
-- apps/board.css는 base.html에서 절대 직접 로드하지 않음
+## 4.2 핵심 규칙
 
-### 4-2. 대상 템플릿 목록
+모든 board 템플릿은 반드시 다음을 상속해야 한다.
 
-- post_list / post_detail / post_create / post_edit
-- task_list / task_detail / task_create / task_edit
-- support_form / states_form
+    {% extends "board/base_board.html" %}
 
-> 전부 {% extends "board/base_board.html" %} 사용
+CSS 정책
 
----
+-   `.board-scope` 외부로 CSS 누수 금지
+-   `board.css`는 base.html에서 직접 로드 금지
 
-## 5. JavaScript 구조 (공용 모듈)
+------------------------------------------------------------------------
 
-### 5-1. status_ui.js
+# 5. JavaScript 구조
 
-- 상태값 → 표준 CSS 클래스 매핑
-- .status-select[data-status-ui="1"] 대상만 적용
-- 인라인 업데이트 후 재적용 가능
+Board 앱은 **공용 모듈 + 페이지 모듈 구조**로 설계된다.
 
-### 5-2. inline_update.js (목록)
+------------------------------------------------------------------------
 
-- 목록 페이지 상태/담당자 AJAX 업데이트
-- CSRF 자동 처리
-- 중복 요청 방지(busy 상태)
+## 5.1 공용 모듈
 
-### 5-3. detail_inline_update.js (상세)
+### status_ui.js
 
-- 상세 페이지 인라인 업데이트
-- 성공 시 상태 변경일 텍스트 갱신
-- update URL 없으면 자동 종료(권한 방어)
+기능
 
-### 5-4. comment_edit.js
+-   상태값 → CSS 클래스 매핑
+-   상태 badge / select 색상 자동 적용
 
-- 댓글 인라인 수정/취소
-- delegation 기반 바인딩
-- CSRF 토큰 자동 탐색
+적용 대상
 
-## 5-5. forms 공통 유틸 (js/common/forms)
+    .status-select[data-status-ui="1"]
 
-- dom.js
-  - querySelector / show-hide 등 DOM 유틸
-- rows.js
-  - 행 추가/삭제/초기화 공통 패턴
-- premium.js
-  - 숫자 입력 + 콤마 포맷 처리
-  - submit 시 숫자 정규화
+------------------------------------------------------------------------
 
-> board 뿐 아니라 commission / partner 등
-> 모든 “폼 중심 화면”에서 재사용 가능하도록 설계됨
+### inline_update.js
 
----
+목록 페이지 상태/담당자 AJAX 업데이트
 
-## 6. CSS 설계 원칙 (board.css)
+특징
 
-### 6-1. No-Leak Policy
+-   CSRF 자동 처리
+-   busy 상태 중복 요청 방지
+-   성공 시 UI 업데이트
 
-- 모든 셀렉터는 .board-scope 하위
-- textarea[name="content"] 등 위험 셀렉터도 스코프 내부 제한
+------------------------------------------------------------------------
 
-### 6-2. 주요 스타일 범위
+### detail_inline_update.js
 
-- 록 테이블 말줄임/nowrap 정책
-- 댓글 UI (PC absolute / Mobile 하단)
-- 첨부파일 UI
-- 상태 배지/셀렉트 컬러링
-- 모바일 서식 가로 스크롤(support_form)
+상세 페이지 상태/담당자 업데이트
 
----
+특징
 
-## 7. 보안 설계 (중요)
+-   update URL 없으면 자동 종료
+-   상태 변경일 텍스트 갱신
 
-### 7-1. 첨부파일 다운로드
+------------------------------------------------------------------------
 
-❌ 금지:
+### comment_edit.js
 
-<a href="{{ att.file.url }}">
+댓글 인라인 수정
 
+특징
 
-✅ 허용:
+-   delegation 이벤트
+-   CSRF 자동 탐색
 
-<a href="{% url 'board:post_attachment_download' att.id %}">
+------------------------------------------------------------------------
 
+## 5.2 제출 보호
 
-- 모든 다운로드는 View를 경유
-- 권한 검증 + 파일명 정규화 + RFC5987 적용
+### form_submit_lock.js
 
-### 7-2. 권한 정책 요약
+기능
 
-| 기능 | 접근 |
-|-----|-----|
-| Post | 로그인 사용자 |
-| Task | superuser only |
-| 인라인 업데이트 | superuser |
-| support_form | superuser/head/leader |
-| states_form | inactive 제외 |
+-   폼 중복 제출 방지
+-   파일 업로드 연동
+-   BFCache 대응
 
----
+------------------------------------------------------------------------
 
-## 8. 운영 포인트 / 주의사항
+## 5.3 페이지 스크립트
 
-### 8-1. 절대 수정 시 주의
+  Script            대상
+  ----------------- ---------------
+  post_list.js      업무요청 목록
+  post_detail.js    업무요청 상세
+  task_list.js      직원업무 목록
+  task_detail.js    직원업무 상세
+  support_form.js   업무요청서
+  states_form.js    FA 소명서
 
-- services/attachments.py
-- views/attachments.py
-- base_board.html
-- apps/board.css
+------------------------------------------------------------------------
 
-> 잘못 수정 시 보안 사고 / CSS 전체 누수 발생 가능
+# 6. CSS 설계 원칙
 
-### 8-2. 신규 기능 추가 시 권장 패턴
+파일
 
-- 목록/검색 → services/listing.py 확장
-- 상태/담당자 → services/inline_update.py 재사용
-- 댓글 → services/comments.py 공용 사용
-- CSS → 반드시 .board-scope 하위에만 작성
+    static/css/apps/board.css
 
-### 9. 요약
+------------------------------------------------------------------------
 
-board 앱은 django_ma 내에서 가장 복합적이고 운영 의존도가 높은 앱이다.
+## No-Leak Policy
 
-- View는 얇게
-- Service는 공용화
-- CSS는 스코프 고립
-- 첨부는 무조건 보안 경유
-- 운영자 UX 최우선
+모든 selector는 반드시
 
-👉 이 기준을 유지하면 장기 운영 / 인수인계 / 기능 확장 모두 안전하다.
+    .board-scope ...
+
+예
+
+    .board-scope textarea[name="content"]
+
+------------------------------------------------------------------------
+
+## 주요 스타일 범위
+
+-   리스트 테이블 말줄임
+-   댓글 UI
+-   첨부파일 UI
+-   상태 badge
+-   모바일 서식 스크롤
+
+------------------------------------------------------------------------
+
+# 7. 보안 설계
+
+## 첨부 다운로드
+
+❌ 금지
+
+    <a href="{{ att.file.url }}">
+
+✅ 허용
+
+    <a href="{% url 'board:post_attachment_download' att.id %}">
+
+정책
+
+-   View 경유 다운로드
+-   권한 검증
+-   파일명 정규화
+-   RFC5987 적용
+
+------------------------------------------------------------------------
+
+## CSRF 정책
+
+-   모든 AJAX 요청 CSRF 필수
+
+------------------------------------------------------------------------
+
+## XSS 방지
+
+절대 금지
+
+    {{ post.content|safe }}
+
+------------------------------------------------------------------------
+
+## 권한 정책
+
+  기능              권한
+  ----------------- ---------------------------
+  Post              로그인 사용자
+  Task              superuser
+  인라인 업데이트   superuser
+  support_form      superuser / head / leader
+  states_form       inactive 제외
+
+------------------------------------------------------------------------
+
+# 8. 운영 포인트
+
+절대 수정 주의 파일
+
+    services/attachments.py
+    views/attachments.py
+    base_board.html
+    static/css/apps/board.css
+
+------------------------------------------------------------------------
+
+## 신규 기능 추가 패턴
+
+  기능        위치
+  ----------- ------------------------
+  목록 검색   services/listing
+  상태 변경   services/inline_update
+  댓글        services/comments
+  첨부        services/attachments
+
+------------------------------------------------------------------------
+
+# 9. 확장 설계 원칙
+
+서비스 확장
+
+    services/*
+
+JS 확장
+
+    static/js/common
+
+CSS 확장
+
+    .board-scope
+
+------------------------------------------------------------------------
+
+# 10. 요약
+
+Board 앱은 django_ma에서 **운영 의존도가 가장 높은 앱**이다.
+
+핵심 원칙
+
+-   View는 얇게
+-   Service는 공용화
+-   CSS는 스코프 고립
+-   첨부는 보안 경유
+-   운영자 UX 최우선
+
+이 원칙을 유지하면
+
+-   장기 운영
+-   인수인계
+-   기능 확장
+
+모두 안정적으로 유지할 수 있다.

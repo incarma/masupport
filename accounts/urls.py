@@ -8,11 +8,32 @@ app_name = "accounts"
 
 urlpatterns = [
     # ---------------------------------------------------------------------
-    # Excel 업로드 진행률 polling
+    # Password change (로그인 사용자 비밀번호 변경)
     #
-    # 사용처:
-    # - admin 사용자 엑셀 업로드 페이지
-    # - task_id 기반으로 Celery 진행률/상태 조회
+    # 사용처(대표):
+    # - templates/base.html 네비게이션 "비번변경" 버튼
+    #
+    # Endpoints:
+    # - GET/POST  /accounts/password-change/        (폼 표시/제출)
+    # - GET       /accounts/password-change/done/   (완료 화면)
+    # ---------------------------------------------------------------------
+    path(
+        "password-change/",
+        views.password_change_view,
+        name="password_change",
+    ),
+    path(
+        "password-change/done/",
+        views.password_change_done_view,
+        name="password_change_done",
+    ),
+
+    # ---------------------------------------------------------------------
+    # Excel Upload Progress (진행률 polling)
+    #
+    # 사용처(대표):
+    # - accounts/admin 엑셀 업로드 UI
+    # - task_id 기반 Celery 진행률/상태 조회
     #
     # GET /accounts/upload-progress/?task_id=...
     # ---------------------------------------------------------------------
@@ -22,7 +43,14 @@ urlpatterns = [
         name="accounts_upload_progress",
     ),
 
-    # ✅ 결과 파일 다운로드 (추가한 부분)
+    # ---------------------------------------------------------------------
+    # Excel Upload Result Download (결과 파일 다운로드)
+    #
+    # - 업로드 완료 후 생성된 결과 파일(xlsx 등)을 다운로드
+    # - 보안상 URL 직접 노출 대신, view에서 파일 존재/권한 확인 후 FileResponse 제공
+    #
+    # GET /accounts/upload-result/<task_id>/
+    # ---------------------------------------------------------------------
     path(
         "upload-result/<str:task_id>/",
         views.upload_result_view,

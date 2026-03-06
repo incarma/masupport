@@ -158,6 +158,14 @@
         <div class="me-3" style="font-weight:500; color:#333;">
           {{ user.branch }}&nbsp;<strong>{{ user.name }}({{ user.id }})</strong>
         </div>
+        <!-- =====================================================
+             ✅ Password change entry (Desktop)
+             - 로그아웃 좌측에 "비번변경" 버튼 노출
+             - 로그인 사용자만 접근 가능(accounts:password_change)
+        ====================================================== -->
+        <a href="{% url 'accounts:password_change' %}" class="btn btn-outline-secondary me-2">
+          비번변경
+        </a>
         <form method="post" action="{% url 'logout' %}">
           {% csrf_token %}
           <button type="submit" class="btn btn-logout">로그아웃</button>
@@ -317,6 +325,16 @@
 
         <!-- 로그아웃 -->
         <div class="p-3 border-top">
+          <!-- =====================================================
+               ✅ Password change entry (Mobile)
+               - 모바일에서도 사용자가 바로 비번변경 가능하도록 제공
+          ====================================================== -->
+          <div class="mb-2">
+            <a class="btn btn-outline-secondary w-100" style="border-radius:10px;"
+               href="{% url 'accounts:password_change' %}">
+              비번변경
+            </a>
+          </div>
           <form method="post" action="{% url 'logout' %}">
             {% csrf_token %}
             <button type="submit" class="btn btn-danger w-100" style="border-radius:10px;">로그아웃</button>

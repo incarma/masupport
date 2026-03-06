@@ -61,7 +61,9 @@ urlpatterns = [
     # Accounts APIs
     # ✅ accounts/urls.py에서:
     #   - upload-progress/
-    #   - api/accounts/search-user/
+    #   - password-change/
+    #   - password-change/done/
+    #   - api/search-user/
     #   - search-user/ (legacy alias)
     # 를 관리하고 있으므로, 여기서는 prefix 1번만 붙여 위임합니다.
     # ---------------------------------------------------------------------

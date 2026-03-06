@@ -49,6 +49,11 @@ PROTECTED_FIELDS = {"position", "team_a", "team_b", "team_c"}
 # 결과 리포트 엑셀 시트명
 RESULT_SHEET_NAME = "UploadResult"
 
+# ✅ 신규 계정 초기 비밀번호 정책(SSOT: Create path only)
+# - 기존 계정(Update path) 비밀번호는 절대 변경하지 않는다.
+# - 신규 생성 계정에 한해 초기 비밀번호 = "incar" + 사원번호
+DEFAULT_PASSWORD_PREFIX = "incar"
+
 # 진행률 표시를 위한 최소/최대 보정
 PERCENT_MIN = 0
 PERCENT_MAX = 100
@@ -252,6 +257,15 @@ def process_users_excel_task(self, task_id: str, file_path: str, batch_size: int
         def flush_chunk(rows_chunk: List[Tuple[Any, ...]], start_row_num: int) -> None:
             nonlocal created, updated, skipped, err_cnt, processed, results, existing_grade_map
 
+            def _build_initial_password(emp_id: str) -> str:
+                """
+                ✅ 신규 계정 초기 비밀번호 생성기
+                - 요구사항: incar+id (예: incar1611851)
+                - 주의: Update path(기존 계정)에는 절대 적용하지 않는다.
+                """
+                emp = (emp_id or "").strip()
+                return f"{DEFAULT_PASSWORD_PREFIX}{emp}"
+
             # 성능: chunk 내 기존 user 한 번에 미리 로드
             chunk_ids: List[str] = []
             built: List[Tuple[int, str, str, Dict[str, Any]]] = []  # (excel_row_num, emp_id, name, defaults)
@@ -363,9 +377,10 @@ def process_users_excel_task(self, task_id: str, file_path: str, batch_size: int
                     # Create path
                     # ---------------------------------------------------------
                     else:
+                        initial_password = _build_initial_password(emp_id)
                         CustomUser.objects.create_user(
                             id=emp_id,
-                            password=emp_id,  # 초기 비밀번호 = 사원번호
+                            password=initial_password,  # 초기 비밀번호 = incar+사원번호
                             **defaults,
                         )
                         existing_grade_map[emp_id] = defaults.get("grade", "basic")

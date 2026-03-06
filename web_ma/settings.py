@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
 from pathlib import Path
 
 import dj_database_url
@@ -65,7 +66,49 @@ if APP_ENV == "dev":
 # Core flags
 # =============================================================================
 SECRET_KEY = config("SECRET_KEY")
-DEBUG = config("DJANGO_DEBUG", default=False, cast=bool)
+def _bool_from_env(key: str):
+    """
+    decouple bool 파서 사용을 위해 config()를 호출하되,
+    키가 없으면 None 반환.
+    """
+    try:
+        # decouple은 키가 없으면 default를 반환하므로, default=None으로 두고 cast=bool 적용
+        return config(key, default=None, cast=bool)
+    except Exception:
+        return None
+
+
+# -----------------------------------------------------------------------------
+# DEBUG (SSOT)
+# - SSOT 키: DJANGO_DEBUG
+# - legacy 키: DEBUG (호환)
+# - 기본값: dev=True / prod=False (env 누락 실수 방지)
+# -----------------------------------------------------------------------------
+_debug = _bool_from_env("DJANGO_DEBUG")
+_debug_legacy = _bool_from_env("DEBUG") if _debug is None else None
+
+if _debug is None and _debug_legacy is None:
+    DEBUG = (APP_ENV == "dev")
+else:
+    DEBUG = _debug if _debug is not None else bool(_debug_legacy)
+
+
+# -----------------------------------------------------------------------------
+# Fail-fast safety rails
+# - runserver에서 DEBUG=False면 정적파일/디버그 UX가 조용히 깨질 수 있으므로 즉시 중단
+# - 운영에서 DEBUG=True면 보안상 치명적이므로 즉시 중단
+# -----------------------------------------------------------------------------
+_is_runserver = any(arg == "runserver" or arg.startswith("runserver") for arg in sys.argv[1:])
+
+if APP_ENV in ("prod", "production") and DEBUG:
+    raise RuntimeError("APP_ENV=prod에서는 DEBUG=True가 허용되지 않습니다. 환경변수를 점검하십시오.")
+
+if APP_ENV == "dev" and _is_runserver and not DEBUG:
+    raise RuntimeError(
+        "개발(runserver) 환경에서 DEBUG=False로 실행되고 있습니다. "
+        "정적파일 서빙이 404로 떨어져 UI가 붕괴할 수 있으므로 안전상 실행을 중단합니다. "
+        "ENV_PATH(.env)와 DJANGO_DEBUG/DEBUG 키를 확인하십시오."
+    )
 
 IS_PROD = APP_ENV in ("prod", "production") and not DEBUG
 
