@@ -8,6 +8,7 @@ from django.contrib.auth.views import (
     PasswordChangeView,
     PasswordChangeDoneView,
 )
+from django.utils import timezone
 from django.core.cache import cache
 from django.http import HttpRequest, HttpResponse, JsonResponse, FileResponse, Http404
 from django.urls import reverse
@@ -29,6 +30,7 @@ import logging
 from django.http import HttpResponseForbidden
 
 logger = logging.getLogger("django.security.csrf")
+access_logger = logging.getLogger("accounts.access")
 
 def csrf_failure(request, reason=""):
     logger.warning(
@@ -73,6 +75,25 @@ class UserPasswordChangeView(PasswordChangeView):
 
     def get_success_url(self) -> str:
         return reverse("accounts:password_change_done")
+    
+    def form_valid(self, form) -> HttpResponse:
+        """
+        Phase 3:
+        - 비밀번호 변경 성공 시 must_change_password 플래그를 해제합니다.
+        - '기본 비번 여부'는 여기서 판별하지 않습니다(불필요/위험).
+        """
+        response = super().form_valid(form)
+        try:
+            u = getattr(self.request, "user", None)
+            if u and getattr(u, "is_authenticated", False) and getattr(u, "must_change_password", False):
+                u.must_change_password = False
+                u.must_change_password_cleared_at = timezone.now()
+                u.save(update_fields=["must_change_password", "must_change_password_cleared_at"])
+                access_logger.info("PASSWORD_CHANGE_COMPLETED user=%s", getattr(u, "id", ""))
+        except Exception:
+            # 사용자에게는 노출하지 않고, 서버 로그만 남기기(운영 안정성)
+            access_logger.exception("PASSWORD_CHANGE_COMPLETED log failed")
+        return response
 
 
 @method_decorator(login_required, name="dispatch")
@@ -155,8 +176,46 @@ class SessionCloseLoginView(LoginView):
 
 
     def form_valid(self, form) -> HttpResponse:
+        """
+        Phase 3:
+        - 로그인 성공 시점은 사용자가 입력한 원문 비밀번호를 알 수 있는 유일한 지점입니다.
+        - 따라서 "기본 비번(id / incar+id) 로그인"이면 must_change_password 플래그를 True로 수렴합니다.
+        """
+        raw_pw = ""
+        try:
+            raw_pw = (form.cleaned_data.get("password") or "").strip()
+        except Exception:
+            raw_pw = (self.request.POST.get("password") or "").strip()
+
+        user = None
+        try:
+            user = form.get_user()
+        except Exception:
+            user = None
+
         response = super().form_valid(form)
         self.request.session.set_expiry(0)
+
+        # ✅ 로그인 성공 후에만 플래그 수렴(인증 실패 케이스 오염 방지)
+        try:
+            if user and getattr(user, "is_authenticated", True):
+                emp_id = (getattr(user, "id", "") or "").strip()
+                if emp_id:
+                    default_pw_1 = emp_id
+                    default_pw_2 = f"incar{emp_id}"
+                    is_default = raw_pw != "" and (raw_pw == default_pw_1 or raw_pw == default_pw_2)
+
+                    if is_default and not getattr(user, "must_change_password", False):
+                        user.must_change_password = True
+                        user.must_change_password_set_at = timezone.now()
+                        user.save(update_fields=["must_change_password", "must_change_password_set_at"])
+                        access_logger.info(
+                            "PASSWORD_CHANGE_REQUIRED_SET user=%s via=login_default_pw",
+                            emp_id,
+                        )
+        except Exception:
+            access_logger.exception("PASSWORD_CHANGE_REQUIRED_SET failed")
+
         return response
 
 

@@ -35,6 +35,11 @@ urlpatterns = [
     # ---------------------------------------------------------------------
     path("login/", SessionCloseLoginView.as_view(template_name="registration/login.html"), name="login"),
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),
+    # Phase 3(강제 비번변경) whitelist(SSOT, URL name 기준):
+    # - login
+    # - logout
+    # - accounts:password_change
+    # - accounts:password_change_done
 
     # ---------------------------------------------------------------------
     # Admin (custom admin site)

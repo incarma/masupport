@@ -170,6 +170,9 @@ MIDDLEWARE = [
     # ✅ login/admin login GET에서 csrftoken 강제 발급(뷰/캐시 의존 제거)
     "web_ma.middleware.ForceCSRFCookieOnLoginMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    # ✅ Phase 3: 강제 비밀번호 변경(플래그+정책엔진 기반)
+    # - 인증 이후(request.user 필요) 위치 고정
+    "accounts.middleware.force_password_change.ForcePasswordChangeMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -236,6 +239,47 @@ AUTH_PASSWORD_VALIDATORS = [
 LOGIN_URL = "/login/"
 LOGIN_REDIRECT_URL = "manual:manual_list"
 LOGOUT_REDIRECT_URL = "manual:manual_list"
+
+# =============================================================================
+# Phase 3) Force Password Change (SSOT)
+# - 운영 롤백을 위해 전역 토글을 반드시 둡니다.
+# - 스코프 리스트는 우선 환경변수 기반으로 시작하되,
+#   정책엔진(should_enforce)은 향후 DB scope 모델로 확장 가능하게 설계합니다.
+# =============================================================================
+FORCE_PASSWORD_CHANGE_ENABLED = config(
+    "FORCE_PASSWORD_CHANGE_ENABLED",
+    default=False,
+    cast=bool,
+)
+
+def _csv_set(v: str) -> set[str]:
+    return {s.strip() for s in (v or "").split(",") if s.strip()}
+
+# ✅ URL name whitelist (최소 동선)
+FORCE_PASSWORD_CHANGE_URL_WHITELIST_NAMES = _csv_set(
+    config(
+        "FORCE_PASSWORD_CHANGE_URL_WHITELIST_NAMES",
+        default="login,logout,accounts:password_change,accounts:password_change_done",
+    )
+)
+
+# ✅ 점진 적용 스코프(allow)
+FORCE_PASSWORD_CHANGE_SCOPE_BRANCHES = _csv_set(config("FORCE_PASSWORD_CHANGE_SCOPE_BRANCHES", default=""))
+FORCE_PASSWORD_CHANGE_SCOPE_PARTS = _csv_set(config("FORCE_PASSWORD_CHANGE_SCOPE_PARTS", default=""))
+FORCE_PASSWORD_CHANGE_SCOPE_CHANNELS = _csv_set(config("FORCE_PASSWORD_CHANGE_SCOPE_CHANNELS", default=""))
+
+# ✅ 차단 우선(deny-first)
+FORCE_PASSWORD_CHANGE_DENY_BRANCHES = _csv_set(config("FORCE_PASSWORD_CHANGE_DENY_BRANCHES", default=""))
+FORCE_PASSWORD_CHANGE_DENY_PARTS = _csv_set(config("FORCE_PASSWORD_CHANGE_DENY_PARTS", default=""))
+FORCE_PASSWORD_CHANGE_DENY_CHANNELS = _csv_set(config("FORCE_PASSWORD_CHANGE_DENY_CHANNELS", default=""))
+
+# ✅ grade 예외(운영 안전)
+FORCE_PASSWORD_CHANGE_EXEMPT_GRADES = _csv_set(
+    config(
+        "FORCE_PASSWORD_CHANGE_EXEMPT_GRADES",
+        default="superuser,main_admin",
+    )
+)
 
 # =============================================================================
 # 7) I18N / Timezone

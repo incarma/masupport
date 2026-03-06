@@ -38,3 +38,16 @@ class ForceCSRFCookieOnLoginMiddleware:
             response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
 
         return response
+    
+
+# -----------------------------------------------------------------------------
+# NOTE (Phase 3)
+# -----------------------------------------------------------------------------
+# 강제 비밀번호 변경 미들웨어는 "accounts 앱 스코프"로 관리합니다.
+# - 구현 파일: django_ma/accounts/middleware/force_password_change.py
+# - settings.py의 MIDDLEWARE에는 다음 dotted-path로 등록합니다:
+#   "accounts.middleware.force_password_change.ForcePasswordChangeMiddleware"
+#
+# 이유:
+# - 정책 엔진(should_enforce) 및 accounts URL name whitelist 등 SSOT가
+#   accounts 도메인에 더 가깝고, 장기 운영에서 변경 범위를 좁히기 위함입니다.

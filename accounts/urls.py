@@ -10,6 +10,10 @@ urlpatterns = [
     # ---------------------------------------------------------------------
     # Password change (로그인 사용자 비밀번호 변경)
     #
+    # Phase 3(강제 비번변경) 미들웨어 whitelist가 다음 URL name을 참조합니다(SSOT):
+    # - accounts:password_change
+    # - accounts:password_change_done
+    #
     # 사용처(대표):
     # - templates/base.html 네비게이션 "비번변경" 버튼
     #

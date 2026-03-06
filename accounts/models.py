@@ -5,6 +5,7 @@ from __future__ import annotations
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseUserManager
 from django.core.exceptions import ValidationError
+from django.utils import timezone
 
 
 # =============================================================================
@@ -100,6 +101,20 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     # 이 필드가 이미 DB/마이그레이션에 존재하는 프로젝트라면 호환을 위해 유지합니다.
     # (새 프로젝트라면 PermissionsMixin의 is_superuser를 그대로 쓰는 것이 정석입니다.)
     is_superuser = models.BooleanField(default=False)
+
+    # -------------------------------------------------------------------------
+    # Phase 3 (Force Password Change)
+    #
+    # ✅ must_change_password:
+    # - 로그인 성공 훅에서 "기본 비번(id 또는 incar+id)"으로 로그인한 경우 True로 수렴
+    # - 비밀번호 변경 완료 시 False로 해제
+    #
+    # ⚠️ 미들웨어는 '기본 비번 여부'를 판별하지 않습니다.
+    #    (원문 비밀번호를 알 수 없으므로) → 오직 이 플래그만 봅니다.
+    # -------------------------------------------------------------------------
+    must_change_password = models.BooleanField(default=False)
+    must_change_password_set_at = models.DateTimeField(blank=True, null=True)
+    must_change_password_cleared_at = models.DateTimeField(blank=True, null=True)
 
     # -------------------------------------------------------------------------
     # Django auth config

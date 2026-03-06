@@ -327,6 +327,19 @@ class CustomUserAdmin(UserAdmin):
     search_fields = ("id", "name", "channel", "division", "part", "branch", "grade", "status")
     ordering = ("id", "name", "channel", "division", "part", "branch")
 
+    list_filter = ("grade", "status", "channel", "division", "part", "branch", "must_change_password")
+
+    actions = [export_selected_users_to_excel, "clear_must_change_password"]
+
+    @admin.action(description="(Phase3) 선택 사용자 must_change_password 해제")
+    def clear_must_change_password(self, request, queryset):
+        """
+        운영 비상 동선:
+        - 강제 정책 적용 실패/문의 폭주 시, 특정 사용자만 빠르게 해제할 수 있어야 합니다.
+        - (주의) '비번이 안전해졌다'는 의미는 아니므로, 현장 SOP에 따라 사용하세요.
+        """
+        queryset.update(must_change_password=False)
+
     def get_readonly_fields(self, request, obj=None):
         # ✅ 수정 화면에서만 id를 잠금
         if obj:  # change_view
@@ -339,6 +352,7 @@ class CustomUserAdmin(UserAdmin):
             "Personal Info",
             {"fields": ("name", "regist", "birth", "channel", "division", "part", "branch", "grade", "status", "enter", "quit")},
         ),
+        ("Phase 3 (Force Password Change)", {"fields": ("must_change_password", "must_change_password_set_at", "must_change_password_cleared_at")}),
         ("Permissions", {"fields": ("is_active", "is_staff", "is_superuser", "groups", "user_permissions")}),
     )
 
