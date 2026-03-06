@@ -7,14 +7,16 @@ from pathlib import Path
 from typing import Iterable, Optional
 
 from django.conf import settings
-from django.contrib import admin
+from django.contrib import admin, messages
 from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.forms import UserChangeForm, UserCreationForm
 from django.contrib.staticfiles import finders
 from django.core.cache import cache
+from django.db import transaction
 from django.http import FileResponse, Http404, HttpRequest, HttpResponse
 from django.shortcuts import render
 from django.urls import path
+from django.utils import timezone
 
 from openpyxl import Workbook
 
@@ -25,12 +27,15 @@ from .constants import (
     CACHE_STATUS_PREFIX,
     CACHE_TIMEOUT_SECONDS,
     EXCEL_CONTENT_TYPE,
+    ADMIN_ACTION_RESET_PASSWORD_AND_UNLOCK,
     cache_key,
 )
 from .custom_admin import custom_admin_site
 from .forms import ExcelUploadForm
 from .models import CustomUser
 from .tasks import process_users_excel_task
+from audit.constants import ACTION
+from audit.services import log_action
 
 # =============================================================================
 # Settings / Constants
@@ -310,6 +315,8 @@ class CustomUserAdmin(UserAdmin):
     add_form = CustomUserCreationAdminForm
     form = CustomUserChangeAdminForm
 
+    actions = [export_selected_users_to_excel, "clear_must_change_password", "reset_password_and_unlock_accounts"]
+
     list_display = (
         "id",
         "name",
@@ -319,6 +326,10 @@ class CustomUserAdmin(UserAdmin):
         "branch",
         "grade",
         "status",
+        "is_locked",
+        "login_fail_count",
+        "locked_at",
+        "last_login_fail_at",
         "enter",
         "quit",
         "is_staff",
@@ -327,9 +338,68 @@ class CustomUserAdmin(UserAdmin):
     search_fields = ("id", "name", "channel", "division", "part", "branch", "grade", "status")
     ordering = ("id", "name", "channel", "division", "part", "branch")
 
-    list_filter = ("grade", "status", "channel", "division", "part", "branch", "must_change_password")
+    list_filter = ("grade", "status", "channel", "division", "part", "branch", "must_change_password", "is_locked")
 
-    actions = [export_selected_users_to_excel, "clear_must_change_password"]
+    @admin.action(description=ADMIN_ACTION_RESET_PASSWORD_AND_UNLOCK)
+    def reset_password_and_unlock_accounts(self, request, queryset):
+        """
+        Lockout 운영 복구 동선(권장):
+        - 표준 초기 비밀번호(incar+사원번호)로 초기화
+        - 잠금 해제
+        - 실패 횟수 0으로 초기화
+        - must_change_password=True로 강제 비밀번호 변경 유도
+        """
+        req_grade = (getattr(request.user, "grade", "") or "").strip()
+        if not (request.user.is_superuser or req_grade in {"superuser", "main_admin"}):
+            self.message_user(request, "이 작업은 superuser 또는 main_admin만 수행할 수 있습니다.", level=messages.ERROR)
+            return
+
+        now = timezone.now()
+        changed = 0
+
+        for selected in queryset:
+            with transaction.atomic():
+                target = CustomUser.objects.select_for_update().get(pk=selected.pk)
+                was_locked = bool(getattr(target, "is_locked", False))
+
+                target.set_password(f"incar{target.id}")
+                target.is_locked = False
+                target.login_fail_count = 0
+                target.lock_cleared_at = now
+                target.lock_cleared_by = request.user
+                target.password_reset_by_admin_at = now
+                target.must_change_password = True
+                target.must_change_password_set_at = now
+                target.must_change_password_cleared_at = None
+                target.save(
+                    update_fields=[
+                        "password",
+                        "is_locked",
+                        "login_fail_count",
+                        "lock_cleared_at",
+                        "lock_cleared_by",
+                        "password_reset_by_admin_at",
+                        "must_change_password",
+                        "must_change_password_set_at",
+                        "must_change_password_cleared_at",
+                    ]
+                )
+
+                try:
+                    log_action(
+                        request,
+                        ACTION.ACCOUNTS_PASSWORD_RESET_UNLOCK,
+                        obj=target,
+                        meta={"user_id": target.id, "was_locked": was_locked},
+                        success=True,
+                    )
+                except Exception:
+                    # audit 실패가 관리자 복구 자체를 막으면 안 됨
+                    pass
+
+                changed += 1
+
+        self.message_user(request, f"{changed}명의 사용자 비밀번호를 초기화하고 잠금을 해제했습니다.", level=messages.SUCCESS)
 
     @admin.action(description="(Phase3) 선택 사용자 must_change_password 해제")
     def clear_must_change_password(self, request, queryset):
@@ -339,11 +409,20 @@ class CustomUserAdmin(UserAdmin):
         - (주의) '비번이 안전해졌다'는 의미는 아니므로, 현장 SOP에 따라 사용하세요.
         """
         queryset.update(must_change_password=False)
+    
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        req_grade = (getattr(request.user, "grade", "") or "").strip()
+        if not (request.user.is_superuser or req_grade in {"superuser", "main_admin"}):
+            actions.pop("reset_password_and_unlock_accounts", None)
+        return actions
 
     def get_readonly_fields(self, request, obj=None):
         # ✅ 수정 화면에서만 id를 잠금
         if obj:  # change_view
-            return ("id",)
+            return ("id", "must_change_password_set_at", "must_change_password_cleared_at",
+                    "locked_at", "last_login_fail_at", "lock_cleared_at", "lock_cleared_by",
+                    "password_reset_by_admin_at")
         return ()  # add_view에서는 입력 가능
 
     fieldsets = (
@@ -351,6 +430,21 @@ class CustomUserAdmin(UserAdmin):
         (
             "Personal Info",
             {"fields": ("name", "regist", "birth", "channel", "division", "part", "branch", "grade", "status", "enter", "quit")},
+        ),
+        (
+            "Phase 4 (Account Lockout)",
+            {
+                "fields": (
+                    "login_fail_count",
+                    "is_locked",
+                    "locked_at",
+                    "last_login_fail_at",
+                    "lock_reason",
+                    "lock_cleared_at",
+                    "lock_cleared_by",
+                    "password_reset_by_admin_at",
+                )
+            },
         ),
         ("Phase 3 (Force Password Change)", {"fields": ("must_change_password", "must_change_password_set_at", "must_change_password_cleared_at")}),
         ("Permissions", {"fields": ("is_active", "is_staff", "is_superuser", "groups", "user_permissions")}),

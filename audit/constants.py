@@ -4,6 +4,8 @@ class ACTION:
     # Auth
     AUTH_LOGIN_SUCCESS = "auth.login.success"
     AUTH_LOGIN_FAIL = "auth.login.fail"
+    AUTH_LOGIN_LOCKED = "auth.login.locked"
+    AUTH_LOGIN_BLOCKED_LOCKED = "auth.login.blocked.locked"
     AUTH_LOGOUT = "auth.logout"
 
     # Board
@@ -42,3 +44,5 @@ class ACTION:
     ACCOUNTS_EXCEL_UPLOAD = "accounts.excel.upload"
     ACCOUNTS_LEVEL_UPDATE = "accounts.user.level.update"
     ACCOUNTS_GRADE_UPDATE = "accounts.user.grade.update"
+    ACCOUNTS_PASSWORD_RESET_UNLOCK = "accounts.user.password_reset_unlock"
+    ACCOUNTS_PASSWORD_CHANGE_COMPLETED = "accounts.user.password_change.completed"

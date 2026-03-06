@@ -2,12 +2,15 @@
 from __future__ import annotations
 from pathlib import Path
 
+from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import (
     LoginView,
     PasswordChangeView,
     PasswordChangeDoneView,
 )
+from django.core.exceptions import ValidationError
+from django.db import transaction
 from django.utils import timezone
 from django.core.cache import cache
 from django.http import HttpRequest, HttpResponse, JsonResponse, FileResponse, Http404
@@ -15,13 +18,17 @@ from django.urls import reverse
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.cache import never_cache
+from django.forms.forms import NON_FIELD_ERRORS
 
 from .constants import (
     CACHE_ERROR_PREFIX,
     CACHE_PROGRESS_PREFIX,
     CACHE_RESULT_PATH_PREFIX,
     CACHE_STATUS_PREFIX,
-    cache_key,
+    cache_key,LOGIN_FAIL_MAX_COUNT,
+    LOCK_REASON_LOGIN_FAIL_MAX,
+    INVALID_LOGIN_MESSAGE,
+    ACCOUNT_LOCKED_MESSAGE,
 )
 from .forms import ActiveOnlyAuthenticationForm, StrictPasswordChangeForm
 from .search_api import search_users_for_api
@@ -29,8 +36,12 @@ from .search_api import search_users_for_api
 import logging
 from django.http import HttpResponseForbidden
 
+from audit.constants import ACTION
+from audit.services import log_action
+
 logger = logging.getLogger("django.security.csrf")
 access_logger = logging.getLogger("accounts.access")
+UserModel = get_user_model()
 
 def csrf_failure(request, reason=""):
     logger.warning(
@@ -89,6 +100,18 @@ class UserPasswordChangeView(PasswordChangeView):
                 u.must_change_password = False
                 u.must_change_password_cleared_at = timezone.now()
                 u.save(update_fields=["must_change_password", "must_change_password_cleared_at"])
+                try:
+                    log_action(
+                        self.request,
+                        ACTION.ACCOUNTS_PASSWORD_CHANGE_COMPLETED,
+                        obj=u,
+                        meta={"user_id": getattr(u, "id", "")},
+                        success=True,
+                    )
+                except Exception:
+                    # audit 실패가 비밀번호 변경 완료를 막으면 안 됨
+                    access_logger.exception("PASSWORD_CHANGE_COMPLETED audit failed")
+
                 access_logger.info("PASSWORD_CHANGE_COMPLETED user=%s", getattr(u, "id", ""))
         except Exception:
             # 사용자에게는 노출하지 않고, 서버 로그만 남기기(운영 안정성)
@@ -173,7 +196,110 @@ class SessionCloseLoginView(LoginView):
         """
         response = super().dispatch(request, *args, **kwargs)
         return _set_no_store_headers(response)
+    
+    # -------------------------------------------------------------------------
+    # Internal helpers (Lockout)
+    # -------------------------------------------------------------------------
+    def _extract_login_id(self) -> str:
+        """
+        Django AuthenticationForm의 기본 필드명(username) + 방어적 fallback(id)
+        """
+        return (self.request.POST.get("username") or self.request.POST.get("id") or "").strip()
 
+    def _get_submitted_user(self):
+        login_id = self._extract_login_id()
+        if not login_id:
+            return None
+        return UserModel.objects.filter(pk=login_id).first()
+
+    def _replace_non_field_error(self, form, message: str, code: str) -> None:
+        # 기존 invalid_login 메시지와 중복되지 않도록 non-field error 교체
+        try:
+            _ = form.errors
+        except Exception:
+            pass
+        try:
+            form._errors.pop(NON_FIELD_ERRORS, None)
+        except Exception:
+            pass
+        form.add_error(None, ValidationError(message, code=code))
+
+    def _audit_safe(self, request, action: str, **kwargs) -> None:
+        try:
+            log_action(request, action, **kwargs)
+        except Exception:
+            access_logger.exception("AUDIT_LOG_ACTION_FAILED action=%s", action)
+
+    def _mark_login_failed(self, user):
+        """
+        잘못된 비밀번호로 인증 실패한 경우에만 연속 실패 횟수 누적.
+        select_for_update()로 동시 로그인 시도 경쟁 조건을 완화한다.
+        """
+        with transaction.atomic():
+            locked_user = UserModel.objects.select_for_update().get(pk=user.pk)
+            now = timezone.now()
+            became_locked = False
+
+            if locked_user.is_locked:
+                return locked_user, False
+
+            locked_user.login_fail_count = int(getattr(locked_user, "login_fail_count", 0) or 0) + 1
+            locked_user.last_login_fail_at = now
+
+            update_fields = ["login_fail_count", "last_login_fail_at"]
+            if locked_user.login_fail_count >= LOGIN_FAIL_MAX_COUNT:
+                locked_user.login_fail_count = LOGIN_FAIL_MAX_COUNT
+                locked_user.is_locked = True
+                locked_user.locked_at = now
+                locked_user.lock_reason = LOCK_REASON_LOGIN_FAIL_MAX
+                update_fields.extend(["is_locked", "locked_at", "lock_reason"])
+                became_locked = True
+
+            locked_user.save(update_fields=list(dict.fromkeys(update_fields)))
+            return locked_user, became_locked
+
+    def _reset_login_fail_state(self, user) -> None:
+        with transaction.atomic():
+            target = UserModel.objects.select_for_update().get(pk=user.pk)
+            update_fields = []
+
+            if int(getattr(target, "login_fail_count", 0) or 0) != 0:
+                target.login_fail_count = 0
+                update_fields.append("login_fail_count")
+
+            # 잠겨 있지 않은 정상 로그인 사용자에 대해서만 보조 필드를 정리
+            if not getattr(target, "is_locked", False):
+                if getattr(target, "lock_reason", ""):
+                    target.lock_reason = ""
+                    update_fields.append("lock_reason")
+
+            if update_fields:
+                target.save(update_fields=update_fields)
+
+    def post(self, request: HttpRequest, *args, **kwargs) -> HttpResponse:
+        """
+        잠긴 계정은 비밀번호가 맞더라도 로그인 시도 자체를 막는다.
+        - form_invalid 경로로 내려 보내 잠금 메시지를 동일하게 렌더
+        """
+        submitted_user = self._get_submitted_user()
+        if submitted_user and getattr(submitted_user, "is_locked", False):
+            form = self.get_form()
+            self._replace_non_field_error(form, ACCOUNT_LOCKED_MESSAGE, "locked")
+            self._audit_safe(
+                request,
+                ACTION.AUTH_LOGIN_BLOCKED_LOCKED,
+                obj=submitted_user,
+                meta={
+                    "user_id": getattr(submitted_user, "id", ""),
+                    "login_fail_count": int(getattr(submitted_user, "login_fail_count", 0) or 0),
+                    "lock_reason": getattr(submitted_user, "lock_reason", ""),
+                },
+                success=False,
+                reason="locked_account",
+            )
+            return self.form_invalid(form)
+
+        return super().post(request, *args, **kwargs)
 
     def form_valid(self, form) -> HttpResponse:
         """
@@ -196,6 +322,19 @@ class SessionCloseLoginView(LoginView):
         response = super().form_valid(form)
         self.request.session.set_expiry(0)
 
+        # ✅ 성공 로그인 시 연속 실패 횟수 초기화
+        try:
+            if user and getattr(user, "is_authenticated", True):
+                self._reset_login_fail_state(user)
+        except Exception:
+            access_logger.exception("LOGIN_FAIL_COUNTER_RESET failed user=%s", getattr(user, "id", ""))
+
+        try:
+            if user:
+                self._audit_safe(self.request, ACTION.AUTH_LOGIN_SUCCESS, obj=user, success=True)
+        except Exception:
+            access_logger.exception("AUTH_LOGIN_SUCCESS audit failed")
+
         # ✅ 로그인 성공 후에만 플래그 수렴(인증 실패 케이스 오염 방지)
         try:
             if user and getattr(user, "is_authenticated", True):
@@ -217,6 +356,56 @@ class SessionCloseLoginView(LoginView):
             access_logger.exception("PASSWORD_CHANGE_REQUIRED_SET failed")
 
         return response
+    
+    def form_invalid(self, form) -> HttpResponse:
+        """
+        잘못된 비밀번호로 인한 invalid_login만 연속 실패 횟수에 반영한다.
+        inactive / locked / 기타 폼 에러는 누적하지 않는다.
+        """
+        submitted_user = self._get_submitted_user()
+
+        try:
+            error_data = form.errors.as_data().get(NON_FIELD_ERRORS, [])
+            error_codes = {getattr(err, "code", "") for err in error_data}
+        except Exception:
+            error_codes = set()
+
+        if submitted_user and "invalid_login" in error_codes and not getattr(submitted_user, "is_locked", False):
+            try:
+                updated_user, became_locked = self._mark_login_failed(submitted_user)
+
+                self._audit_safe(
+                    self.request,
+                    ACTION.AUTH_LOGIN_FAIL,
+                    obj=updated_user,
+                    meta={
+                        "user_id": getattr(updated_user, "id", ""),
+                        "login_fail_count": int(getattr(updated_user, "login_fail_count", 0) or 0),
+                    },
+                    success=False,
+                    reason="invalid_login",
+                )
+
+                if became_locked:
+                    self._replace_non_field_error(form, ACCOUNT_LOCKED_MESSAGE, "locked")
+                    self._audit_safe(
+                        self.request,
+                        ACTION.AUTH_LOGIN_LOCKED,
+                        obj=updated_user,
+                        meta={
+                            "user_id": getattr(updated_user, "id", ""),
+                            "login_fail_count": int(getattr(updated_user, "login_fail_count", 0) or 0),
+                            "lock_reason": getattr(updated_user, "lock_reason", ""),
+                        },
+                        success=False,
+                        reason="login_fail_limit_reached",
+                    )
+                else:
+                    self._replace_non_field_error(form, INVALID_LOGIN_MESSAGE, "invalid_login")
+            except Exception:
+                access_logger.exception("AUTH_LOGIN_FAIL handling failed user=%s", getattr(submitted_user, "id", ""))
+
+        return super().form_invalid(form)
 
 
 # =============================================================================

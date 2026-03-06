@@ -3,6 +3,8 @@ from django import forms
 from django.contrib.auth.forms import AuthenticationForm, PasswordChangeForm
 from django.core.exceptions import ValidationError
 
+from .constants import ACCOUNT_LOCKED_MESSAGE
+
 
 # =============================================================================
 # Excel Upload Form
@@ -23,8 +25,13 @@ class ActiveOnlyAuthenticationForm(AuthenticationForm):
     """
     비활성화(is_active=False) 계정 로그인 차단
     """
+
     def confirm_login_allowed(self, user):
         super().confirm_login_allowed(user)
+
+        # ✅ 방어적 가드: 잠긴 계정은 어떤 로그인 뷰를 타더라도 인증 완료 금지
+        if getattr(user, "is_locked", False):
+            raise ValidationError(ACCOUNT_LOCKED_MESSAGE, code="locked")
 
         if not getattr(user, "is_active", True):
             raise ValidationError("비활성화된 계정입니다.", code="inactive")

@@ -103,6 +103,25 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     is_superuser = models.BooleanField(default=False)
 
     # -------------------------------------------------------------------------
+    # Phase 4 (Account Lockout)
+    #
+    # ✅ login_fail_count:
+    # - 연속 로그인 실패 횟수
+    # - 로그인 성공 시 0으로 초기화
+    #
+    # ✅ is_locked:
+    # - True이면 관리자 비밀번호 초기화 전까지 로그인 불가
+    # -------------------------------------------------------------------------
+    login_fail_count = models.PositiveIntegerField(default=0)
+    is_locked = models.BooleanField(default=False)
+    locked_at = models.DateTimeField(blank=True, null=True)
+    last_login_fail_at = models.DateTimeField(blank=True, null=True)
+    lock_reason = models.CharField(max_length=50, blank=True, default="")
+    lock_cleared_at = models.DateTimeField(blank=True, null=True)
+    lock_cleared_by = models.ForeignKey("self", null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    password_reset_by_admin_at = models.DateTimeField(blank=True, null=True)
+
+    # -------------------------------------------------------------------------
     # Phase 3 (Force Password Change)
     #
     # ✅ must_change_password:
