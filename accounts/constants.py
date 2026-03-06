@@ -38,8 +38,13 @@ LOGIN_FAIL_MAX_COUNT = 5
 LOCK_REASON_LOGIN_FAIL_MAX = "LOGIN_FAIL_MAX"
 
 # 사용자 메시지(SSOT)
-INVALID_LOGIN_MESSAGE = "아이디 또는 비밀번호가 올바르지 않습니다."
-ACCOUNT_LOCKED_MESSAGE = "비밀번호를 5회 이상 틀리게 입력하셔서 계정이 잠겼습니다. 관리자에게 문의 바랍니다."
+INVALID_LOGIN_MESSAGE_HEAD = "아이디/비밀번호를 다시 확인해주세요."
+INVALID_LOGIN_MESSAGE_PROGRESS_TEMPLATE = "아이디/비밀번호 5회 오류 시 계정이 잠깁니다. ({count}/{max_count})"
+
+ACCOUNT_LOCKED_MESSAGE = (
+    "아이디/비밀번호 5회 오류로 계정이 잠겼습니다.\n"
+    "관리자에게 문의 바랍니다."
+)
 
 # Admin action label
 ADMIN_ACTION_RESET_PASSWORD_AND_UNLOCK = "(Lockout) 선택 사용자 비밀번호 초기화 + 잠금 해제"

@@ -10,8 +10,16 @@
   <div class="card p-4 shadow">
     <h3 class="text-center mb-4" style="color:#003f7d; font-weight:700;">로그인</h3>
 
-    <form method="POST" novalidate>
+    <form id="loginForm" method="POST" novalidate>
       {% csrf_token %}
+
+      {% if form.non_field_errors %}
+        <div class="alert alert-danger py-2 px-3" role="alert" style="font-size:0.95rem; line-height:1.5;">
+          {% for error in form.non_field_errors %}
+            <div>{{ error|linebreaksbr }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
       
       <!-- 아이디 -->
       <div class="mb-3">
@@ -23,7 +31,7 @@
         {{ form.password|add_class:"form-control"|attr:"placeholder:비밀번호" }}
       </div>
 
-      <button type="submit" class="btn btn-primary w-100">로그인</button>
+      <button id="loginBtn" type="submit" class="btn btn-primary w-100">로그인</button>
     </form>
   </div>
 </div>

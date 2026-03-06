@@ -1,6 +1,7 @@
 # django_ma/accounts/views.py
 from __future__ import annotations
 from pathlib import Path
+from typing import Optional
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
@@ -25,9 +26,11 @@ from .constants import (
     CACHE_PROGRESS_PREFIX,
     CACHE_RESULT_PATH_PREFIX,
     CACHE_STATUS_PREFIX,
-    cache_key,LOGIN_FAIL_MAX_COUNT,
+    cache_key,
+    LOGIN_FAIL_MAX_COUNT,
     LOCK_REASON_LOGIN_FAIL_MAX,
-    INVALID_LOGIN_MESSAGE,
+    INVALID_LOGIN_MESSAGE_HEAD,
+    INVALID_LOGIN_MESSAGE_PROGRESS_TEMPLATE,
     ACCOUNT_LOCKED_MESSAGE,
 )
 from .forms import ActiveOnlyAuthenticationForm, StrictPasswordChangeForm
@@ -211,6 +214,20 @@ class SessionCloseLoginView(LoginView):
         if not login_id:
             return None
         return UserModel.objects.filter(pk=login_id).first()
+    
+    def _build_invalid_login_message(self, count: int) -> str:
+        """
+        일반 로그인 실패 메시지:
+        - 1~4회 실패 시 (N/5) 진행 상태를 안내
+        """
+        safe_count = max(1, min(int(count or 0), LOGIN_FAIL_MAX_COUNT - 1))
+        return (
+            f"{INVALID_LOGIN_MESSAGE_HEAD}\n"
+            f"{INVALID_LOGIN_MESSAGE_PROGRESS_TEMPLATE.format(count=safe_count, max_count=LOGIN_FAIL_MAX_COUNT)}"
+        )
+
+    def _build_locked_message(self) -> str:
+        return ACCOUNT_LOCKED_MESSAGE
 
     def _replace_non_field_error(self, form, message: str, code: str) -> None:
         # 기존 invalid_login 메시지와 중복되지 않도록 non-field error 교체
@@ -284,7 +301,7 @@ class SessionCloseLoginView(LoginView):
         submitted_user = self._get_submitted_user()
         if submitted_user and getattr(submitted_user, "is_locked", False):
             form = self.get_form()
-            self._replace_non_field_error(form, ACCOUNT_LOCKED_MESSAGE, "locked")
+            self._replace_non_field_error(form, self._build_locked_message(), "locked")
             self._audit_safe(
                 request,
                 ACTION.AUTH_LOGIN_BLOCKED_LOCKED,
@@ -387,7 +404,7 @@ class SessionCloseLoginView(LoginView):
                 )
 
                 if became_locked:
-                    self._replace_non_field_error(form, ACCOUNT_LOCKED_MESSAGE, "locked")
+                    self._replace_non_field_error(form, self._build_locked_message(), "locked")
                     self._audit_safe(
                         self.request,
                         ACTION.AUTH_LOGIN_LOCKED,
@@ -401,7 +418,11 @@ class SessionCloseLoginView(LoginView):
                         reason="login_fail_limit_reached",
                     )
                 else:
-                    self._replace_non_field_error(form, INVALID_LOGIN_MESSAGE, "invalid_login")
+                    self._replace_non_field_error(
+                        form,
+                        self._build_invalid_login_message(updated_user.login_fail_count),
+                        "invalid_login",
+                    )
             except Exception:
                 access_logger.exception("AUTH_LOGIN_FAIL handling failed user=%s", getattr(submitted_user, "id", ""))
 
