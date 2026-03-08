@@ -1,0 +1,113 @@
+<!-- django_ma/support/templates/support/industry_info.html-->
+
+{% extends "base.html" %}
+{% load static support_tags %}
+
+{% block title %}업계정보{% endblock %}
+
+{% block app_css %}
+  <link rel="stylesheet" href="{% static 'css/apps/support.css' %}">
+{% endblock %}
+
+{% block content %}
+<!-- support 업계정보 페이지 루트 -->
+<div
+  id="industryInfoRoot"
+  class="support-scope"
+  data-preference-url-template="{% url 'support:api_preference' 0 %}"
+  data-click-url-template="{% url 'support:api_click' 0 %}"
+>
+  <!-- 페이지 헤더 -->
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+      <h2 class="mb-1">업계정보</h2>
+      <div class="text-muted">보험 업계 주요 뉴스와 맞춤 추천을 확인하세요.</div>
+    </div>
+  </div>
+
+  <!-- 토픽 필터 -->
+  <div class="support-filter-bar card mb-4">
+    <div class="card-body">
+      <div class="d-flex flex-wrap gap-2">
+        <a
+          href="{% url 'support:industry_info' %}"
+          class="btn btn-sm {% if not selected_topic %}btn-primary{% else %}btn-outline-secondary{% endif %}"
+        >
+          전체
+        </a>
+
+        {% for value, label in topics %}
+          <a
+            href="{% url 'support:industry_info' %}?topic={{ value|urlencode }}"
+            class="btn btn-sm {% if selected_topic == value %}btn-primary{% else %}btn-outline-secondary{% endif %}"
+          >
+            {{ label }}
+          </a>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-4">
+    <!-- 추천 기사 영역 -->
+    <div class="col-lg-5">
+      <div class="card">
+        <div class="card-header">
+          <strong>추천 업계정보</strong>
+        </div>
+        <div class="card-body">
+          {% if recommended_articles %}
+            <div class="support-card-list">
+              {% for article in recommended_articles %}
+                {% include "support/partials/_article_card.html" with article=article pref=pref_map|get_item:article.id recommend_reason=article.recommend_reason only %}
+              {% endfor %}
+            </div>
+          {% else %}
+            <div class="text-muted">
+              추천 데이터가 아직 충분하지 않습니다. 최신 기사를 먼저 확인해 주세요.
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- 최신 기사 영역 -->
+    <div class="col-lg-7">
+      <div class="card">
+        <div class="card-header">
+          <strong>최신 업계 뉴스</strong>
+        </div>
+        <div class="card-body">
+          {% if latest_articles %}
+            <div class="support-card-list">
+              {% for article in latest_articles %}
+                {% include "support/partials/_article_card.html" with article=article pref=pref_map|get_item:article.id recommend_reason="" only %}
+              {% endfor %}
+            </div>
+          {% else %}
+            <div class="text-muted">
+              표시할 기사가 없습니다. 수집 작업 이후 다시 확인해 주세요.
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 초기 사용자 선호도 맵 -->
+<script>
+  window.supportPrefMap = {
+    {% for article_id, pref in pref_map.items %}
+      "{{ article_id }}": {
+        rating: {{ pref.rating|default:"null" }},
+        is_bookmarked: {{ pref.is_bookmarked|yesno:"true,false" }},
+        is_hidden: {{ pref.is_hidden|yesno:"true,false" }}
+      }{% if not forloop.last %},{% endif %}
+    {% endfor %}
+  };
+</script>
+
+<!-- 업계정보 페이지 전용 JS -->
+<script src="{% static 'js/support/industry_info.js' %}"></script>
+{% endblock %}

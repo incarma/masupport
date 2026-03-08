@@ -17,6 +17,8 @@ from __future__ import annotations
 import os
 import logging
 from dataclasses import dataclass
+import re
+from xml.sax.saxutils import escape
 from datetime import date
 from typing import Optional
 
@@ -127,6 +129,62 @@ def _safe_str(v) -> str:
     return (str(v) if v is not None else "").strip()
 
 
+_MONEY_RE = re.compile(r"^[0-9][0-9,]*$")
+
+
+def _clean_text(value, *, max_len: int, field_name: str, required: bool = False) -> str:
+    s = _safe_str(value)
+    if required and not s:
+        raise ValueError(f"{field_name}을(를) 입력해주세요.")
+    if len(s) > max_len:
+        raise ValueError(f"{field_name}은(는) {max_len}자 이하로 입력해주세요.")
+    return s
+
+
+def _clean_money(raw: str, *, field_name: str) -> str:
+    s = _safe_str(raw).replace(" ", "")
+    if not s:
+        return ""
+    if not _MONEY_RE.match(s):
+        raise ValueError(f"{field_name} 금액 형식이 올바르지 않습니다.")
+    return s
+
+
+def _p(text: str) -> str:
+    return escape(text or "")
+
+
+def _paragraph(text: str, style):
+    return Paragraph(_p(text), style)
+
+
+def _read_contract_row(post_data, idx: int) -> list[str]:
+    premium_raw = _post_get_any(
+        post_data,
+        [f"premium_{idx}", f"premium{idx}", f"premium-{idx}"],
+        "",
+    )
+    premium = _clean_money(premium_raw, field_name=f"보험료({idx})")
+    return [
+        _clean_text(
+            _post_get_any(post_data, [f"insurer_{idx}", f"insurer{idx}", f"insurer-{idx}"], ""),
+            max_len=50,
+            field_name=f"보험사({idx})",
+        ),
+        _clean_text(
+            _post_get_any(post_data, [f"policy_no_{idx}", f"policy_no{idx}", f"policy_no-{idx}"], ""),
+            max_len=50,
+            field_name=f"증권번호({idx})",
+        ),
+        _clean_text(
+            _post_get_any(post_data, [f"contractor_{idx}", f"contractor{idx}", f"contractor-{idx}"], ""),
+            max_len=80,
+            field_name=f"계약자({idx})",
+        ),
+        _fmt_money_from_post(premium),
+    ]
+
+
 def _post_get_any(post, keys: list[str], default: str = "") -> str:
     """
     템플릿/JS 변경으로 필드명이 달라도 PDF 생성이 되도록 방어.
@@ -221,6 +279,10 @@ def generate_request_states(request, *, task_only: bool = False):
     try:
         _ensure_korean_font()
         styles = _build_styles()
+        title = _clean_text(request.POST.get("title", ""), max_len=200, field_name="제목", required=True)
+        reason = _clean_text(request.POST.get("reason", ""), max_len=4000, field_name="발생경위", required=True)
+        solution = _clean_text(request.POST.get("solution", ""), max_len=4000, field_name="개선방안", required=True)
+        request_date = f"{date.today():%Y-%m-%d}"
 
         response = HttpResponse(content_type="application/pdf")
         response["Content-Disposition"] = 'attachment; filename="소명서.pdf"'
@@ -236,7 +298,7 @@ def generate_request_states(request, *, task_only: bool = False):
 
         elements += [
             Paragraph("<b>FA 소명서</b>", styles["TitleBold"]),
-            Paragraph(f"요청일자 : {date.today():%Y-%m-%d}", styles["RightAlign"]),
+            _paragraph(f"요청일자 : {request_date}", styles["RightAlign"]),
             Spacer(1, 15),
         ]
 
@@ -262,28 +324,7 @@ def generate_request_states(request, *, task_only: bool = False):
         # -------------------------------------------
         contract_rows = [["보험사", "증권번호", "계약자(피보험자)", "보험료"]]
         for i in range(1, 6):
-            row = [
-                _safe_str(_post_get_any(
-                    request.POST,
-                    [f"insurer_{i}", f"insurer{i}", f"insurer-{i}"],
-                    "-"
-                )) or "-",
-                _safe_str(_post_get_any(
-                    request.POST,
-                    [f"policy_no_{i}", f"policy_no{i}", f"policy_no-{i}"],
-                   "-"
-                )) or "-",
-                _safe_str(_post_get_any(
-                    request.POST,
-                    [f"contractor_{i}", f"contractor{i}", f"contractor-{i}"],
-                    "-"
-                )) or "-",
-                _fmt_money_from_post(_post_get_any(
-                    request.POST,
-                    [f"premium_{i}", f"premium{i}", f"premium-{i}"],
-                    ""
-                )),
-            ]
+            row = _read_contract_row(request.POST, i)
             if _is_meaningful_row(row):
                 contract_rows.append(row)
         if len(contract_rows) == 1:
@@ -296,14 +337,10 @@ def generate_request_states(request, *, task_only: bool = False):
         # -------------------------------------------
         # 📝 요청 내용
         # -------------------------------------------
-        title = _safe_str(request.POST.get("title", "")) or "-"
-        reason = _safe_str(request.POST.get("reason", "")) or "-"
-        solution = _safe_str(request.POST.get("solution", "")) or "-"
-
         content_table = [
-            ["제목", Paragraph(title, styles["Korean"])],
-            ["발생경위", Paragraph(reason, styles["Korean"])],
-            ["개선방안", Paragraph(solution, styles["Korean"])],
+            ["제목", _paragraph(title, styles["Korean"])],
+            ["발생경위", _paragraph(reason, styles["Korean"])],
+            ["개선방안", _paragraph(solution, styles["Korean"])],
         ]
         t3 = Table(content_table, colWidths=[60, 440], minRowHeights=[20, 150, 150])
         t3.setStyle(TableStyle([
@@ -319,11 +356,11 @@ def generate_request_states(request, *, task_only: bool = False):
         # ✍️ 작성자 서명란
         # -------------------------------------------
         requester_sign = (
-            f"작성자 : {requester_branch}"
+            f"작성자 : {requester_branch} "
             f"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{_safe_str(getattr(user, 'name', '')) or '-'}"
             f"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(서명)"
         )
-        elements.append(Paragraph(requester_sign, styles["RightAlign"]))
+        elements.append(Paragraph(_p(requester_sign), styles["RightAlign"]))
         elements.append(Spacer(1, 10))
 
         # -------------------------------------------
@@ -332,11 +369,11 @@ def generate_request_states(request, *, task_only: bool = False):
         head_user = find_branch_head_user(requester_branch)
         head_name = _safe_str(getattr(head_user, "name", "")) or "(미등록)"
         confirm_text = (
-            f"최상위관리자 확인 : {requester_branch} 본부장(사업단장)"
+            f"최상위관리자 확인 : {requester_branch} 본부장(사업단장) "
             f"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{head_name}"
             f"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(서명)"
         )
-        elements.append(Paragraph(confirm_text, styles["RightAlign"]))
+        elements.append(Paragraph(_p(confirm_text), styles["RightAlign"]))
         elements.append(Spacer(1, 20))
 
         # -------------------------------------------
@@ -345,7 +382,10 @@ def generate_request_states(request, *, task_only: bool = False):
         doc.build(elements)
         logger.info("[PDF] FA 소명서 생성 완료 — %s (%s)", getattr(user, "name", ""), requester_branch)
         return response
-
+    
+    except ValueError as e:
+        logger.warning("[PDF validation 오류] %s", e)
     except Exception as e:
         logger.error("[PDF 생성 오류] %s", e, exc_info=True)
         return None
+    return None

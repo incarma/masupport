@@ -25,8 +25,14 @@ handler500 = "web_ma.views.handler500"
 
 
 def home_redirect(request):
-    """홈(/) 접속 시 매뉴얼로 리다이렉트"""
-    return redirect("manual:manual_list")
+    """
+    홈(/) 접속 시 최초 랜딩페이지인 업계정보로 리다이렉트합니다.
+    - support.md 기준: 로그인 후 최초 진입 페이지는 support:industry_info
+    - 비로그인 사용자는 login으로 보내 인증 흐름을 유지합니다.
+    """
+    if request.user.is_authenticated:
+        return redirect("support:industry_info")
+    return redirect("login")
 
 
 urlpatterns = [
@@ -58,6 +64,7 @@ urlpatterns = [
     path("board/", include("board.urls")),
     path("commission/", include("commission.urls")),
     path("dash/", include("dash.urls")),
+    path("support/", include(("support.urls", "support"), namespace="support")),
     path("partner/", include(("partner.urls", "partner"), namespace="partner")),
     path("manual/", include("manual.urls")),
     path("ckeditor/", include("ckeditor_uploader.urls")),

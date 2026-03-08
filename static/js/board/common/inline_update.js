@@ -18,6 +18,8 @@
   Board.Common = Board.Common || {};
 
   const INIT_FLAG = "__boardListInlineUpdateBound";
+  const PAGE_SHOW_FLAG = "__boardListInlineUpdatePageShowBound";
+  const CTX_KEY = "__boardListInlineUpdateContexts";
 
   /* =========================================================
    * 1) Utilities
@@ -41,6 +43,27 @@
 
   function getCsrfFromForm(form) {
     return form?.querySelector("input[name='csrfmiddlewaretoken']")?.value || "";
+  }
+
+  function isHtmlResponse(res) {
+    return (res.headers.get("content-type") || "").toLowerCase().includes("text/html");
+  }
+
+  async function readErrorMessage(res, data) {
+    if (data?.message) return data.message;
+    if (data?.error) return data.error;
+
+    if (res.status === 401 || res.status === 403) {
+      if (isHtmlResponse(res)) {
+        return "세션이 만료되었거나 접근 권한이 없습니다. 다시 로그인 후 시도해주세요.";
+      }
+      return "권한이 없거나 세션이 만료되었습니다.";
+    }
+
+    if (isHtmlResponse(res)) {
+      return "요청 처리 중 로그인 페이지 또는 오류 페이지가 반환되었습니다. 다시 로그인 후 시도해주세요.";
+    }
+    return `변경 실패 (HTTP ${res.status})`;
   }
 
   function setBusy(selectEl, busy) {
@@ -74,6 +97,34 @@
     }, 2500);
   }
 
+  function getContexts() {
+    if (!Array.isArray(Board.Common[CTX_KEY])) {
+      Board.Common[CTX_KEY] = [];
+    }
+    return Board.Common[CTX_KEY];
+  }
+
+  function registerContext(ctx) {
+    const contexts = getContexts();
+    const exists = contexts.some((item) => item.bootId === ctx.bootId);
+    if (!exists) contexts.push(ctx);
+  }
+
+  function resetBusyState() {
+    document.querySelectorAll("form.inline-update-form").forEach((form) => {
+      form.dataset.submitting = "0";
+    });
+    document
+      .querySelectorAll("form.inline-update-form select[name='handler'], form.inline-update-form select[name='status']")
+      .forEach((sel) => setBusy(sel, false));
+  }
+
+  function bindPageShowReset() {
+    if (document.body.dataset[PAGE_SHOW_FLAG] === "1") return;
+    document.body.dataset[PAGE_SHOW_FLAG] = "1";
+    window.addEventListener("pageshow", resetBusyState);
+  }
+
   async function sendUpdate({ updateUrl, form, idKey, idValue, actionType, value }) {
     if (!updateUrl) throw new Error("AJAX update URL이 없습니다. (boot data-update-url 확인)");
 
@@ -97,8 +148,13 @@
     });
 
     const data = await safeJson(res);
+    if (res.redirected || isHtmlResponse(res)) {
+      throw new Error(await readErrorMessage(res, data));
+    }
+
     if (!res.ok || !data?.ok) {
-      throw new Error(data?.message || `변경 실패 (HTTP ${res.status})`);
+      const fallback = await readErrorMessage(res, data);
+      throw new Error(fallback);
     }
     return data;
   }
@@ -121,22 +177,28 @@
 
     const bind = () => {
       // 중복 바인딩 방지(LIST 페이지는 1회만)
-      if (document.body.dataset[INIT_FLAG] === "1") return;
-      document.body.dataset[INIT_FLAG] = "1";
-
       const boot = document.getElementById(bootId);
+      if (!boot || boot.dataset.boardListInlineUpdateInited === "1") return;
+      boot.dataset.boardListInlineUpdateInited = "1";
+
       const updateUrl = boot?.dataset?.updateUrl || "";
       const alertHost = document.getElementById("inlineUpdateAlertHost");
 
       // updateUrl 없으면(비권한/일반화면) 조용히 종료
       if (!updateUrl) return;
+      registerContext({ bootId, idKey, updateUrl, onSuccess });
 
       // 초기 prevValue 세팅
+      bindPageShowReset();
       document
         .querySelectorAll(
           "form.inline-update-form select[name='handler'], form.inline-update-form select[name='status']"
         )
         .forEach((s) => (s.dataset.prevValue = s.value));
+      
+      // 전역 change handler는 1회만
+      if (document.body.dataset[INIT_FLAG] === "1") return;
+      document.body.dataset[INIT_FLAG] = "1";
 
       document.addEventListener("change", async (e) => {
         const sel = e.target;
@@ -147,6 +209,18 @@
 
         const fieldName = sel.getAttribute("name");
         if (fieldName !== "handler" && fieldName !== "status") return;
+
+        const contexts = getContexts();
+        const ctx = contexts.find((item) => {
+          const currentBoot = document.getElementById(item.bootId);
+          return currentBoot && document.contains(currentBoot);
+        });
+        if (!ctx?.updateUrl || !ctx?.idKey) return;
+
+        const currentOnSuccess = typeof ctx.onSuccess === "function" ? ctx.onSuccess : null;
+        const currentAlertHost = document.getElementById("inlineUpdateAlertHost");
+        const updateUrl = ctx.updateUrl;
+        const idKey = ctx.idKey;
 
         const idValue = qs(`input[name="${idKey}"]`, form)?.value || "";
         const actionType = qs('input[name="action_type"]', form)?.value || "";
@@ -188,12 +262,12 @@
             sel.dataset.status = data.status;
           }
 
-          showAlert(alertHost, data.message || "변경되었습니다.", "success");
+          showAlert(currentAlertHost, data.message || "변경되었습니다.", "success");
 
           // 공식 onSuccess
-          if (onSuccess) {
+          if (currentOnSuccess) {
             try {
-              onSuccess(data, { sel, form, fieldName, idKey, idValue, actionType, updateUrl });
+              currentOnSuccess(data, { sel, form, fieldName, idKey, idValue, actionType, updateUrl });
             } catch {
               /* ignore */
             }
@@ -202,7 +276,7 @@
           sel.value = prev;
           sel.dataset.prevValue = prev;
           sel.dataset.status = prev;
-          showAlert(alertHost, err?.message || "변경 실패", "danger");
+          showAlert(currentAlertHost, err?.message || "변경 실패", "danger");
         } finally {
           setBusy(sel, false);
           form.dataset.submitting = "0";

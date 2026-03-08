@@ -12,8 +12,24 @@ class ACTION:
     BOARD_POST_CREATE = "board.post.create"
     BOARD_POST_UPDATE = "board.post.update"
     BOARD_POST_DELETE = "board.post.delete"
+    BOARD_TASK_CREATE = "board.task.create"
+    BOARD_TASK_UPDATE = "board.task.update"
+    BOARD_TASK_DELETE = "board.task.delete"
+
+    BOARD_STATUS_UPDATE = "board.status.update"
+    BOARD_HANDLER_UPDATE = "board.handler.update"
+    BOARD_INLINE_UPDATE = "board.inline.update"
+
+    BOARD_COMMENT_CREATE = "board.comment.create"
+    BOARD_COMMENT_UPDATE = "board.comment.update"
+    BOARD_COMMENT_DELETE = "board.comment.delete"
+
+    BOARD_ATTACHMENT_UPLOAD = "board.attachment.upload"
+    BOARD_ATTACHMENT_DELETE = "board.attachment.delete"
     BOARD_ATTACHMENT_DOWNLOAD = "board.attachment.download"
     TASK_ATTACHMENT_DOWNLOAD = "board.task_attachment.download"
+    BOARD_SUPPORT_PDF_GENERATE = "board.support_pdf.generate"
+    BOARD_STATES_PDF_GENERATE = "board.states_pdf.generate"
 
     # Manual
     MANUAL_CREATE = "manual.manual.create"
@@ -46,3 +62,13 @@ class ACTION:
     ACCOUNTS_GRADE_UPDATE = "accounts.user.grade.update"
     ACCOUNTS_PASSWORD_RESET_UNLOCK = "accounts.user.password_reset_unlock"
     ACCOUNTS_PASSWORD_CHANGE_COMPLETED = "accounts.user.password_change.completed"
+
+    # Support
+    SUPPORT_COLLECT_RUN = "support.collect.run"
+    SUPPORT_COLLECT_FAIL = "support.collect.fail"
+    SUPPORT_ARTICLE_HIDE = "support.article.hide"
+    SUPPORT_ARTICLE_RESTORE = "support.article.restore"
+    SUPPORT_USER_RATE = "support.user.rate"
+    SUPPORT_USER_BOOKMARK = "support.user.bookmark"
+    SUPPORT_USER_HIDE = "support.user.hide"
+    SUPPORT_RECOMMEND_GENERATE = "support.recommend.generate"

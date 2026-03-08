@@ -25,6 +25,11 @@ import { qs, qsa } from "../common/forms/dom.js";
 import { initRowController } from "../common/forms/rows.js";
 import { bindPremiumInputs } from "../common/forms/premium.js";
 
+const INIT_FLAG = "boardSupportInited";
+const BUSY_FLAG = "boardSupportBusy";
+const USER_BIND_FLAG = "boardSupportUserBind";
+const PAGE_SHOW_FLAG = "boardSupportPageShowBind";
+
 function getCsrfToken() {
   return (
     window.csrfToken ||
@@ -34,6 +39,37 @@ function getCsrfToken() {
   );
 }
 
+function isJsonResponse(res) {
+  return (res.headers.get("content-type") || "").toLowerCase().includes("application/json");
+}
+
+async function readErrorMessage(res, fallback) {
+  if (!isJsonResponse(res)) return fallback;
+  try {
+    const data = await res.json();
+    return data?.message || data?.error || fallback;
+  } catch (_) {
+    return fallback;
+  }
+}
+
+function setBusyState({ overlay, button, busy }) {
+  if (overlay) overlay.style.display = busy ? "block" : "none";
+  if (button) {
+    button.disabled = !!busy;
+    button.dataset[BUSY_FLAG] = busy ? "1" : "";
+    button.setAttribute("aria-busy", busy ? "true" : "false");
+  }
+}
+
+function bindPageShowReset({ overlay, button }) {
+  if (window[PAGE_SHOW_FLAG]) return;
+  window[PAGE_SHOW_FLAG] = true;
+  window.addEventListener("pageshow", () => {
+    setBusyState({ overlay, button, busy: false });
+  });
+}
+
 async function downloadPdf({ url, formEl, filename }) {
   const formData = new FormData(formEl);
   const csrf = getCsrfToken();
@@ -41,11 +77,35 @@ async function downloadPdf({ url, formEl, filename }) {
   const res = await fetch(url, {
     method: "POST",
     body: formData,
-    headers: csrf ? { "X-CSRFToken": csrf } : {},
+    headers: {
+      ...(csrf ? { "X-CSRFToken": csrf } : {}),
+      "X-Requested-With": "XMLHttpRequest",
+    },
     credentials: "same-origin",
   });
 
-  if (!res.ok) throw new Error(`PDF 생성 실패 (HTTP ${res.status})`);
+  if (!res.ok) {
+    const fallback = `PDF 생성 실패 (HTTP ${res.status})`;
+    throw new Error(await readErrorMessage(res, fallback));
+  }
+
+  if (isJsonResponse(res)) {
+    throw new Error(await readErrorMessage(res, "PDF 생성 실패"));
+  }
+
+  const ct = (res.headers.get("content-type") || "").toLowerCase();
+  if (!ct.includes("application/pdf")) {
+    let hint = "";
+    try {
+      hint = (await res.text()).slice(0, 200);
+    } catch (_) {
+      hint = "";
+    }
+    throw new Error(
+      "PDF 응답이 아닙니다. (서버가 리다이렉트/에러 페이지를 반환했을 수 있습니다.)"
+      + (hint ? `\n\n${hint}` : "")
+    );
+  }
 
   const blob = await res.blob();
   const objectUrl = URL.createObjectURL(blob);
@@ -60,27 +120,38 @@ async function downloadPdf({ url, formEl, filename }) {
   URL.revokeObjectURL(objectUrl);
 }
 
+function getPdfUrlFallback() {
+  const btn = document.querySelector("#generatePdfBtn");
+  const fromBtn = btn?.dataset?.pdfUrl;
+  if (fromBtn) return fromBtn;
+  const root = document.querySelector("#support-form");
+  return root?.dataset?.pdfUrl || "";
+}
+
 /**
  * ✅ support_form 전용: userSelected 결과를 currentRow에 넣기
  * - 기존 템플릿 input name 규칙을 그대로 따른다.
  */
 function bindUserSelectedAutofill() {
+  if (window[USER_BIND_FLAG]) return;
+  window[USER_BIND_FLAG] = true;
+
   let currentRow = "";
 
-  // 검색 버튼 클릭 시 현재 row 기억
-  qsa(".btn-open-search").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      currentRow = String(btn.dataset.row || "").trim();
-    });
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest(".btn-open-search");
+    if (!btn) return;
+    currentRow = String(btn.dataset.row || "").trim();
   });
 
-  // 공통 search_user_modal.js에서 발행하는 이벤트 수신
   document.addEventListener("userSelected", (e) => {
     const u = e.detail || {};
     if (!currentRow) return;
 
     const set = (name, val) => {
-      const el = document.querySelector(`input[name="${name}_${currentRow}"]`);
+      const el = document.querySelector(
+        `input[name="${name}_${currentRow}"], input[name="${name}${currentRow}"], input[name="${name}-${currentRow}"]`
+      );
       if (el) el.value = val ?? "";
     };
 
@@ -97,6 +168,12 @@ document.addEventListener("DOMContentLoaded", () => {
   const generateBtn = qs("#generatePdfBtn");
 
   if (!form || !generateBtn) return;
+  if (form.dataset[INIT_FLAG] === "1") return;
+  form.dataset[INIT_FLAG] = "1";
+
+  generateBtn.setAttribute("type", "button");
+  setBusyState({ overlay, button: generateBtn, busy: false });
+  bindPageShowReset({ overlay, button: generateBtn });
 
   // 1) 요청대상 행 제어
   initRowController({
@@ -147,10 +224,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // 5) PDF 생성
   generateBtn.addEventListener("click", async () => {
-    const pdfUrl = generateBtn.dataset.pdfUrl;
+    if (generateBtn.dataset[BUSY_FLAG] === "1") return;
+
+    const pdfUrl = generateBtn.dataset.pdfUrl || getPdfUrlFallback();
     if (!pdfUrl) return window.alert("PDF URL(data-pdf-url)이 없습니다.");
 
-    if (overlay) overlay.style.display = "block";
+    setBusyState({ overlay, button: generateBtn, busy: true });
 
     try {
       await downloadPdf({
@@ -160,9 +239,9 @@ document.addEventListener("DOMContentLoaded", () => {
       });
     } catch (err) {
       console.error(err);
-      window.alert("PDF 생성 중 오류가 발생했습니다.");
+      window.alert(err?.message || "PDF 생성 중 오류가 발생했습니다.");
     } finally {
-      if (overlay) overlay.style.display = "none";
+      setBusyState({ overlay, button: generateBtn, busy: false });
     }
   });
 });

@@ -141,6 +141,7 @@ INSTALLED_APPS = [
     "django.contrib.humanize",
     # Local apps
     "home",
+    "support.apps.SupportConfig",
     "join",
     "board",
     "accounts.apps.AccountsConfig",
@@ -237,7 +238,7 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 LOGIN_URL = "/login/"
-LOGIN_REDIRECT_URL = "manual:manual_list"
+LOGIN_REDIRECT_URL = "support:industry_info"
 LOGOUT_REDIRECT_URL = "manual:manual_list"
 
 # =============================================================================
@@ -468,3 +469,9 @@ USE_X_FORWARDED_HOST = True
 # 16) Dash models directory (pipeline artifacts)
 # =============================================================================
 DASH_MODEL_DIR = str(BASE_DIR / "var" / "dash_models")
+
+# =============================================================================
+# 17) External API Keys
+# =============================================================================
+NAVER_SEARCH_CLIENT_ID = config("NAVER_SEARCH_CLIENT_ID", default="")
+NAVER_SEARCH_CLIENT_SECRET = config("NAVER_SEARCH_CLIENT_SECRET", default="")

@@ -7,18 +7,41 @@ from django.db.models import Q, Sum
 from django.db.models.functions import Coalesce
 
 from dash.models import SalesRecord, SalesDailyAgg
+import logging
+
+logger = logging.getLogger(__name__)
 
 def _last_day(ym: str) -> int:
     y, m = map(int, ym.split("-"))
     return calendar.monthrange(y, m)[1]
 
 def _scope_filter(scope_type: str, scope_key: str):
+    """
+    Scope filter 안정화
+    - user NULL 대응
+    - snapshot 기반 fallback
+    """
+
+    scope_key = (scope_key or "").strip()
+
     if scope_type == "all":
         return Q()
+
+    if not scope_key:
+        return Q()
+
     if scope_type == "part":
-        return Q(user__part=scope_key) | Q(part_snapshot=scope_key)
+        return (
+            Q(user__isnull=False, user__part=scope_key)
+            | Q(part_snapshot=scope_key)
+        )
+
     if scope_type == "branch":
-        return Q(user__branch=scope_key) | Q(branch_snapshot=scope_key)
+        return (
+            Q(user__isnull=False, user__branch=scope_key)
+            | Q(branch_snapshot=scope_key)
+        )
+
     return Q()
 
 def _qs_category(qs, category: str):
@@ -35,8 +58,12 @@ def _qs_category(qs, category: str):
 
 @transaction.atomic
 def build_daily_agg_for_month(ym: str, scope_type: str, scope_key: str) -> None:
-    base = SalesRecord.objects.filter(ym=ym).exclude(receipt_date__isnull=True)
-    base = base.filter(_scope_filter(scope_type, scope_key))
+    base = (
+        SalesRecord.objects
+        .filter(ym=ym)
+        .exclude(receipt_date__isnull=True)
+        .filter(_scope_filter(scope_type, scope_key))
+    )
 
     last_day = _last_day(ym)
 
@@ -48,6 +75,12 @@ def build_daily_agg_for_month(ym: str, scope_type: str, scope_key: str) -> None:
               .annotate(v=Sum(Coalesce("receipt_amount", 0)))
               .order_by("receipt_date")
         )
+
+        logger.debug(
+            "[dash.agg] ym=%s scope=%s/%s category=%s rows=%s",
+            ym, scope_type, scope_key, category, rows.count()
+        )
+        
         day_amount = {r["receipt_date"].day: int(r["v"] or 0) for r in rows if r["receipt_date"]}
 
         running = 0

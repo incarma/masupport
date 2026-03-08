@@ -1,0 +1,52 @@
+<!-- django_ma/support/templates/support/partials/_article_card.html-->
+
+<!-- 업계정보 기사 카드 -->
+<div class="support-article-card" data-article-id="{{ article.id }}">
+  <!-- 상단 메타 정보 -->
+  <div class="support-article-head">
+    <div class="support-topic">{{ article.topic|default:"미분류" }}</div>
+    <div class="support-source">{{ article.source_name|default:"출처미상" }}</div>
+  </div>
+
+  <!-- 기사 제목 -->
+  <h5 class="support-title">{{ article.title }}</h5>
+
+  <!-- 추천 사유 -->
+  {% if recommend_reason %}
+    <div class="support-reason">{{ recommend_reason }}</div>
+  {% endif %}
+
+  <!-- 기사 요약 -->
+  {% if article.summary %}
+    <p class="support-summary">{{ article.summary }}</p>
+  {% endif %}
+
+  <!-- 발행일 -->
+  <div class="support-meta">
+    <span>{{ article.published_at|date:"Y-m-d H:i" }}</span>
+  </div>
+
+  <!-- 사용자 액션 -->
+  <div class="support-actions">
+    <div class="support-rating-group">
+      <button type="button" class="btn btn-sm btn-outline-primary js-rate-btn" data-rating="1">1점</button>
+      <button type="button" class="btn btn-sm btn-outline-primary js-rate-btn" data-rating="2">2점</button>
+      <button type="button" class="btn btn-sm btn-outline-primary js-rate-btn" data-rating="3">3점</button>
+      <button type="button" class="btn btn-sm btn-outline-primary js-rate-btn" data-rating="4">4점</button>
+      <button type="button" class="btn btn-sm btn-outline-primary js-rate-btn" data-rating="5">5점</button>
+    </div>
+
+    <div class="support-action-group">
+      <button type="button" class="btn btn-sm btn-outline-secondary js-bookmark-btn">북마크</button>
+      <button type="button" class="btn btn-sm btn-outline-danger js-hide-btn">관심없음</button>
+      <a
+        href="{{ article.display_url }}"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="btn btn-sm btn-primary js-origin-link"
+      >
+        원문보기
+      </a>
+    </div>
+  </div>
+</div>

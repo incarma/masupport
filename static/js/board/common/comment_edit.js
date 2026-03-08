@@ -27,6 +27,7 @@
   Board.Common = Board.Common || {};
 
   const INIT_FLAG = "__boardCommentEditInited";
+  const PAGE_SHOW_FLAG = "__boardCommentEditPageShowBound";
 
   /* =========================================================
    * 1) Small DOM utilities
@@ -45,6 +46,10 @@
     const p = qs("p.comment-text", container) || qs("p", container);
     // innerText는 줄바꿈 유지에 유리
     return String(p?.innerText || "").trim();
+  }
+
+  function normalizeText(v) {
+    return String(v ?? "").replace(/\r\n/g, "\n").trim();
   }
 
   /* =========================================================
@@ -86,10 +91,17 @@
 
     const actions = document.createElement("div");
     actions.className = "comment-edit-actions mt-2";
-    actions.innerHTML = `
-      <button type="submit" class="btn btn-sm btn-primary">저장</button>
-      <button type="button" class="btn btn-sm btn-outline-secondary cancel-edit">취소</button>
-    `;
+    const submitBtn = document.createElement("button");
+    submitBtn.type = "submit";
+    submitBtn.className = "btn btn-sm btn-primary";
+    submitBtn.textContent = "저장";
+
+    const cancelBtn = document.createElement("button");
+    cancelBtn.type = "button";
+    cancelBtn.className = "btn btn-sm btn-outline-secondary cancel-edit";
+    cancelBtn.textContent = "취소";
+
+    actions.append(submitBtn, cancelBtn);
 
     form.append(csrfInput, actInput, idInput, ta, actions);
     return form;
@@ -118,6 +130,29 @@
     container.dataset.editing = "0";
   }
 
+  function restoreAllEditingContainers() {
+    document.querySelectorAll(".comment-content[data-editing='1']").forEach((container) => {
+      const oldText = container.dataset.originalText || getOldText(container);
+      restoreStatic(container, oldText);
+    });
+  }
+
+  function bindPageShowReset() {
+    if (document.body.dataset[PAGE_SHOW_FLAG] === "1") return;
+    document.body.dataset[PAGE_SHOW_FLAG] = "1";
+
+    window.addEventListener("pageshow", () => {
+      restoreAllEditingContainers();
+      document.querySelectorAll("form.comment-edit-form button[type='submit']").forEach((btn) => {
+        btn.disabled = false;
+        btn.removeAttribute("aria-busy");
+      });
+      document.querySelectorAll("form.comment-edit-form").forEach((form) => {
+        form.dataset.submitting = "0";
+      });
+    });
+  }
+
   function enterEditMode(container, commentId, oldText) {
     const csrf = getCsrfToken();
     if (!csrf) {
@@ -126,12 +161,19 @@
       return;
     }
 
+    const normalizedOldText = normalizeText(oldText);
+    if (!normalizedOldText && !getOldText(container)) {
+      container.dataset.editing = "0";
+      alert("댓글 내용을 불러오지 못했습니다. 새로고침 후 다시 시도해주세요.");
+      return;
+    }
+
     // 버튼 숨김 + 본문 제거
     showActionButtons(container, false);
     clearStaticText(container);
 
     // 편집폼 삽입
-    const form = buildEditForm({ csrf, commentId, oldText });
+    const form = buildEditForm({ csrf, commentId, oldText: normalizedOldText });
     container.insertBefore(form, container.firstChild);
 
     // 취소
@@ -141,6 +183,28 @@
 
     // UX: textarea focus
     qs("textarea[name='content']", form)?.focus?.();
+
+    form.addEventListener("submit", (e) => {
+      if (form.dataset.submitting === "1") {
+        e.preventDefault();
+        return;
+      }
+
+      const ta = qs("textarea[name='content']", form);
+      const content = normalizeText(ta?.value || "");
+      if (!content) {
+        e.preventDefault();
+        alert("댓글 내용을 입력해주세요.");
+        ta?.focus?.();
+        return;
+      }
+      form.dataset.submitting = "1";
+      const submitBtn = qs("button[type='submit']", form);
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.setAttribute("aria-busy", "true");
+      }
+    });
   }
 
   /* =========================================================
@@ -149,6 +213,7 @@
   function bind() {
     if (document.body.dataset[INIT_FLAG] === "1") return;
     document.body.dataset[INIT_FLAG] = "1";
+    bindPageShowReset();
 
     document.addEventListener("click", (e) => {
       const btn = e.target?.closest?.(".edit-comment-btn");
@@ -160,8 +225,9 @@
 
       if (container.dataset.editing === "1") return;
       container.dataset.editing = "1";
+      container.dataset.originalText = getOldText(container);
 
-      const oldText = getOldText(container);
+      const oldText = container.dataset.originalText;
       enterEditMode(container, commentId, oldText);
     });
   }

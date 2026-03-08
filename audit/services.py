@@ -9,26 +9,58 @@ from .models import AuditLog
 from .utils import get_client_ip, mask_value
 
 
+MAX_META_DEPTH = 2
+MAX_META_ITEMS = 30
+
+
+def _safe_meta_value(value: Any, *, depth: int = 0) -> Any:
+    if value is None:
+        return None
+
+    if isinstance(value, (int, float, bool)):
+        return value
+
+    if isinstance(value, str):
+        return mask_value(value)
+
+    if depth >= MAX_META_DEPTH:
+        return mask_value(str(value))
+
+    if isinstance(value, dict):
+        safe: dict[str, Any] = {}
+        for i, (k, v) in enumerate(value.items()):
+            if i >= MAX_META_ITEMS:
+                safe["_truncated"] = True
+                break
+            safe[str(k)[:100]] = _safe_meta_value(v, depth=depth + 1)
+        return safe
+
+    if isinstance(value, (list, tuple, set)):
+        items = list(value)[:MAX_META_ITEMS]
+        safe_items = [_safe_meta_value(v, depth=depth + 1) for v in items]
+        if len(list(value)) > MAX_META_ITEMS:
+            safe_items.append("_truncated")
+        return safe_items
+
+    return mask_value(str(value))
+
+
 def _safe_meta(meta: Optional[dict[str, Any]]) -> dict[str, Any]:
     """
     meta는 민감정보가 들어가기 쉬움.
     - 문자열은 mask_value 적용
-    - dict/list는 너무 깊게 저장하지 않도록 제한
+    - dict/list는 구조를 일부 유지하되 깊이/개수를 제한
     """
     if not meta:
         return {}
 
     safe: dict[str, Any] = {}
     for k, v in meta.items():
-        if v is None:
+        key = str(k)[:100]
+        safe_value = _safe_meta_value(v, depth=0)
+        if safe_value is None:
             continue
-        if isinstance(v, (int, float, bool)):
-            safe[k] = v
-        elif isinstance(v, str):
-            safe[k] = mask_value(v)
-        else:
-            # 복잡한 객체는 str로 축약
-            safe[k] = mask_value(str(v))
+        safe[key] = safe_value
     return safe
 
 

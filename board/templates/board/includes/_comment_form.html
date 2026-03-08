@@ -16,6 +16,10 @@
 
 {% if user.is_authenticated %}
   <form method="post" action="{{ action_url }}" class="mt-3 board-comment-form">
+    <!-- =====================================================
+         ✅ comment_edit.js 우선 참조용 CSRF SSOT
+    ====================================================== -->
+    <input type="hidden" id="commentEditCsrfToken" value="{{ csrf_token }}">
     {% csrf_token %}
     <input type="hidden" name="action_type" value="comment">
 

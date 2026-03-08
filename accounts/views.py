@@ -200,6 +200,17 @@ class SessionCloseLoginView(LoginView):
         response = super().dispatch(request, *args, **kwargs)
         return _set_no_store_headers(response)
     
+    def get_success_url(self) -> str:
+        """
+        로그인 성공 후 최초 랜딩페이지를 업계정보로 통일합니다.
+        - settings.LOGIN_REDIRECT_URL도 동일하게 support:industry_info로 맞추지만,
+          실제 로그인 흐름의 SSOT는 여기로 두어 의도를 분명히 합니다.
+        - ForcePasswordChangeMiddleware는 인증 이후 별도 정책으로 동작하므로,
+          강제 비밀번호 변경 대상자는 미들웨어가 우선 처리합니다.
+        """
+        return reverse("support:industry_info")
+    
+    
     # -------------------------------------------------------------------------
     # Internal helpers (Lockout)
     # -------------------------------------------------------------------------

@@ -18,6 +18,8 @@
   Board.Common = Board.Common || {};
 
   const INIT_FLAG = "__boardDetailInlineUpdateBound";
+  const PAGE_SHOW_FLAG = "__boardDetailInlineUpdatePageShowBound";
+  const CTX_KEY = "__boardDetailInlineUpdateContexts";
 
   /* =========================================================
    * 1) Utilities
@@ -41,6 +43,27 @@
 
   function getCsrfFromForm(form) {
     return form?.querySelector("input[name='csrfmiddlewaretoken']")?.value || "";
+  }
+
+  function isHtmlResponse(res) {
+    return (res.headers.get("content-type") || "").toLowerCase().includes("text/html");
+  }
+
+  async function readErrorMessage(res, data) {
+    if (data?.message) return data.message;
+    if (data?.error) return data.error;
+
+    if (res.status === 401 || res.status === 403) {
+      if (isHtmlResponse(res)) {
+        return "세션이 만료되었거나 접근 권한이 없습니다. 다시 로그인 후 시도해주세요.";
+      }
+      return "권한이 없거나 세션이 만료되었습니다.";
+    }
+
+    if (isHtmlResponse(res)) {
+      return "요청 처리 중 로그인 페이지 또는 오류 페이지가 반환되었습니다. 다시 로그인 후 시도해주세요.";
+    }
+    return `변경 실패 (HTTP ${res.status})`;
   }
 
   function setBusy(selectEl, busy) {
@@ -74,6 +97,34 @@
     }, 2500);
   }
 
+  function getContexts() {
+    if (!Array.isArray(Board.Common[CTX_KEY])) {
+      Board.Common[CTX_KEY] = [];
+    }
+    return Board.Common[CTX_KEY];
+  }
+
+  function registerContext(ctx) {
+    const contexts = getContexts();
+    const exists = contexts.some((item) => item.bootId === ctx.bootId);
+    if (!exists) contexts.push(ctx);
+  }
+
+  function resetBusyState() {
+    document.querySelectorAll("form.inline-update-form").forEach((form) => {
+      form.dataset.submitting = "0";
+    });
+    document
+      .querySelectorAll("form.inline-update-form select[name='handler'], form.inline-update-form select[name='status']")
+      .forEach((sel) => setBusy(sel, false));
+  }
+
+  function bindPageShowReset() {
+    if (document.body.dataset[PAGE_SHOW_FLAG] === "1") return;
+    document.body.dataset[PAGE_SHOW_FLAG] = "1";
+    window.addEventListener("pageshow", resetBusyState);
+  }
+
   async function sendUpdate({ updateUrl, form, actionType, value }) {
     const csrf = getCsrfFromForm(form);
     if (!csrf) throw new Error("CSRF 토큰을 찾을 수 없습니다.");
@@ -94,8 +145,13 @@
     });
 
     const data = await safeJson(res);
+    if (res.redirected || isHtmlResponse(res)) {
+      throw new Error(await readErrorMessage(res, data));
+    }
+
     if (!res.ok || !data?.ok) {
-      throw new Error(data?.message || `변경 실패 (HTTP ${res.status})`);
+      const fallback = await readErrorMessage(res, data);
+      throw new Error(fallback);
     }
     return data;
   }
@@ -115,13 +171,13 @@
     if (!bootId) return;
 
     const bind = () => {
-      // 중복 바인딩 방지(DETAIL 페이지는 1회만)
-      if (document.body.dataset[INIT_FLAG] === "1") return;
-      document.body.dataset[INIT_FLAG] = "1";
-
       const boot = document.getElementById(bootId);
+      if (!boot || boot.dataset.boardDetailInlineUpdateInited === "1") return;
+      boot.dataset.boardDetailInlineUpdateInited = "1";
+
       const updateUrl = boot?.dataset?.updateUrl || "";
       if (!updateUrl) return; // 비-superuser 화면 등
+      registerContext({ bootId, updateUrl, onSuccess });
 
       const alertHost = document.getElementById("inlineUpdateAlertHost");
       const statusUpdatedAtText = document.getElementById("statusUpdatedAtText");
@@ -133,6 +189,12 @@
         )
         .forEach((s) => (s.dataset.prevValue = s.value));
 
+        bindPageShowReset();
+
+      // 중복 바인딩 방지(전역 change handler는 1회만)
+      if (document.body.dataset[INIT_FLAG] === "1") return;
+      document.body.dataset[INIT_FLAG] = "1";
+
       document.addEventListener("change", async (e) => {
         const sel = e.target;
         if (!(sel instanceof HTMLSelectElement)) return;
@@ -143,9 +205,21 @@
         const name = sel.getAttribute("name");
         if (name !== "handler" && name !== "status") return;
 
+        const contexts = getContexts();
+        const ctx = contexts.find((item) => {
+          const currentBoot = document.getElementById(item.bootId);
+          return currentBoot && document.contains(currentBoot);
+        });
+        if (!ctx?.updateUrl) return;
+
+        const currentOnSuccess = typeof ctx.onSuccess === "function" ? ctx.onSuccess : null;
+        const currentAlertHost = document.getElementById("inlineUpdateAlertHost");
+        const currentStatusUpdatedAtText = document.getElementById("statusUpdatedAtText");
+        const updateUrl = ctx.updateUrl;
+
         const actionType = qs('input[name="action_type"]', form)?.value || "";
         if (!actionType) {
-          showAlert(alertHost, "action_type이 없습니다.", "danger");
+          showAlert(currentAlertHost, "action_type이 없습니다.", "danger");
           return;
         }
 
@@ -168,16 +242,16 @@
           }
 
           // detail의 변경일자 텍스트 갱신
-          if (data.status_updated_at && statusUpdatedAtText) {
-            statusUpdatedAtText.textContent = data.status_updated_at;
+          if (data.status_updated_at && currentStatusUpdatedAtText) {
+            currentStatusUpdatedAtText.textContent = data.status_updated_at;
           }
 
-          showAlert(alertHost, data.message || "변경되었습니다.", "success");
+          showAlert(currentAlertHost, data.message || "변경되었습니다.", "success");
 
           // 공식 onSuccess
-          if (onSuccess) {
+          if (currentOnSuccess) {
             try {
-              onSuccess(data, { sel, form, actionType, updateUrl });
+              currentOnSuccess(data, { sel, form, actionType, updateUrl });
             } catch {
               /* ignore */
             }
@@ -186,7 +260,7 @@
           sel.value = prev;
           sel.dataset.prevValue = prev;
           sel.dataset.status = prev;
-          showAlert(alertHost, err?.message || "변경 실패", "danger");
+          showAlert(currentAlertHost, err?.message || "변경 실패", "danger");
         } finally {
           setBusy(sel, false);
           form.dataset.submitting = "0";

@@ -28,6 +28,8 @@
   Board.Common = Board.Common || {};
 
   const INIT_FLAG = "__boardStatusUIBound";
+  const PAGE_SHOW_FLAG = "__boardStatusUIPageShowBound";
+  const CTX_KEY = "__boardStatusUIContexts";
 
   // 프로젝트 표준 클래스 (CSS는 apps/board.css 또는 base.css에 존재)
   const STANDARD_CLASSES = ["status-start", "status-progress", "status-fix", "status-done", "status-reject"];
@@ -87,6 +89,39 @@
 
   function getStatusFromBadge(el) {
     return normalize(el?.dataset?.status || el?.textContent || "");
+  }
+
+  function getContexts() {
+    if (!Array.isArray(Board.Common[CTX_KEY])) {
+      Board.Common[CTX_KEY] = [];
+    }
+    return Board.Common[CTX_KEY];
+  }
+
+  function sameRoot(a, b) {
+    return (a || document) === (b || document);
+  }
+
+  function registerContext(ctx) {
+    const contexts = getContexts();
+    const exists = contexts.some(
+      (item) =>
+        item.preset === ctx.preset &&
+        sameRoot(item.root, ctx.root) &&
+        JSON.stringify(item.badgeSelectors || []) === JSON.stringify(ctx.badgeSelectors || [])
+    );
+    if (!exists) contexts.push(ctx);
+  }
+
+  function bindPageShowReapply() {
+    if (document.body.dataset[PAGE_SHOW_FLAG] === "1") return;
+    document.body.dataset[PAGE_SHOW_FLAG] = "1";
+
+    window.addEventListener("pageshow", () => {
+      getContexts().forEach((ctx) => {
+        applyAll({ preset: ctx.preset, root: ctx.root, badgeSelectors: ctx.badgeSelectors });
+      });
+    });
   }
 
   /* =========================================================
@@ -149,10 +184,13 @@
     const root = opts?.root || document;
 
     const bind = () => {
+      registerContext({ preset, root, badgeSelectors });
+
       // 최초 1회 적용
       applyAll({ preset, root, badgeSelectors });
+      bindPageShowReapply();
 
-      // ✅ change 이벤트 위임: 1회만
+      // ✅ change 이벤트 위임: 전역 1회만
       if (document.body.dataset[INIT_FLAG] === "1") return;
       document.body.dataset[INIT_FLAG] = "1";
 
@@ -163,10 +201,11 @@
           if (!(sel instanceof HTMLSelectElement)) return;
           if (!isEligibleStatusSelect(sel)) return;
 
-          // root 스코프 밖이면 무시
-          if (root !== document && root && !root.contains(sel)) return;
-
-          applyToSelect(sel, preset);
+          getContexts().forEach((ctx) => {
+            const currentRoot = ctx.root || document;
+            if (currentRoot !== document && currentRoot && !currentRoot.contains(sel)) return;
+            applyToSelect(sel, ctx.preset || "post");
+          });
         },
         { passive: true }
       );

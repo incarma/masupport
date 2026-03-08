@@ -13,6 +13,9 @@ from django.conf import settings
 from django.db.models import Sum
 
 from dash.models import SalesDailyAgg, SalesForecast, SalesForecastDaily
+import logging
+
+logger = logging.getLogger(__name__)
 
 try:
     import lightgbm as lgb
@@ -139,7 +142,14 @@ def build_train_df(scope_type: str, scope_key: str, category: str, max_months: i
                 "target_total": total,
             })
 
-    return pd.DataFrame(rows)
+    df = pd.DataFrame(rows)
+
+    logger.info(
+        "[dash.forecast] train dataset rows=%s scope=%s/%s cat=%s",
+        len(df), scope_type, scope_key, category
+    )
+
+    return df
 
 def _train_quantile_models(df: pd.DataFrame) -> Dict[str, object]:
     if lgb is None:

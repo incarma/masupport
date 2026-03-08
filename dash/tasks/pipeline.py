@@ -132,7 +132,12 @@ def iter_scopes() -> Iterable[Tuple[str, str]]:
         SalesRecord.objects.exclude(part_snapshot__isnull=True).exclude(part_snapshot__exact="")
         .values_list("part_snapshot", flat=True).distinct()
     )
-    parts = sorted({str(p).strip() for p in (user_parts + snap_parts) if str(p).strip() and str(p).strip().lower() != "nan"})
+    parts = sorted({
+        str(p).strip()
+        for p in (user_parts + snap_parts)
+        if p and str(p).strip() and str(p).strip().lower() != "nan"
+    })
+
     for p in parts:
         yield ("part", p)
 
@@ -145,7 +150,12 @@ def iter_scopes() -> Iterable[Tuple[str, str]]:
         SalesRecord.objects.exclude(branch_snapshot__isnull=True).exclude(branch_snapshot__exact="")
         .values_list("branch_snapshot", flat=True).distinct()
     )
-    branches = sorted({str(b).strip() for b in (user_branches + snap_branches) if str(b).strip() and str(b).strip().lower() != "nan"})
+    branches = sorted({
+        str(b).strip()
+        for b in (user_branches + snap_branches)
+        if b and str(b).strip() and str(b).strip().lower() != "nan"
+    })
+    
     for b in branches:
         yield ("branch", b)
 
@@ -178,6 +188,10 @@ def _build_aggs_for_ym(ym: str) -> dict:
     done = 0
     for scope_type, scope_key in iter_scopes():
         try:
+            logger.info(
+                "[dash.pipeline] building agg ym=%s scope=%s/%s",
+                ym, scope_type, scope_key
+            )
             build_daily_agg_for_month(ym, scope_type, scope_key)
             done += 1
         except Exception:

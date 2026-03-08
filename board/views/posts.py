@@ -7,8 +7,11 @@
 
 from __future__ import annotations
 
+import logging
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.db import transaction
 from django.db.models import Count, OuterRef, Q, Subquery, Value
 from django.db.models.functions import Coalesce
 from django.http import HttpRequest, HttpResponse, JsonResponse
@@ -18,6 +21,9 @@ from django.views.decorators.http import require_POST
 
 from accounts.decorators import grade_required
 from accounts.models import CustomUser
+
+from audit.constants import ACTION
+from audit.services import log_action
 
 from ..constants import (
     BOARD_ALLOWED_GRADES,
@@ -56,6 +62,77 @@ __all__ = [
     "ajax_update_post_field",
     "ajax_update_post_field_detail",
 ]
+
+
+logger = logging.getLogger(__name__)
+
+
+def _safe_action(name: str, default: str) -> str:
+    return getattr(ACTION, name, default)
+
+
+def _user_storage_key(user) -> str:
+    key = getattr(user, "emp_id", None) or getattr(user, "user_id", None) or getattr(user, "id", "")
+    return str(key or "")
+
+
+def _safe_int_ids(values) -> list[int]:
+    result: list[int] = []
+    for value in values or []:
+        s = str(value or "").strip()
+        if not s.isdigit():
+            continue
+        result.append(int(s))
+    return result
+
+
+def _post_meta(post, *, extra: dict | None = None) -> dict:
+    meta = {
+        "post_id": getattr(post, "pk", None),
+        "category": getattr(post, "category", "") or "",
+        "status": getattr(post, "status", "") or "",
+        "handler": getattr(post, "handler", "") or "",
+        "user_id": getattr(post, "user_id", "") or "",
+        "user_branch": getattr(post, "user_branch", "") or "",
+    }
+    if extra:
+        meta.update(extra)
+    return meta
+
+
+def _log_post_action(request: HttpRequest, action_name: str, *, post=None, success: bool, reason: str = "", meta: dict | None = None) -> None:
+    try:
+        log_action(
+            request,
+            action_name,
+            obj=post,
+            object_type="board_post",
+            object_id=str(getattr(post, "pk", "") or ""),
+            meta=meta or _post_meta(post, extra={}) if post is not None else (meta or {}),
+            success=success,
+            reason=reason or "",
+        )
+    except Exception:
+        logger.exception("post audit logging failed")
+
+
+def _json_message(response: JsonResponse) -> str:
+    try:
+        return (response.json().get("message") or "").strip()
+    except Exception:
+        return ""
+
+
+def _inline_action_to_audit_name(action: str) -> str:
+    mapping = {
+        "status": _safe_action("BOARD_STATUS_UPDATE", "board_status_update"),
+        "handler": _safe_action("BOARD_HANDLER_UPDATE", "board_handler_update"),
+    }
+    return mapping.get(action, _safe_action("BOARD_INLINE_UPDATE", "board_inline_update"))
+
+
+def _attachment_upload_count(files) -> int:
+    return len([f for f in (files or []) if getattr(f, "name", "")])
 
 
 @login_required
@@ -197,7 +274,23 @@ def ajax_update_post_field(request: HttpRequest) -> JsonResponse:
         return JsonResponse({"ok": False, "message": "요청이 올바르지 않습니다."}, status=400)
 
     post = get_object_or_404(Post, id=post_id)
-    return inline_update_common(obj=post, action=action, value=value, allowed_status_values=STATUS_CHOICES)
+    response = inline_update_common(obj=post, action=action, value=value, allowed_status_values=STATUS_CHOICES)
+    _log_post_action(
+        request,
+        _inline_action_to_audit_name(action),
+        post=post,
+        success=response.status_code < 400,
+        reason="" if response.status_code < 400 else (_json_message(response) or "inline_update_failed"),
+        meta=_post_meta(
+            post,
+            extra={
+                "source": "list",
+                "action_type": action,
+                "requested_value": value,
+            },
+        ),
+    )
+    return response
 
 
 @login_required
@@ -217,7 +310,23 @@ def ajax_update_post_field_detail(request: HttpRequest, pk: int) -> JsonResponse
         return JsonResponse({"ok": False, "message": "요청이 올바르지 않습니다."}, status=400)
 
     post = get_object_or_404(Post, pk=pk)
-    return inline_update_common(obj=post, action=action, value=value, allowed_status_values=STATUS_CHOICES)
+    response = inline_update_common(obj=post, action=action, value=value, allowed_status_values=STATUS_CHOICES)
+    _log_post_action(
+        request,
+        _inline_action_to_audit_name(action),
+        post=post,
+        success=response.status_code < 400,
+        reason="" if response.status_code < 400 else (_json_message(response) or "inline_update_failed"),
+        meta=_post_meta(
+            post,
+            extra={
+                "source": "detail",
+                "action_type": action,
+                "requested_value": value,
+            },
+        ),
+    )
+    return response
 
 
 @login_required
@@ -251,9 +360,24 @@ def post_detail(request: HttpRequest, pk: int) -> HttpResponse:
         act = (request.POST.get("action_type") or "").strip()
         if act == "delete_post":
             if not can_edit:
+                _log_post_action(
+                    request,
+                    _safe_action("BOARD_POST_DELETE", "board_post_delete"),
+                    post=post,
+                    success=False,
+                    reason="permission_denied",
+                )
                 messages.error(request, "삭제 권한이 없습니다.")
                 return redirect(POST_DETAIL, pk=pk)
+            post_meta = _post_meta(post)
             post.delete()
+            _log_post_action(
+                request,
+                _safe_action("BOARD_POST_DELETE", "board_post_delete"),
+                post=None,
+                success=True,
+                meta=post_meta,
+            )
             messages.success(request, "게시글이 삭제되었습니다.")
             return redirect(POST_LIST)
 
@@ -297,22 +421,49 @@ def post_create(request: HttpRequest) -> HttpResponse:
     if request.method == "POST":
         form = PostForm(request.POST, request.FILES)
         if form.is_valid():
-            post = form.save(commit=False)
-            user_key = getattr(request.user, "emp_id", None) or getattr(request.user, "user_id", None) or request.user.id
-            post.user_id = str(user_key)
-            post.user_name = getattr(request.user, "name", "") or ""
-            post.user_branch = getattr(request.user, "branch", "") or ""
-            post.save()
-
             files = request.FILES.getlist("attachments")
+            with transaction.atomic():
+                post = form.save(commit=False)
+                post.user_id = _user_storage_key(request.user)
+                post.user_name = getattr(request.user, "name", "") or ""
+                post.user_branch = getattr(request.user, "branch", "") or ""
+                post.save()
 
-            def _create(**kwargs):
-                return Attachment.objects.create(post=post, **kwargs)
+                def _create(**kwargs):
+                    return Attachment.objects.create(post=post, **kwargs)
 
-            save_attachments(files=files, create_func=_create)
+                save_attachments(files=files, create_func=_create)
+
+            _log_post_action(
+                request,
+                _safe_action("BOARD_POST_CREATE", "board_post_create"),
+                post=post,
+                success=True,
+                meta=_post_meta(
+                    post,
+                    extra={
+                        "attachment_count": _attachment_upload_count(files),
+                    },
+                ),
+            )
 
             messages.success(request, "게시글이 등록되었습니다.")
             return redirect(POST_DETAIL, pk=post.pk)
+        
+        _log_post_action(
+            request,
+            _safe_action("BOARD_POST_CREATE", "board_post_create"),
+            post=None,
+            success=False,
+            reason="form_invalid",
+            meta={
+                "user_id": _user_storage_key(request.user),
+                "category": (request.POST.get("category") or "").strip(),
+                "title_len": len((request.POST.get("title") or "").strip()),
+                "content_len": len((request.POST.get("content") or "").strip()),
+                "attachment_count": _attachment_upload_count(request.FILES.getlist("attachments")),
+            },
+        )
 
         messages.error(request, "입력값을 다시 확인해주세요.")
     else:
@@ -338,22 +489,53 @@ def post_edit(request: HttpRequest, pk: int) -> HttpResponse:
     if request.method == "POST":
         form = PostForm(request.POST, request.FILES, instance=post)
         if form.is_valid():
-            form.save()
-
-            del_ids = request.POST.getlist("delete_files")
-            if del_ids:
-                Attachment.objects.filter(id__in=del_ids, post=post).delete()
-
+            delete_ids = _safe_int_ids(request.POST.getlist("delete_files"))
             files = request.FILES.getlist("attachments")
+            with transaction.atomic():
+                form.save()
 
-            def _create(**kwargs):
-                return Attachment.objects.create(post=post, **kwargs)
+                if delete_ids:
+                    Attachment.objects.filter(id__in=delete_ids, post=post).delete()
 
-            save_attachments(files=files, create_func=_create)
+                def _create(**kwargs):
+                    return Attachment.objects.create(post=post, **kwargs)
+
+                save_attachments(files=files, create_func=_create)
+
+            _log_post_action(
+                request,
+                _safe_action("BOARD_POST_UPDATE", "board_post_update"),
+                post=post,
+                success=True,
+                meta=_post_meta(
+                    post,
+                    extra={
+                        "deleted_attachment_ids": delete_ids,
+                        "new_attachment_count": _attachment_upload_count(files),
+                    },
+                ),
+            )
 
             messages.success(request, "게시글이 수정되었습니다.")
             return redirect(POST_DETAIL, pk=post.pk)
-
+        
+        _log_post_action(
+            request,
+            _safe_action("BOARD_POST_UPDATE", "board_post_update"),
+            post=post,
+            success=False,
+            reason="form_invalid",
+            meta=_post_meta(
+                post,
+                extra={
+                    "requested_category": (request.POST.get("category") or "").strip(),
+                    "requested_title_len": len((request.POST.get("title") or "").strip()),
+                    "requested_content_len": len((request.POST.get("content") or "").strip()),
+                    "deleted_attachment_ids": _safe_int_ids(request.POST.getlist("delete_files")),
+                    "new_attachment_count": _attachment_upload_count(request.FILES.getlist("attachments")),
+                },
+            ),
+        )
         messages.error(request, "입력값을 확인해주세요.")
     else:
         form = PostForm(instance=post)

@@ -64,6 +64,17 @@
            id="navbarContent" style="width: fit-content;">
         <ul class="navbar-nav mb-2 mb-lg-0">
 
+          <!-- ✅ Support -->
+          {% if user.grade != 'inactive' %}
+            <li class="nav-item dropdown">
+              <a class="nav-link dropdown-toggle {% if '/support' in request.path %}active{% else %}inactive{% endif %}"
+                 href="#" id="dashMenu" data-bs-toggle="dropdown">영업지원</a>
+              <ul class="dropdown-menu" aria-labelledby="dashMenu">
+                <li><a class="dropdown-item" href="{% url 'support:industry_info' %}">업계정보</a></li>
+              </ul>
+            </li>
+          {% endif %}
+
           <!-- ✅ Dashboard (superuser/head only) -->
           {% if user.grade == 'superuser' or user.grade == 'head' %}
             <li class="nav-item dropdown">
@@ -202,6 +213,17 @@
 
     <div class="offcanvas-body p-0">
       <div class="accordion accordion-flush" id="mobileMenuAccordion">
+
+        <!-- ✅ Support -->
+        {% if user.grade != 'inactive' %}
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle {% if '/support' in request.path %}active{% else %}inactive{% endif %}"
+                href="#" id="dashMenu" data-bs-toggle="dropdown">영업지원</a>
+            <ul class="dropdown-menu" aria-labelledby="dashMenu">
+              <li><a class="dropdown-item" href="{% url 'support:industry_info' %}">업계정보</a></li>
+            </ul>
+          </li>
+        {% endif %}
 
         {% if user.grade == 'superuser' or user.grade == 'head' %}
           <!-- 대시보드 -->

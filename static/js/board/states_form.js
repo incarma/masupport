@@ -23,6 +23,10 @@ import { qs } from "../common/forms/dom.js";
 import { initRowController } from "../common/forms/rows.js";
 import { bindPremiumInputs } from "../common/forms/premium.js";
 
+const INIT_FLAG = "boardStatesInited";
+const BUSY_FLAG = "boardStatesBusy";
+const PAGE_SHOW_FLAG = "boardStatesPageShowBind";
+
 function getCsrfToken() {
   return (
     window.csrfToken ||
@@ -30,6 +34,36 @@ function getCsrfToken() {
     document.cookie.match(/csrftoken=([^;]+)/)?.[1] ||
     ""
   );
+
+}
+
+function isJsonResponse(res) {
+  return (res.headers.get("content-type") || "").toLowerCase().includes("application/json");
+}
+
+async function readErrorMessage(res, fallback) {
+  if (!isJsonResponse(res)) return fallback;
+  try {
+    const data = await res.json();
+    return data?.message || data?.error || fallback;
+  } catch (_) {
+    return fallback;
+  }
+}
+
+function setBusyState({ overlay, button, busy }) {
+  if (overlay) overlay.style.display = busy ? "flex" : "none";
+  if (button) {
+    button.disabled = !!busy;
+    button.dataset[BUSY_FLAG] = busy ? "1" : "";
+    button.setAttribute("aria-busy", busy ? "true" : "false");
+  }
+}
+
+function bindPageShowReset({ overlay, button }) {
+  if (window[PAGE_SHOW_FLAG]) return;
+  window[PAGE_SHOW_FLAG] = true;
+  window.addEventListener("pageshow", () => setBusyState({ overlay, button, busy: false }));
 }
 
 function getPdfUrlFallback() {
@@ -59,31 +93,16 @@ async function downloadPdf({ url, formEl, filename }) {
   });
 
   if (!res.ok) {
-    // ✅ 서버가 JSON 에러를 주는 경우 메시지 노출
-    const ct0 = (res.headers.get("content-type") || "").toLowerCase();
-    if (ct0.includes("application/json")) {
-      try {
-        const data = await res.json();
-        throw new Error(data?.message || data?.error || `PDF 생성 실패 (HTTP ${res.status})`);
-      } catch (_) {
-        /* ignore */
-      }
-    }
-    throw new Error(`PDF 생성 실패 (HTTP ${res.status})`);
+    const fallback = `PDF 생성 실패 (HTTP ${res.status})`;
+    throw new Error(await readErrorMessage(res, fallback));
   }
 
-  const ct = (res.headers.get("content-type") || "").toLowerCase();
-  if (ct.includes("application/json")) {
+  if (isJsonResponse(res)) {
     // 서버에서 에러를 JSON으로 반환하는 경우(권한/검증 실패 등) 사용자에게 노출
-    let msg = "PDF 생성 실패";
-    try {
-      const data = await res.json();
-      msg = data?.message || data?.error || msg;
-    } catch (_) {}
-    throw new Error(msg);
+    throw new Error(await readErrorMessage(res, "PDF 생성 실패"));
   }
   
-   // ✅ PDF가 아닌 응답(redirect로 인한 HTML 등)이면 다운로드 시도 자체를 막음
+  const ct = (res.headers.get("content-type") || "").toLowerCase();
   if (!ct.includes("application/pdf")) {
     let hint = "";
     try {
@@ -112,6 +131,12 @@ document.addEventListener("DOMContentLoaded", () => {
   const generateBtn = qs("#generatePdfBtn");
 
   if (!form || !generateBtn) return;
+  if (form.dataset[INIT_FLAG] === "1") return;
+  form.dataset[INIT_FLAG] = "1";
+
+  generateBtn.setAttribute("type", "button");
+  setBusyState({ overlay, button: generateBtn, busy: false });
+  bindPageShowReset({ overlay, button: generateBtn });
 
   // 1) 계약사항 행 제어
   initRowController({
@@ -133,11 +158,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // 3) PDF 생성
   generateBtn.addEventListener("click", async () => {
+    if (generateBtn.dataset[BUSY_FLAG] === "1") return;
+
     const pdfUrl = generateBtn.dataset.pdfUrl || getPdfUrlFallback();
     if (!pdfUrl) return window.alert("PDF URL(data-pdf-url)이 없습니다.");
 
-    // overlay 표시 (기존 템플릿이 display 기반이면 유지)
-    if (overlay) overlay.style.display = "flex"; // CSS가 flex 기준일 때 자연스러움
+    setBusyState({ overlay, button: generateBtn, busy: true });
 
     try {
       await downloadPdf({
@@ -149,7 +175,7 @@ document.addEventListener("DOMContentLoaded", () => {
       console.error(err);
       window.alert(err?.message || "PDF 생성 중 오류가 발생했습니다.");
     } finally {
-      if (overlay) overlay.style.display = "none";
+      setBusyState({ overlay, button: generateBtn, busy: false });
     }
   });
 });
