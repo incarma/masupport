@@ -28,7 +28,8 @@ def _scope_filter(scope_type: str, scope_key: str):
         return Q()
 
     if not scope_key:
-        return Q()
+        # 공백 scope는 전체 조회가 아니라 "매칭 없음"으로 처리해야 안전하다.
+        return Q(pk__isnull=True)
 
     if scope_type == "part":
         return (
@@ -65,6 +66,11 @@ def build_daily_agg_for_month(ym: str, scope_type: str, scope_key: str) -> None:
         .filter(_scope_filter(scope_type, scope_key))
     )
 
+    logger.info(
+        "[dash.agg] start ym=%s scope=%s/%s base_count=%s",
+        ym, scope_type, scope_key, base.count()
+    )
+
     last_day = _last_day(ym)
 
     for category in ["long", "car", "long_nonlife", "long_life"]:
@@ -92,3 +98,8 @@ def build_daily_agg_for_month(ym: str, scope_type: str, scope_key: str) -> None:
                 ym=ym, day=d, scope_type=scope_type, scope_key=scope_key, category=category,
                 defaults={"amount": amt, "cumsum": running},
             )
+
+    logger.info(
+        "[dash.agg] done ym=%s scope=%s/%s",
+        ym, scope_type, scope_key
+    )

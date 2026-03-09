@@ -2,14 +2,63 @@
 from __future__ import annotations
 
 import calendar
+import logging
 
+from django.core.cache import cache
 from django.http import JsonResponse
 from django.views.decorators.http import require_GET
 
 from accounts.decorators import grade_required
 from dash.models import SalesDailyAgg, SalesForecast, SalesForecastDaily
+from dash.task_runtime import build_scope_forecast_now, CATEGORIES
 
 from .constants import FORECAST_MODEL_VER
+
+logger = logging.getLogger(__name__)
+
+
+def _bootstrap_requested_scope_if_missing(ym: str, asof_day: int, scope: str, scope_key: str) -> None:
+    agg_exists = SalesDailyAgg.objects.filter(
+        ym=ym,
+        scope_type=scope,
+        scope_key=scope_key,
+        category__in=CATEGORIES,
+    ).exists()
+    forecast_exists = SalesForecast.objects.filter(
+        ym=ym,
+        scope_type=scope,
+        scope_key=scope_key,
+        category__in=CATEGORIES,
+        model_ver=FORECAST_MODEL_VER,
+        asof_day__lte=asof_day,
+    ).exists()
+
+    if agg_exists and forecast_exists:
+        return
+
+    lock_key = f"dash:api_forecast:bootstrap:{ym}:{scope}:{scope_key}:{asof_day}"
+    if not cache.add(lock_key, "1", 60):
+        return
+
+    try:
+        logger.info(
+            "[dash.api_forecast] bootstrap ym=%s asof=%s scope=%s/%s agg_exists=%s forecast_exists=%s",
+            ym, asof_day, scope, scope_key, agg_exists, forecast_exists
+        )
+        build_scope_forecast_now(
+            ym=ym,
+            asof_day=asof_day,
+            scope_type=scope,
+            scope_key=scope_key,
+            include_prev=True,
+        )
+    except Exception:
+        logger.exception(
+            "[dash.api_forecast] bootstrap failed ym=%s asof=%s scope=%s/%s",
+            ym, asof_day, scope, scope_key
+        )
+    finally:
+        cache.delete(lock_key)
 
 
 @grade_required("superuser", "head")
@@ -52,6 +101,8 @@ def dash_forecast_api(request):
             return JsonResponse({"ok": True, "data": None, "message": "no branch"}, status=200)
         scope = "branch"
         scope_key = my_branch
+
+    _bootstrap_requested_scope_if_missing(ym, asof_day, scope, scope_key)
 
     labels = list(range(1, last_day + 1))
 

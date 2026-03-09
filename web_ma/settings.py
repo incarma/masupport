@@ -170,6 +170,10 @@ MIDDLEWARE = [
     "django.middleware.csrf.CsrfViewMiddleware",
     # ✅ login/admin login GET에서 csrftoken 강제 발급(뷰/캐시 의존 제거)
     "web_ma.middleware.ForceCSRFCookieOnLoginMiddleware",
+    # ✅ 운영에서 과거 host-only csrftoken 정리
+    # - 현재 정책(.ma-support.kr) 쿠키는 유지
+    # - 중복 csrftoken으로 인한 CSRF 불일치 방지
+    "web_ma.middleware.CleanupLegacyCSRFCookieMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     # ✅ Phase 3: 강제 비밀번호 변경(플래그+정책엔진 기반)
     # - 인증 이후(request.user 필요) 위치 고정

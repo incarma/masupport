@@ -216,7 +216,7 @@ def upload_sales_excel(request):
         try:
             yms_to_process = _pick_yms_to_process(touched_yms)
             if yms_to_process:
-                from dash.tasks.pipeline import build_sales_forecasts_for_yms
+                from dash.tasks import build_sales_forecasts_for_yms
                 build_sales_forecasts_for_yms.delay(yms_to_process)
         except Exception:
             logger.exception("dash upload: forecast task enqueue failed")

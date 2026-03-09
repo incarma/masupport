@@ -22,6 +22,3 @@ ENV PYTHONUNBUFFERED=1
 
 # 기본 실행 명령 (웹 서버는 docker-compose에서 override) / Render 호환 CMD (쉘 방식)
 CMD sh -c "gunicorn web_ma.asgi:application -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT"
-
-
-

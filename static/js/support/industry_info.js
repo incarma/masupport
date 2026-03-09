@@ -10,10 +10,23 @@
   /**
    * CSRF 토큰 조회
    * - 현재 프로젝트는 CSRF 쿠키 기반 fetch 패턴을 사용합니다.
+   * - 운영 환경에서 과거 host-only 쿠키가 일시적으로 남아 같은 이름의
+   *   csrftoken이 2개 보일 수 있으므로, 마지막 값을 우선 사용합니다.
    */
   function getCSRFToken() {
-    const match = document.cookie.match(/(?:^|; )csrftoken=([^;]+)/);
-    return match ? decodeURIComponent(match[1]) : "";
+    const raw = document.cookie || "";
+    if (!raw) return "";
+
+    const parts = raw.split(";").map((v) => v.trim()).filter(Boolean);
+    const values = [];
+
+    for (const part of parts) {
+      if (!part.startsWith("csrftoken=")) continue;
+      values.push(part.slice("csrftoken=".length));
+    }
+
+    if (!values.length) return "";
+    return decodeURIComponent(values[values.length - 1]);
   }
 
   /**
