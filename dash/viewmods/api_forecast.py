@@ -11,6 +11,7 @@ from django.views.decorators.http import require_GET
 from accounts.decorators import grade_required
 from dash.models import SalesDailyAgg, SalesForecast, SalesForecastDaily
 from dash.task_runtime import build_scope_forecast_now, CATEGORIES
+from dash.task_runtime import _build_aggs_for_scope
 
 from .constants import FORECAST_MODEL_VER
 
@@ -31,6 +32,7 @@ def _bootstrap_requested_scope_if_missing(ym: str, asof_day: int, scope: str, sc
         category__in=CATEGORIES,
         model_ver=FORECAST_MODEL_VER,
         asof_day__lte=asof_day,
+        pred_total_p50__isnull=False,   # ← NULL(껍데기) forecast는 없는 것으로 간주
     ).exists()
 
     if agg_exists and forecast_exists:
@@ -45,13 +47,44 @@ def _bootstrap_requested_scope_if_missing(ym: str, asof_day: int, scope: str, sc
             "[dash.api_forecast] bootstrap ym=%s asof=%s scope=%s/%s agg_exists=%s forecast_exists=%s",
             ym, asof_day, scope, scope_key, agg_exists, forecast_exists
         )
-        build_scope_forecast_now(
-            ym=ym,
-            asof_day=asof_day,
-            scope_type=scope,
-            scope_key=scope_key,
-            include_prev=True,
-        )
+        # ✅ SIGSEGV 방지: 학습(LightGBM)은 동기로 실행하지 않음
+        # 집계만 동기로 생성하고, 예측은 기존 모델 파일이 있을 때만 실행
+        if not agg_exists:
+            _build_aggs_for_scope(ym, scope, scope_key)
+
+        # ✅ 모델 파일이 있는 카테고리에 대해서만 직접 예측 생성
+        # _build_forecast_for_scope()는 내부에서 학습을 시도하므로 사용 금지
+        # 대신 load_models → predict → upsert_forecast 흐름을 직접 구성
+        if not forecast_exists:
+            from dash.ml.forecast import load_models, predict_month_total, upsert_forecast
+            from dash.task_runtime import _build_features, MODEL_VER
+
+            for cat in CATEGORIES:
+                models = load_models(scope, scope_key, cat)
+                if not models:
+                    # 모델 없음 → 학습 시도 없이 skip (SIGSEGV 방지)
+                    continue
+                try:
+                    features = _build_features(scope, scope_key, cat, ym, asof_day)
+                    p10, p50, p90 = predict_month_total(models, features)
+                    upsert_forecast(
+                        ym=ym,
+                        asof_day=asof_day,
+                        scope_type=scope,
+                        scope_key=scope_key,
+                        category=cat,
+                        model_ver=MODEL_VER,
+                        pred_total_p10=p10,
+                        pred_total_p50=p50,
+                        pred_total_p90=p90,
+                    )
+                except Exception:
+                    logger.exception(
+                        "[dash.api_forecast] bootstrap predict failed "
+                        "ym=%s scope=%s/%s cat=%s",
+                        ym, scope, scope_key, cat,
+                    )
+
     except Exception:
         logger.exception(
             "[dash.api_forecast] bootstrap failed ym=%s asof=%s scope=%s/%s",

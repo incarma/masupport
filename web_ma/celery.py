@@ -34,19 +34,19 @@ def debug_task(self):
 app.conf.beat_schedule = {
     # 매시간 10분: 집계 갱신(이번달/전월) → SalesDailyAgg(또는 유사 집계 테이블) 최신화
     "dash-agg-hourly": {
-        "task": "dash.tasks.pipeline.build_sales_aggs_hourly",
+        "task": "dash.tasks.build_sales_aggs_hourly",
         "schedule": crontab(minute=10),
         "args": (),
     },
     # 매일 02:10: 모델/예측 갱신 → Forecast 생성/업데이트
     "dash-forecast-daily": {
-        "task": "dash.tasks.pipeline.build_sales_forecasts_daily",
+        "task": "dash.tasks.build_sales_forecasts_daily",
         "schedule": crontab(hour=2, minute=10),
         "args": (),
     },
     # (선택) 매시간 예측까지 갱신하고 싶으면 활성화
     # "dash-forecast-hourly": {
-    #     "task": "dash.tasks.pipeline.build_sales_forecasts_hourly",
+    #     "task": "dash.tasks.build_sales_forecasts_hourly",
     #     "schedule": crontab(minute=20),
     #     "args": (),
     # },

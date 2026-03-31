@@ -87,12 +87,15 @@ class CleanupLegacyCSRFCookieMiddleware:
         #
         #    - domain 인자를 주지 않으면 현재 호스트 기준 host-only 쿠키 삭제
         #    - 현재 정책 쿠키(.ma-support.kr)는 유지됨
+        #    - Django HttpResponse.delete_cookie()는 secure 인자를 받지 않음
+        #      (set_cookie()와 시그니처가 다름)
+        #    - delete_cookie()는 key/path/domain/samesite 기준으로 만료 쿠키를 내려보내므로
+        #      여기서는 host-only 삭제 의도에 맞게 domain 없이 path+samesite만 맞춘다.
         # ---------------------------------------------------------------------
         response.delete_cookie(
             key="csrftoken",
             path="/",
             samesite=getattr(settings, "CSRF_COOKIE_SAMESITE", "Lax"),
-            secure=bool(getattr(settings, "CSRF_COOKIE_SECURE", False)),
         )
         return response
 
