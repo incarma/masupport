@@ -1,7 +1,6 @@
 # django_ma/accounts/views.py
 from __future__ import annotations
 from pathlib import Path
-from typing import Optional
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
@@ -46,6 +45,11 @@ logger = logging.getLogger("django.security.csrf")
 access_logger = logging.getLogger("accounts.access")
 UserModel = get_user_model()
 
+
+# =============================================================================
+# CSRF Failure Handler
+# =============================================================================
+
 def csrf_failure(request, reason=""):
     logger.warning(
         "CSRF FAILED | reason=%s | path=%s | method=%s | host=%s | secure=%s | "
@@ -64,37 +68,49 @@ def csrf_failure(request, reason=""):
     )
     return HttpResponseForbidden(f"CSRF Failed: {reason}")
 
+
+# =============================================================================
+# Internal Helpers
+# =============================================================================
+
 def _set_no_store_headers(response: HttpResponse) -> HttpResponse:
-    # 로그인 페이지/CSRF 관련 페이지는 캐시되면 안 됨
+    """로그인 페이지/CSRF 관련 페이지는 캐시되면 안 됨."""
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
     return response
 
 
+def _is_ajax(request: HttpRequest) -> bool:
+    """
+    랜딩 모달 AJAX 요청 판별 SSOT.
+    landing.js의 fetch() 호출에 'X-Requested-With: XMLHttpRequest' 헤더가 포함되어야 한다.
+    """
+    return request.headers.get("X-Requested-With") == "XMLHttpRequest"
+
+
 # =============================================================================
 # Password Change (로그인 사용자 비밀번호 변경)
 # =============================================================================
+
 @method_decorator(login_required, name="dispatch")
 class UserPasswordChangeView(PasswordChangeView):
     """
-    ✅ 1단계: 로그인 사용자가 직접 비밀번호를 변경할 수 있는 페이지
-
+    로그인 사용자가 직접 비밀번호를 변경할 수 있는 페이지.
     - Django 표준 PasswordChangeView 사용
     - 성공 시 done 페이지로 이동
-    - template은 registration/password_change_form.html 사용
+    - template: registration/password_change_form.html
     """
     template_name = "registration/password_change_form.html"
     form_class = StrictPasswordChangeForm
 
     def get_success_url(self) -> str:
         return reverse("accounts:password_change_done")
-    
+
     def form_valid(self, form) -> HttpResponse:
         """
-        Phase 3:
-        - 비밀번호 변경 성공 시 must_change_password 플래그를 해제합니다.
-        - '기본 비번 여부'는 여기서 판별하지 않습니다(불필요/위험).
+        비밀번호 변경 성공 시 must_change_password 플래그를 해제한다.
+        '기본 비번 여부'는 여기서 판별하지 않는다(불필요/위험).
         """
         response = super().form_valid(form)
         try:
@@ -117,16 +133,17 @@ class UserPasswordChangeView(PasswordChangeView):
 
                 access_logger.info("PASSWORD_CHANGE_COMPLETED user=%s", getattr(u, "id", ""))
         except Exception:
-            # 사용자에게는 노출하지 않고, 서버 로그만 남기기(운영 안정성)
+            # 사용자에게는 노출하지 않고 서버 로그만 남기기(운영 안정성)
             access_logger.exception("PASSWORD_CHANGE_COMPLETED log failed")
+
         return response
 
 
 @method_decorator(login_required, name="dispatch")
 class UserPasswordChangeDoneView(PasswordChangeDoneView):
     """
-    ✅ 비밀번호 변경 완료 페이지
-    - template은 registration/password_change_done.html 사용
+    비밀번호 변경 완료 페이지.
+    - template: registration/password_change_done.html
     """
     template_name = "registration/password_change_done.html"
 
@@ -139,6 +156,7 @@ password_change_done_view = UserPasswordChangeDoneView.as_view()
 # =============================================================================
 # Upload Progress (Excel 업로드 진행률 / 상태 조회)
 # =============================================================================
+
 @login_required
 def upload_progress_view(request: HttpRequest) -> JsonResponse:
     task_id = (request.GET.get("task_id") or "").strip()
@@ -151,7 +169,7 @@ def upload_progress_view(request: HttpRequest) -> JsonResponse:
 
     download_url = ""
     if status == "SUCCESS":
-        # ✅ 기본은 accounts 결과 다운로드(항상 존재)
+        # 기본은 accounts 결과 다운로드(항상 존재)
         download_url = reverse("accounts:accounts_upload_result", args=[task_id])
 
         # (선택) admin url이 정확히 존재하는 경우에만 덮어쓰기
@@ -184,8 +202,10 @@ def upload_result_view(request: HttpRequest, task_id: str) -> FileResponse:
 
 
 # =============================================================================
-# Auth (로그인 후 브라우저 종료 시 세션 만료)
+# Auth — SessionCloseLoginView
+# 브라우저 종료 시 세션 만료 + 랜딩 모달 AJAX 로그인 지원
 # =============================================================================
+
 @method_decorator(never_cache, name="dispatch")
 @method_decorator(ensure_csrf_cookie, name="dispatch")
 class SessionCloseLoginView(LoginView):
@@ -193,31 +213,29 @@ class SessionCloseLoginView(LoginView):
 
     def dispatch(self, request: HttpRequest, *args, **kwargs) -> HttpResponse:
         """
-        ✅ CSRF cookie not set 방지
+        CSRF cookie not set 방지:
         - ensure_csrf_cookie로 GET /login 시점에 csrftoken 강제 발급
         - never_cache + no-store 헤더로 캐시 재사용 이슈 차단
         """
         response = super().dispatch(request, *args, **kwargs)
         return _set_no_store_headers(response)
-    
+
     def get_success_url(self) -> str:
         """
-        로그인 성공 후 최초 랜딩페이지를 업계정보로 통일합니다.
+        로그인 성공 후 최초 랜딩페이지를 업계정보로 통일.
         - settings.LOGIN_REDIRECT_URL도 동일하게 support:industry_info로 맞추지만,
-          실제 로그인 흐름의 SSOT는 여기로 두어 의도를 분명히 합니다.
+          실제 로그인 흐름의 SSOT는 여기로 두어 의도를 분명히 한다.
         - ForcePasswordChangeMiddleware는 인증 이후 별도 정책으로 동작하므로,
-          강제 비밀번호 변경 대상자는 미들웨어가 우선 처리합니다.
+          강제 비밀번호 변경 대상자는 미들웨어가 우선 처리한다.
         """
         return reverse("support:industry_info")
-    
-    
+
     # -------------------------------------------------------------------------
     # Internal helpers (Lockout)
     # -------------------------------------------------------------------------
+
     def _extract_login_id(self) -> str:
-        """
-        Django AuthenticationForm의 기본 필드명(username) + 방어적 fallback(id)
-        """
+        """Django AuthenticationForm 기본 필드명(username) + 방어적 fallback(id)."""
         return (self.request.POST.get("username") or self.request.POST.get("id") or "").strip()
 
     def _get_submitted_user(self):
@@ -225,12 +243,9 @@ class SessionCloseLoginView(LoginView):
         if not login_id:
             return None
         return UserModel.objects.filter(pk=login_id).first()
-    
+
     def _build_invalid_login_message(self, count: int) -> str:
-        """
-        일반 로그인 실패 메시지:
-        - 1~4회 실패 시 (N/5) 진행 상태를 안내
-        """
+        """1~4회 실패 시 (N/5) 진행 상태 안내 메시지."""
         safe_count = max(1, min(int(count or 0), LOGIN_FAIL_MAX_COUNT - 1))
         return (
             f"{INVALID_LOGIN_MESSAGE_HEAD}\n"
@@ -241,7 +256,7 @@ class SessionCloseLoginView(LoginView):
         return ACCOUNT_LOCKED_MESSAGE
 
     def _replace_non_field_error(self, form, message: str, code: str) -> None:
-        # 기존 invalid_login 메시지와 중복되지 않도록 non-field error 교체
+        """기존 invalid_login 메시지와 중복되지 않도록 non-field error 교체."""
         try:
             _ = form.errors
         except Exception:
@@ -304,10 +319,14 @@ class SessionCloseLoginView(LoginView):
             if update_fields:
                 target.save(update_fields=update_fields)
 
+    # -------------------------------------------------------------------------
+    # Request handlers
+    # -------------------------------------------------------------------------
+
     def post(self, request: HttpRequest, *args, **kwargs) -> HttpResponse:
         """
         잠긴 계정은 비밀번호가 맞더라도 로그인 시도 자체를 막는다.
-        - form_invalid 경로로 내려 보내 잠금 메시지를 동일하게 렌더
+        form_invalid 경로로 내려 보내 잠금 메시지를 동일하게 렌더한다.
         """
         submitted_user = self._get_submitted_user()
         if submitted_user and getattr(submitted_user, "is_locked", False):
@@ -331,9 +350,17 @@ class SessionCloseLoginView(LoginView):
 
     def form_valid(self, form) -> HttpResponse:
         """
-        Phase 3:
-        - 로그인 성공 시점은 사용자가 입력한 원문 비밀번호를 알 수 있는 유일한 지점입니다.
-        - 따라서 "기본 비번(id / incar+id) 로그인"이면 must_change_password 플래그를 True로 수렴합니다.
+        로그인 성공 경로.
+
+        처리 순서:
+        1. 원문 비밀번호 추출 (기본 비번 여부 판별용)
+        2. super().form_valid() 호출 → 세션 생성 + redirect response 준비
+        3. 세션 만료 정책 적용 (브라우저 종료 시 만료)
+        4. 연속 실패 횟수 초기화
+        5. audit 로그 기록
+        6. 기본 비번 로그인 시 must_change_password 플래그 수렴
+        7-a. AJAX 요청: JSON {"success": true, "next_url": ...} 반환
+        7-b. 일반 form submit: 기존 redirect response 반환
         """
         raw_pw = ""
         try:
@@ -347,31 +374,35 @@ class SessionCloseLoginView(LoginView):
         except Exception:
             user = None
 
+        # super() 호출 → 세션 생성 + redirect response 객체 생성
         response = super().form_valid(form)
+
+        # 브라우저 종료 시 세션 만료
         self.request.session.set_expiry(0)
 
-        # ✅ 성공 로그인 시 연속 실패 횟수 초기화
+        # 연속 실패 횟수 초기화
         try:
             if user and getattr(user, "is_authenticated", True):
                 self._reset_login_fail_state(user)
         except Exception:
             access_logger.exception("LOGIN_FAIL_COUNTER_RESET failed user=%s", getattr(user, "id", ""))
 
+        # audit 로그
         try:
             if user:
                 self._audit_safe(self.request, ACTION.AUTH_LOGIN_SUCCESS, obj=user, success=True)
         except Exception:
             access_logger.exception("AUTH_LOGIN_SUCCESS audit failed")
 
-        # ✅ 로그인 성공 후에만 플래그 수렴(인증 실패 케이스 오염 방지)
+        # 기본 비번(사번 / incar+사번) 로그인 시 must_change_password 플래그 수렴
+        # 로그인 성공 후에만 수렴 (인증 실패 케이스 오염 방지)
         try:
             if user and getattr(user, "is_authenticated", True):
                 emp_id = (getattr(user, "id", "") or "").strip()
                 if emp_id:
-                    default_pw_1 = emp_id
-                    default_pw_2 = f"incar{emp_id}"
-                    is_default = raw_pw != "" and (raw_pw == default_pw_1 or raw_pw == default_pw_2)
-
+                    is_default = raw_pw != "" and (
+                        raw_pw == emp_id or raw_pw == f"incar{emp_id}"
+                    )
                     if is_default and not getattr(user, "must_change_password", False):
                         user.must_change_password = True
                         user.must_change_password_set_at = timezone.now()
@@ -383,12 +414,29 @@ class SessionCloseLoginView(LoginView):
         except Exception:
             access_logger.exception("PASSWORD_CHANGE_REQUIRED_SET failed")
 
+        # ── AJAX 분기 (랜딩 모달 전용) ──────────────────────────────
+        # landing.js의 fetch() 요청에는 X-Requested-With: XMLHttpRequest 헤더가 포함된다.
+        # 이 헤더가 있을 때만 JSON을 반환하고, 없으면 기존 redirect response를 그대로 반환한다.
+        if _is_ajax(self.request):
+            return JsonResponse({
+                "success": True,
+                "next_url": self.get_success_url(),
+            })
+        # ── AJAX 분기 끝 ────────────────────────────────────────────
+
         return response
-    
+
     def form_invalid(self, form) -> HttpResponse:
         """
-        잘못된 비밀번호로 인한 invalid_login만 연속 실패 횟수에 반영한다.
-        inactive / locked / 기타 폼 에러는 누적하지 않는다.
+        로그인 실패 경로.
+
+        처리 순서:
+        1. invalid_login 에러인 경우에만 연속 실패 횟수 누적
+           (inactive / locked / 기타 폼 에러는 누적하지 않음)
+        2. 잠금 임계치 도달 시 is_locked 처리 + 잠금 메시지 교체
+        3. audit 로그 기록
+        4-a. AJAX 요청: JSON {"success": false, "message": ...} 반환 (status 401)
+        4-b. 일반 form submit: 기존 HTML 에러 페이지 반환
         """
         submitted_user = self._get_submitted_user()
 
@@ -435,7 +483,21 @@ class SessionCloseLoginView(LoginView):
                         "invalid_login",
                     )
             except Exception:
-                access_logger.exception("AUTH_LOGIN_FAIL handling failed user=%s", getattr(submitted_user, "id", ""))
+                access_logger.exception(
+                    "AUTH_LOGIN_FAIL handling failed user=%s", getattr(submitted_user, "id", "")
+                )
+
+        # ── AJAX 분기 (랜딩 모달 전용) ──────────────────────────────
+        # non_field_errors()의 첫 번째 메시지를 그대로 모달에 표시한다.
+        # 잠금 메시지(_replace_non_field_error로 교체된 값)도 여기서 전달된다.
+        if _is_ajax(self.request):
+            try:
+                error_list = form.non_field_errors()
+                message = error_list[0] if error_list else "로그인에 실패했습니다."
+            except Exception:
+                message = "로그인에 실패했습니다."
+            return JsonResponse({"success": False, "message": str(message)}, status=401)
+        # ── AJAX 분기 끝 ────────────────────────────────────────────
 
         return super().form_invalid(form)
 
@@ -446,13 +508,11 @@ class SessionCloseLoginView(LoginView):
 
 @login_required
 def api_search_user(request: HttpRequest) -> JsonResponse:
-    """
-    ✅ 정식 검색 구현(search_api.search_users_for_api)을 호출하는 thin wrapper
-    """
+    """정식 검색 구현(search_api.search_users_for_api)을 호출하는 thin wrapper."""
     return JsonResponse(search_users_for_api(request))
 
 
-# ✅ 레거시 alias (기존 /search-user/ 유지)
+# 레거시 alias (기존 /search-user/ 유지)
 @login_required
 def search_user(request: HttpRequest) -> JsonResponse:
     return api_search_user(request)

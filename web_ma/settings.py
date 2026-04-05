@@ -243,7 +243,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LOGIN_URL = "/login/"
 LOGIN_REDIRECT_URL = "support:industry_info"
-LOGOUT_REDIRECT_URL = "manual:manual_list"
+LOGOUT_REDIRECT_URL = "/"
 
 # =============================================================================
 # Phase 3) Force Password Change (SSOT)

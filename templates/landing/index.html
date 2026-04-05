@@ -1,0 +1,1069 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>인카금융서비스 — 인생설계 카운슬러</title>
+
+  <!-- Google Fonts: Noto Sans KR -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+
+  <style>
+    /* =============================================
+       CSS 토큰 (브랜드 디자인 SSOT)
+       ============================================= */
+    :root {
+      --inka-blue:      #005BAC;
+      --inka-blue2:     #0074D9;
+      --inka-dark:      #002F6C;
+      --inka-white:     #FFFFFF;
+      --ease-out-expo:  cubic-bezier(0.16, 1, 0.3, 1);
+      --ease-slide:     cubic-bezier(0.25, 0.46, 0.45, 0.94);
+      --z-bg:       1;
+      --z-objects:  5;
+      --z-content:  10;
+      --z-nav:      100;
+      --z-modal:    1050;
+      --z-backdrop: 1040;
+    }
+
+    /* =============================================
+       전역 리셋
+       ============================================= */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html {
+      scroll-snap-type: y mandatory;
+      overflow-y: scroll;
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: 'Noto Sans KR', sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* =============================================
+       Section 0 — Hero (1페이지)
+       ============================================= */
+    .landing-hero {
+      position: relative;
+      width: 100%;
+      height: 100svh;
+      min-height: 100vh;
+      overflow: hidden;
+      scroll-snap-align: start;
+    }
+
+    /* Layer 1: Background */
+    .hero-bg {
+      position: absolute;
+      inset: 0;
+      z-index: var(--z-bg);
+      /* [FIX] 배경 이미지: <head> 인라인 style 블록에서 주입 (아래) */
+      background-size: cover;
+      background-position: center right;
+      background-repeat: no-repeat;
+    }
+
+    .hero-bg::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(105deg,
+        rgba(255,255,255,0.55) 0%,
+        rgba(255,255,255,0.25) 45%,
+        rgba(255,255,255,0.0)  70%);
+      pointer-events: none;
+    }
+
+    /* Layer 2: Object */
+    .section-objects {
+      position: absolute;
+      inset: 0;
+      z-index: var(--z-objects);
+      pointer-events: none;
+    }
+
+    .obj-title-counselor {
+      position: absolute;
+      left: 5%;
+      top: 50%;
+      transform: translateY(-50%) translateY(40px);
+      width: clamp(320px, 42vw, 640px);
+      height: auto;
+      opacity: 0;
+      mix-blend-mode: multiply; /* [FIX] 검정 배경 투명 처리 */
+      transition: opacity 0.9s var(--ease-out-expo), transform 0.9s var(--ease-out-expo);
+    }
+    .obj-title-counselor.is-visible {
+      opacity: 1;
+      transform: translateY(-50%) translateY(0);
+    }
+
+    /* Layer 3: Content */
+    .section-content {
+      position: relative;
+      z-index: var(--z-content);
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      padding: 0 5% 10%;
+    }
+
+    .hero-tagline {
+      color: var(--inka-blue);
+      font-size: clamp(0.85rem, 1.2vw, 1rem);
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      opacity: 0;
+      transform: translateY(16px);
+      transition: opacity 0.7s var(--ease-out-expo) 1.1s,
+                  transform 0.7s var(--ease-out-expo) 1.1s;
+    }
+    .hero-tagline.is-visible { opacity: 1; transform: translateY(0); }
+
+    /* =============================================
+       Scroll-down 화살표
+       ============================================= */
+    .scroll-down-arrow {
+      position: absolute;
+      bottom: 36px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: var(--z-content);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity 0.6s ease 1.5s;
+      text-decoration: none;
+    }
+    .scroll-down-arrow.is-visible { opacity: 1; }
+
+    .arrow-label {
+      font-size: 0.7rem;
+      font-weight: 500;
+      color: var(--inka-blue);
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+    .arrow-circle {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.85);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1.5px solid rgba(0,91,172,0.22);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 16px rgba(0,91,172,0.15);
+      transition: background 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease;
+    }
+    .arrow-chevron {
+      animation: arrowBounce 1.8s var(--ease-slide) infinite;
+    }
+    @keyframes arrowBounce {
+      0%, 100% { transform: translateY(0);   opacity: 1; }
+      45%       { transform: translateY(7px); opacity: 0.4; }
+      65%       { transform: translateY(3px); opacity: 0.7; }
+    }
+    .scroll-down-arrow:hover .arrow-circle {
+      background: var(--inka-blue);
+      transform: scale(1.12);
+      box-shadow: 0 8px 24px rgba(0,91,172,0.38);
+    }
+    .scroll-down-arrow:hover .arrow-circle svg { stroke: #ffffff; }
+    .scroll-down-arrow:hover .arrow-label { color: var(--inka-dark); }
+
+    /* =============================================
+       Section 1 — Since 1999 (2페이지)
+       ============================================= */
+    .section-since1999 {
+      position: relative;
+      width: 100%;
+      height: 100svh;
+      min-height: 100vh;
+      background-color: #f0f1f3;
+      /* [FIX] background-image: <head> 인라인 style 블록에서 주입 (아래) */
+      background-size: cover;
+      background-position: center;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 80px 5% 60px;
+      box-sizing: border-box;
+      scroll-snap-align: start;
+    }
+
+    .s1-title-img {
+      width: clamp(380px, 52vw, 760px);
+      height: auto;
+      mix-blend-mode: multiply;
+      margin-bottom: clamp(16px, 2.5vh, 32px);
+      opacity: 0;
+      transform: translateY(24px);
+      transition: opacity 0.8s var(--ease-out-expo), transform 0.8s var(--ease-out-expo);
+    }
+    .s1-title-img.is-visible { opacity: 1; transform: translateY(0); }
+
+    .s1-cards {
+      display: flex;
+      gap: clamp(12px, 2vw, 28px);
+      width: 100%;
+      max-width: 1060px;
+      margin-bottom: clamp(16px, 2.5vh, 32px);
+      opacity: 0;
+      transform: translateY(24px);
+      transition: opacity 0.8s var(--ease-out-expo) 0.15s,
+                  transform 0.8s var(--ease-out-expo) 0.15s;
+    }
+    .s1-cards.is-visible { opacity: 1; transform: translateY(0); }
+
+    .s1-card {
+      flex: 1;
+      background: rgba(255,255,255,0.96);
+      border-radius: 20px;
+      box-shadow: 0 4px 28px rgba(0,91,172,0.09);
+      overflow: hidden;
+    }
+    .s1-card img { width: 100%; height: auto; display: block; }
+
+    .s1-timeline-img {
+      width: 100%;
+      max-width: 1100px;
+      height: auto;
+      opacity: 0;
+      transform: translateY(20px);
+      transition: opacity 0.8s var(--ease-out-expo) 0.3s,
+                  transform 0.8s var(--ease-out-expo) 0.3s;
+    }
+    .s1-timeline-img.is-visible { opacity: 1; transform: translateY(0); }
+
+    /* =============================================
+       Fixed Navigation Bar
+       ============================================= */
+    .landing-nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: var(--z-nav);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 40px;
+      background: transparent;
+      transition: background 0.4s ease, backdrop-filter 0.4s ease;
+    }
+    .landing-nav.scrolled {
+      background: rgba(255,255,255,0.92);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      box-shadow: 0 1px 20px rgba(0,91,172,0.1);
+    }
+
+    .nav-logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      text-decoration: none;
+    }
+    .nav-logo-img {
+      width: 38px; height: 38px;
+      object-fit: contain;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .nav-logo-text {
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: var(--inka-dark);
+      letter-spacing: -0.01em;
+      line-height: 1.2;
+    }
+    .nav-logo-text small {
+      display: block;
+      font-size: 0.65rem;
+      font-weight: 400;
+      color: #666;
+      letter-spacing: 0.02em;
+    }
+
+    .btn-login {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 24px;
+      background: var(--inka-blue);
+      color: var(--inka-white);
+      border: none;
+      border-radius: 50px;
+      font-family: 'Noto Sans KR', sans-serif;
+      font-size: 0.875rem;
+      font-weight: 500;
+      letter-spacing: 0.02em;
+      cursor: pointer;
+      transition: background 0.25s ease, transform 0.2s ease, box-shadow 0.25s ease;
+      box-shadow: 0 4px 16px rgba(0,91,172,0.30);
+    }
+    .btn-login:hover {
+      background: var(--inka-blue2);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0,91,172,0.40);
+    }
+    .btn-login:active { transform: translateY(0); }
+    .btn-login svg { width: 15px; height: 15px; flex-shrink: 0; }
+
+    /* =============================================
+       Login Modal
+       ============================================= */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: var(--z-backdrop);
+      background: rgba(0,24,64,0.55);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.35s ease, visibility 0.35s ease;
+    }
+    .modal-backdrop.is-open { opacity: 1; visibility: visible; }
+
+    .login-modal {
+      position: fixed;
+      top: 50%; left: 50%;
+      z-index: var(--z-modal);
+      transform: translate(-50%, -48%) scale(0.96);
+      width: min(420px, calc(100vw - 40px));
+      background: #FFFFFF;
+      border-radius: 20px;
+      box-shadow: 0 24px 80px rgba(0,30,80,0.22), 0 4px 20px rgba(0,91,172,0.12);
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.4s var(--ease-out-expo),
+                  transform 0.4s var(--ease-out-expo),
+                  visibility 0.4s;
+      overflow: hidden;
+    }
+    .login-modal.is-open {
+      opacity: 1;
+      visibility: visible;
+      transform: translate(-50%, -50%) scale(1);
+    }
+
+    .modal-header {
+      background: linear-gradient(135deg, var(--inka-dark) 0%, var(--inka-blue) 100%);
+      padding: 28px 32px 24px;
+      position: relative;
+    }
+    .modal-header-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+    .modal-logo-img { width: 32px; height: 32px; object-fit: contain; border-radius: 50%; flex-shrink: 0; }
+    .modal-logo-text { font-size: 0.85rem; font-weight: 600; color: rgba(255,255,255,0.9); letter-spacing: 0.02em; }
+    .modal-title { font-size: 1.25rem; font-weight: 700; color: #FFFFFF; letter-spacing: -0.01em; }
+    .modal-subtitle { font-size: 0.8rem; color: rgba(255,255,255,0.65); margin-top: 4px; font-weight: 300; }
+
+    .btn-modal-close {
+      position: absolute;
+      top: 20px; right: 20px;
+      width: 32px; height: 32px;
+      border: none;
+      background: rgba(255,255,255,0.15);
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s ease;
+      color: white;
+    }
+    .btn-modal-close:hover { background: rgba(255,255,255,0.28); }
+
+    .modal-body { padding: 28px 32px 32px; }
+
+    .form-group { margin-bottom: 16px; }
+    .form-label {
+      display: block;
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: #444;
+      margin-bottom: 6px;
+      letter-spacing: 0.02em;
+    }
+    .form-input {
+      width: 100%;
+      padding: 13px 16px;
+      border: 1.5px solid #E2E8F0;
+      border-radius: 10px;
+      font-family: 'Noto Sans KR', sans-serif;
+      font-size: 0.9rem;
+      color: #1A202C;
+      background: #FAFBFC;
+      outline: none;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+    }
+    .form-input:focus {
+      border-color: var(--inka-blue);
+      background: #FFFFFF;
+      box-shadow: 0 0 0 3px rgba(0,91,172,0.12);
+    }
+    .form-input::placeholder { color: #A0AEC0; font-size: 0.85rem; }
+
+    /* [FIX] 에러 메시지 초기 텍스트 없음 — JS가 내용 채움 */
+    .form-error {
+      display: none;
+      font-size: 0.78rem;
+      color: #E53E3E;
+      margin-top: 6px;
+      padding: 8px 12px;
+      background: #FFF5F5;
+      border-radius: 6px;
+      border-left: 3px solid #FC8181;
+    }
+    .form-error.is-visible { display: block; }
+
+    .btn-submit {
+      width: 100%;
+      padding: 14px;
+      background: var(--inka-blue);
+      color: white;
+      border: none;
+      border-radius: 10px;
+      font-family: 'Noto Sans KR', sans-serif;
+      font-size: 0.925rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      cursor: pointer;
+      margin-top: 8px;
+      transition: background 0.25s ease, transform 0.15s ease, box-shadow 0.25s ease;
+      box-shadow: 0 4px 16px rgba(0,91,172,0.28);
+    }
+    .btn-submit:hover { background: var(--inka-blue2); transform: translateY(-1px); box-shadow: 0 8px 24px rgba(0,91,172,0.36); }
+    .btn-submit:active { transform: translateY(0); }
+    .btn-submit:disabled { opacity: 0.65; cursor: not-allowed; transform: none; }
+
+    .modal-footer-note {
+      margin-top: 16px;
+      text-align: center;
+      font-size: 0.75rem;
+      color: #A0AEC0;
+      line-height: 1.6;
+    }
+
+    /* =============================================
+       모바일 반응형 (768px 이하)
+       ============================================= */
+    @media (max-width: 768px) {
+      .hero-bg { background-position: 70% center; }
+      .landing-nav { padding: 16px 20px; }
+      .nav-logo-text { font-size: 0.8rem; }
+      .nav-logo-text small { display: none; }
+      .btn-login { padding: 9px 18px; font-size: 0.82rem; }
+
+      .obj-title-counselor {
+        left: 50%; top: auto; bottom: 18%;
+        transform: translateX(-50%) translateY(40px);
+        width: clamp(260px, 80vw, 420px);
+      }
+      .obj-title-counselor.is-visible { transform: translateX(-50%) translateY(0); }
+      .section-content { display: none; }
+      .scroll-down-arrow { bottom: 22px; }
+
+      .login-modal {
+        top: auto; bottom: 0; left: 0; right: 0;
+        width: 100%;
+        transform: translateX(0) translateY(100%);
+        border-radius: 20px 20px 0 0;
+        max-height: 90vh;
+        overflow-y: auto;
+      }
+      .login-modal.is-open { transform: translateX(0) translateY(0); opacity: 1; visibility: visible; }
+      .modal-header { padding: 24px 24px 20px; }
+      .modal-body { padding: 24px 24px 40px; }
+      .modal-drag-handle {
+        width: 40px; height: 4px;
+        background: rgba(255,255,255,0.4);
+        border-radius: 2px;
+        margin: 0 auto 20px;
+      }
+
+      .section-since1999 { padding: 70px 4% 50px; justify-content: flex-start; overflow-y: auto; }
+      .s1-cards { flex-direction: column; }
+      .s1-title-img { width: 88vw; }
+    }
+
+    @media (max-width: 430px) {
+      .obj-title-counselor { width: clamp(220px, 88vw, 360px); bottom: 20%; }
+      .modal-header { padding: 20px 20px 16px; }
+      .modal-body { padding: 20px 20px 36px; }
+    }
+
+    /* 모션 감소 대응 */
+    @media (prefers-reduced-motion: reduce) {
+      .obj-title-counselor, .hero-tagline, .login-modal, .modal-backdrop,
+      .s1-title-img, .s1-cards, .s1-timeline-img, .scroll-down-arrow {
+        transition: opacity 0.3s ease !important;
+        transform: none !important;
+      }
+      .obj-title-counselor.is-visible { transform: none !important; }
+      .arrow-chevron { animation: none; }
+    }
+
+    /* =============================================
+       배경 이미지 인라인 주입
+       CSS 파일 내 Django 템플릿 태그 사용 불가 →
+       <style> 블록에서 직접 주입
+       ============================================= */
+  </style>
+
+
+    /* =============================================
+       Section 2 — GA 최초 코스닥 상장 (3페이지)
+       배경(s2-kosdaq-bg.png)에 우측 사진이 포함되어 있음.
+       title/contents 이미지는 좌측 절반에만 배치.
+       ============================================= */
+    .section-kosdaq {
+      position: relative;
+      width: 100%;
+      height: 100svh;
+      min-height: 100vh;
+      background-color: #eef1f5;
+      background-size: cover;
+      background-position: center;
+      overflow: hidden;          /* 자식 요소가 섹션 밖으로 넘치지 않도록 */
+      display: flex;
+      flex-direction: column;
+      justify-content: center;   /* 세로 중앙 정렬 */
+      align-items: flex-start;   /* 좌측 정렬 */
+      padding: 80px 5% 60px;
+      box-sizing: border-box;
+      scroll-snap-align: start;
+    }
+
+    /* 타이틀 + 콘텐츠를 감싸는 래퍼
+       배경의 우측 사진 오브제와 겹치지 않도록 좌측 50%로 제한 */
+    .s2-content-wrap {
+      display: flex;
+      flex-direction: column;
+      width: min(52%, 680px);    /* 우측 사진 영역(~50%) 침범 금지 */
+      min-width: 300px;
+    }
+
+    /* 타이틀 이미지 — mix-blend-mode:multiply로 검정 배경 제거 */
+    .s2-title-img {
+      width: 100%;               /* 래퍼 너비 기준 */
+      height: auto;
+      mix-blend-mode: multiply;
+      margin-bottom: clamp(12px, 2.5vh, 32px);
+      opacity: 0;
+      transform: translateY(24px);
+      transition: opacity 0.8s var(--ease-out-expo), transform 0.8s var(--ease-out-expo);
+    }
+    .s2-title-img.is-visible { opacity: 1; transform: translateY(0); }
+
+    /* 콘텐츠 이미지 (3개 항목 텍스트) — mix-blend-mode:multiply */
+    .s2-contents-img {
+      width: 100%;               /* 래퍼 너비 기준 */
+      height: auto;
+      mix-blend-mode: multiply;
+      opacity: 0;
+      transform: translateY(20px);
+      transition: opacity 0.8s var(--ease-out-expo) 0.2s, transform 0.8s var(--ease-out-expo) 0.2s;
+    }
+    .s2-contents-img.is-visible { opacity: 1; transform: translateY(0); }
+
+    /* 모바일: 전체 너비 사용, 배경 사진과의 충돌 방지를 위해 반투명 배경 추가 */
+    @media (max-width: 768px) {
+      .section-kosdaq {
+        padding: 70px 4% 50px;
+        justify-content: flex-start;
+        overflow-y: auto;
+      }
+      .s2-content-wrap {
+        width: 90vw;
+        background: rgba(238, 241, 245, 0.88);
+        border-radius: 12px;
+        padding: 16px;
+        box-sizing: border-box;
+      }
+    }
+
+    /* 모션 감소 */
+    @media (prefers-reduced-motion: reduce) {
+      .s2-title-img, .s2-contents-img {
+        transition: opacity 0.3s ease !important;
+        transform: none !important;
+      }
+    }
+
+  <!-- [KEY] 배경 이미지만 별도 style 블록에서 주입 -->
+  <style>
+    .hero-bg          { background-image: url("{% static 'landing/bg/s0-hero-bg.png' %}"); }
+    .section-since1999{ background-image: url("{% static 'landing/bg/s1-history-bg.png' %}"); }
+    .section-kosdaq   { background-image: url("{% static 'landing/bg/s2-kosdaq-bg.png' %}"); }
+  </style>
+</head>
+<body>
+
+  <!-- =============================================
+       Fixed Navigation Bar
+       ============================================= -->
+  <nav class="landing-nav" id="landingNav" role="navigation" aria-label="주 내비게이션">
+    <a href="#" class="nav-logo" aria-label="인카금융서비스 홈">
+      <img class="nav-logo-img"
+           src="{% static 'landing/logos/ci-logo.png' %}"
+           alt="인카금융서비스 로고" width="38" height="38">
+      <div class="nav-logo-text">
+        인카금융서비스
+        <small>KOSDAQ 상장법인</small>
+      </div>
+    </a>
+    <button class="btn-login" id="btnOpenLogin" type="button"
+            aria-haspopup="dialog" aria-expanded="false" aria-controls="loginModal">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="3" y="11" width="18" height="11" rx="2"/>
+        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+      </svg>
+      로그인
+    </button>
+  </nav>
+
+
+  <!-- =============================================
+       Section 0: Hero (1페이지)
+       가이드맵 v2.0 — 3레이어 구조
+       ============================================= -->
+  <section class="landing-hero" id="section-0" data-section="0"
+           aria-label="인카금융서비스 인생설계 카운슬러">
+
+    <!-- Layer 1: Background -->
+    <div class="hero-bg" role="img" aria-label="밝은 회의실 배경" aria-hidden="true"></div>
+
+    <!-- Layer 2: Object — 타이틀 이미지 -->
+    <div class="section-objects" aria-hidden="true">
+      <img class="obj obj-title-counselor" id="objTitleCounselor"
+           src="{% static 'landing/objects/s0/title-counselor.png' %}"
+           alt="" data-anim="slideInUp" data-delay="0.3">
+    </div>
+
+    <!-- Layer 3: Content -->
+    <div class="section-content">
+      <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;
+                 clip:rect(0,0,0,0);white-space:nowrap;">
+        인생설계 카운슬러 — 인카금융서비스
+      </h1>
+      <p class="hero-tagline" id="heroTagline">당신의 인생을 함께 설계합니다</p>
+    </div>
+
+    <!-- Scroll-down 화살표 -->
+    <a class="scroll-down-arrow" id="scrollDownArrow"
+       href="#section-1" aria-label="다음 섹션으로 이동" tabindex="0">
+      <span class="arrow-label">Scroll</span>
+      <div class="arrow-circle">
+        <svg class="arrow-chevron" width="18" height="11" viewBox="0 0 18 11"
+             fill="none" stroke="var(--inka-blue)" stroke-width="2.3"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="1 1 9 9.5 17 1"/>
+        </svg>
+      </div>
+    </a>
+
+  </section>
+
+
+  <!-- =============================================
+       Section 1: Since 1999. 인카가 걸어온 길 (2페이지)
+       가이드맵 v2.0 — 3레이어 구조
+       ============================================= -->
+  <section class="section-since1999" id="section-1" data-section="1"
+           aria-label="Since 1999. 인카가 걸어온 길">
+
+    <!-- 타이틀 (mix-blend-mode:multiply → 검정 배경 제거) -->
+    <img class="s1-title-img" id="s1TitleImg"
+         src="{% static 'landing/objects/s1/title-history.png' %}"
+         alt="Since 1999. 인카가 걸어온 길" data-anim="slideInUp" data-delay="0.1">
+
+    <!-- 카드 2개 -->
+    <div class="s1-cards" id="s1Cards">
+      <div class="s1-card">
+        <img src="{% static 'landing/objects/s1/table-network.png' %}"
+             alt="전국적인 영업 네트워크 구축 — 소속 설계사 수 21,592명, 영업지점 수 788지점"
+             loading="lazy">
+      </div>
+      <div class="s1-card">
+        <img src="{% static 'landing/objects/s1/table-revenue.png' %}"
+             alt="꾸준히 성장하는 매출규모 — 2020~2025 연도별 매출 현황"
+             loading="lazy">
+      </div>
+    </div>
+
+    <!-- 연혁 타임라인 (사진 포함 → 정적 이미지) -->
+    <img class="s1-timeline-img" id="s1TimelineImg"
+         src="{% static 'landing/objects/s1/timeline.png' %}"
+         alt="인카금융서비스 연혁 — 1999년 설립부터 2025년 매출 1조 달성까지"
+         loading="lazy">
+
+  </section>
+
+
+  <!-- =============================================
+       Section 2 — GA 최초 코스닥 상장 (3페이지)
+       가이드맵 v2.0 3-레이어 구조
+       Layer 1: Background — <head> style 블록에서 bg 이미지 주입
+       Layer 3: Content    — 타이틀 · 콘텐츠 이미지
+       ============================================= -->
+  <section
+    class="section-kosdaq"
+    id="section-2"
+    data-section="2"
+    data-theme="light"
+    aria-label="GA 최초 코스닥 상장, 보험업계 최초 설계사 주식 배분">
+
+    <!-- 좌측 콘텐츠 래퍼 — 배경 우측 사진과 겹침 방지 (max 52%) -->
+    <div class="s2-content-wrap">
+
+      <!-- 타이틀: mix-blend-mode:multiply → 검정 배경 투명 처리 -->
+      <img
+        class="s2-title-img"
+        id="s2TitleImg"
+        src="{% static 'landing/objects/s2/title-kosdaq.png' %}"
+        alt="GA 최초 코스닥 상장, 보험업계 최초 설계사 주식 배분"
+        data-anim="slideInUp"
+        data-delay="0.1">
+
+      <!-- 콘텐츠: 3개 항목 (투명한 경영/지속 성장/체계적 운영) -->
+      <img
+        class="s2-contents-img"
+        id="s2ContentsImg"
+        src="{% static 'landing/objects/s2/contents-kosdaq.png' %}"
+        alt="1. 투명한 경영, 신뢰의 기반 / 2. 지속 성장, 매년 실적 갱신 / 3. 체계적 운영의 기업형 GA"
+        loading="lazy">
+
+    </div>
+
+    <!-- Scroll-down 화살표 (Section 1 → Section 2) -->
+    <a class="scroll-down-arrow" id="scrollDownArrow2"
+       href="#section-2" aria-label="다음 섹션으로 이동" tabindex="0">
+      <span class="arrow-label">Scroll</span>
+      <div class="arrow-circle">
+        <svg class="arrow-chevron" width="18" height="11" viewBox="0 0 18 11"
+             fill="none" stroke="var(--inka-blue)" stroke-width="2.3"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="1 1 9 9.5 17 1"/>
+        </svg>
+      </div>
+    </a>
+
+  </section>
+
+
+  <!-- Modal Backdrop -->
+  <div class="modal-backdrop" id="modalBackdrop"
+       role="presentation" aria-hidden="true"></div>
+
+
+  <!-- =============================================
+       Login Modal
+       ============================================= -->
+  <div class="login-modal" id="loginModal"
+       role="dialog" aria-modal="true"
+       aria-labelledby="modalTitle" aria-describedby="modalSubtitle">
+
+    <div class="modal-drag-handle" aria-hidden="true"></div>
+
+    <div class="modal-header">
+      <div class="modal-header-logo">
+        <img class="modal-logo-img"
+             src="{% static 'landing/logos/ci-logo.png' %}"
+             alt="인카금융서비스 로고" width="32" height="32">
+        <span class="modal-logo-text">인카금융서비스</span>
+      </div>
+      <h2 class="modal-title" id="modalTitle">로그인</h2>
+      <p class="modal-subtitle" id="modalSubtitle">임직원 전용 시스템에 접속합니다</p>
+      <button class="btn-modal-close" id="btnCloseLogin"
+              type="button" aria-label="로그인 창 닫기">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <line x1="18" y1="6" x2="6" y2="18"/>
+          <line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+
+    <div class="modal-body">
+      <!-- [FIX] form action/method 제거 — AJAX로만 처리 -->
+      <form id="loginForm" novalidate>
+        <div class="form-group">
+          <label class="form-label" for="inputEmpId">사번</label>
+          <input class="form-input" type="text" id="inputEmpId" name="username"
+                 placeholder="사번을 입력하세요" autocomplete="username"
+                 inputmode="numeric" maxlength="20" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="inputPassword">비밀번호</label>
+          <input class="form-input" type="password" id="inputPassword" name="password"
+                 placeholder="비밀번호를 입력하세요" autocomplete="current-password" required>
+        </div>
+        <!-- [FIX] 에러 메시지 초기 텍스트 없음 — JS가 채움 -->
+        <div class="form-error" id="loginError" role="alert" aria-live="polite"></div>
+        <button class="btn-submit" type="submit" id="btnSubmitLogin">로그인</button>
+      </form>
+      <p class="modal-footer-note">
+        임직원 전용 시스템입니다.<br>
+        계정 문의는 관리자에게 연락해 주세요.
+      </p>
+    </div>
+  </div>
+
+
+  <!-- =============================================
+       JavaScript
+       ============================================= -->
+  <script>
+    // =============================================
+    // 1. Hero 타이틀 오브제 애니메이션 (페이드인 + 올라오기)
+    // =============================================
+    (function initObjectAnimations() {
+      var obj     = document.getElementById('objTitleCounselor');
+      var tagline = document.getElementById('heroTagline');
+      if (!obj) return;
+
+      var delay = parseFloat(obj.dataset.delay || 0.3);
+      requestAnimationFrame(function() {
+        setTimeout(function() { obj.classList.add('is-visible'); }, delay * 1000);
+        if (tagline) {
+          setTimeout(function() { tagline.classList.add('is-visible'); }, (delay + 0.4) * 1000);
+        }
+      });
+    })();
+
+
+    // =============================================
+    // 2. 로그인 모달 열기/닫기 + 포커스 트랩
+    // =============================================
+    (function initLoginModal() {
+      var btnOpen    = document.getElementById('btnOpenLogin');
+      var btnClose   = document.getElementById('btnCloseLogin');
+      var modal      = document.getElementById('loginModal');
+      var backdrop   = document.getElementById('modalBackdrop');
+      var loginForm  = document.getElementById('loginForm');
+      var loginError = document.getElementById('loginError');
+      var inputEmpId = document.getElementById('inputEmpId');
+      var btnSubmit  = document.getElementById('btnSubmitLogin');
+
+      if (!btnOpen || !modal) return;
+      var isOpen = false;
+
+      function openModal() {
+        if (isOpen) return;
+        isOpen = true;
+        modal.classList.add('is-open');
+        backdrop.classList.add('is-open');
+        backdrop.setAttribute('aria-hidden', 'false');
+        btnOpen.setAttribute('aria-expanded', 'true');
+        document.body.style.overflow = 'hidden';
+        setTimeout(function() { if (inputEmpId) inputEmpId.focus(); }, 100);
+      }
+
+      function closeModal() {
+        if (!isOpen) return;
+        isOpen = false;
+        modal.classList.remove('is-open');
+        backdrop.classList.remove('is-open');
+        backdrop.setAttribute('aria-hidden', 'true');
+        btnOpen.setAttribute('aria-expanded', 'false');
+        document.body.style.overflow = '';
+        loginError.classList.remove('is-visible');
+        loginError.textContent = '';
+        btnOpen.focus();
+      }
+
+      btnOpen.addEventListener('click', openModal);
+      btnClose.addEventListener('click', closeModal);
+      backdrop.addEventListener('click', closeModal);
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && isOpen) closeModal();
+      });
+
+      // =============================================
+      // 3. 로그인 AJAX (POST /login/)
+      //    X-CSRFToken: @ensure_csrf_cookie로 발급된 쿠키에서 읽기
+      //    X-Requested-With: XMLHttpRequest → SessionCloseLoginView AJAX 분기 트리거
+      // =============================================
+      loginForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+
+        var empId    = inputEmpId.value.trim();
+        var password = document.getElementById('inputPassword').value;
+
+        if (!empId || !password) {
+          loginError.textContent = '사번과 비밀번호를 모두 입력해 주세요.';
+          loginError.classList.add('is-visible');
+          return;
+        }
+
+        if (btnSubmit.dataset.submitting === '1') return;
+        btnSubmit.dataset.submitting = '1';
+        btnSubmit.disabled = true;
+        btnSubmit.textContent = '확인 중...';
+        loginError.classList.remove('is-visible');
+
+        var csrfToken = (document.cookie.split('; ')
+          .find(function(r) { return r.startsWith('csrftoken='); }) || '')
+          .split('=')[1] || '';
+
+        fetch('/login/', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRFToken': csrfToken,
+            'X-Requested-With': 'XMLHttpRequest',
+          },
+          credentials: 'same-origin',
+          body: new URLSearchParams({ username: empId, password: password })
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data.success) {
+            window.location.href = data.next_url || '/support/';
+          } else {
+            loginError.textContent = data.message || '로그인에 실패했습니다.';
+            loginError.classList.add('is-visible');
+          }
+        })
+        .catch(function() {
+          loginError.textContent = '네트워크 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.';
+          loginError.classList.add('is-visible');
+        })
+        .finally(function() {
+          btnSubmit.disabled = false;
+          btnSubmit.textContent = '로그인';
+          delete btnSubmit.dataset.submitting;
+        });
+      });
+
+      // 포커스 트랩 (Tab 키 모달 내 순환)
+      modal.addEventListener('keydown', function(e) {
+        if (e.key !== 'Tab') return;
+        var focusable = Array.from(modal.querySelectorAll(
+          'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        ));
+        var first = focusable[0];
+        var last  = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      });
+    })();
+
+
+    // =============================================
+    // 4. 스크롤 감지 → 헤더 스타일 전환
+    // =============================================
+    (function initNavScroll() {
+      var nav = document.getElementById('landingNav');
+      if (!nav) return;
+      var ticking = false;
+      window.addEventListener('scroll', function() {
+        if (!ticking) {
+          requestAnimationFrame(function() {
+            nav.classList[window.scrollY > 20 ? 'add' : 'remove']('scrolled');
+            ticking = false;
+          });
+          ticking = true;
+        }
+      }, { passive: true });
+    })();
+
+
+    // =============================================
+    // 5. Section 1 진입 애니메이션 (IntersectionObserver)
+    // =============================================
+    (function initSection1Animations() {
+      var targets = [
+        document.getElementById('s1TitleImg'),
+        document.getElementById('s1Cards'),
+        document.getElementById('s1TimelineImg'),
+      ].filter(Boolean);
+      if (!targets.length) return;
+
+      var observer = new IntersectionObserver(function(entries) {
+        entries.forEach(function(entry) {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('is-visible');
+            observer.unobserve(entry.target);
+          }
+        });
+      }, { threshold: 0.12 });
+
+      targets.forEach(function(el) { observer.observe(el); });
+    })();
+
+
+    // =============================================
+    // 6. Scroll-down 화살표 초기화
+    // =============================================
+    (function initScrollDownArrow() {
+      var arrow = document.getElementById('scrollDownArrow');
+      if (!arrow) return;
+
+      requestAnimationFrame(function() {
+        requestAnimationFrame(function() {
+          arrow.classList.add('is-visible');
+        });
+      });
+
+      function scrollToSection1(e) {
+        e.preventDefault();
+        var target = document.getElementById('section-1');
+        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+
+      arrow.addEventListener('click', scrollToSection1);
+      arrow.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' || e.key === ' ') scrollToSection1(e);
+      });
+    })();
+
+
+    // =============================================
+    // 7. Section 2 진입 애니메이션 (IntersectionObserver)
+    //    타이틀 → 콘텐츠 순차 페이드인 + 올라오기
+    // =============================================
+    (function initSection2Animations() {
+      var targets = [
+        document.getElementById('s2TitleImg'),
+        document.getElementById('s2ContentsImg'),
+      ].filter(Boolean);
+      if (!targets.length) return;
+
+      var observer = new IntersectionObserver(function(entries) {
+        entries.forEach(function(entry) {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('is-visible');
+            observer.unobserve(entry.target);
+          }
+        });
+      }, { threshold: 0.12 });
+
+      targets.forEach(function(el) { observer.observe(el); });
+    })();
+
+  </script>
+
+</body>
+</html>

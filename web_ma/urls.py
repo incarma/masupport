@@ -15,6 +15,7 @@ from django.views.static import serve
 from accounts import views as accounts_views
 from accounts.custom_admin import custom_admin_site
 from accounts.views import SessionCloseLoginView
+from web_ma.views import landing_view
 
 import web_ma.views as web_views
 
@@ -22,17 +23,6 @@ import web_ma.views as web_views
 
 # ✅ 500 에러 핸들러(운영에서 traceback 강제 로깅용)
 handler500 = "web_ma.views.handler500"
-
-
-def home_redirect(request):
-    """
-    홈(/) 접속 시 최초 랜딩페이지인 업계정보로 리다이렉트합니다.
-    - support.md 기준: 로그인 후 최초 진입 페이지는 support:industry_info
-    - 비로그인 사용자는 login으로 보내 인증 흐름을 유지합니다.
-    """
-    if request.user.is_authenticated:
-        return redirect("support:industry_info")
-    return redirect("login")
 
 
 urlpatterns = [
@@ -55,7 +45,7 @@ urlpatterns = [
     # ---------------------------------------------------------------------
     # Home
     # ---------------------------------------------------------------------
-    path("", home_redirect, name="home"),
+    path("", landing_view, name="home"),
 
     # ---------------------------------------------------------------------
     # Apps
