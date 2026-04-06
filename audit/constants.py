@@ -72,3 +72,12 @@ class ACTION:
     SUPPORT_USER_BOOKMARK = "support.user.bookmark"
     SUPPORT_USER_HIDE = "support.user.hide"
     SUPPORT_RECOMMEND_GENERATE = "support.recommend.generate"
+
+    # ------------------------------------------------------------------
+    # Collect (환수관리) — Step 1
+    # 규약: domain.object.action 형식 준수
+    # ------------------------------------------------------------------
+    COLLECT_EXCEL_UPLOAD    = "collect.excel.upload"
+    COLLECT_FEEDBACK_CREATE = "collect.feedback.create"
+    COLLECT_FEEDBACK_UPDATE = "collect.feedback.update"
+    COLLECT_FEEDBACK_DELETE = "collect.feedback.delete"

@@ -252,17 +252,110 @@
     createObserver(targets);
   }
 
+  function initSection3Sequence() {
+    var section = getById('section-3');
+    var title = getById('s3TitleImg');
+    var boxes = [
+      getById('s3Box1'),
+      getById('s3Box2'),
+      getById('s3Box3')
+    ].filter(Boolean);
+    var note = getById('s3NoteImg');
+
+    if (!section || !title || !boxes.length) {
+      return;
+    }
+
+    function playSequence() {
+      if (section.dataset.animated === '1') {
+        return;
+      }
+      section.dataset.animated = '1';
+
+      title.classList.add('is-visible');
+
+      setTimeout(function () {
+        boxes.forEach(function (box) {
+          box.classList.add('is-visible');
+        });
+      }, 850);
+
+      setTimeout(function () {
+        if (note) {
+          note.classList.add('is-visible');
+        }
+      }, 1500);
+    }
+
+    if (typeof IntersectionObserver === 'undefined') {
+      playSequence();
+      return;
+    }
+
+    var observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (!entry.isIntersecting) return;
+        playSequence();
+        observer.unobserve(entry.target);
+      });
+    }, {
+      threshold: 0.28
+    });
+
+    observer.observe(section);
+  }
+
+  function initSection4Sequence() {
+    var section = getById('section-4');
+    var title = getById('s4TitleImg');
+    var boxes = [
+      getById('s4Box1'),
+      getById('s4Box2'),
+      getById('s4Box3')
+    ].filter(Boolean);
+
+    if (!section || !title || !boxes.length) {
+      return;
+    }
+
+    function playSequence() {
+      if (section.dataset.animated === '1') {
+        return;
+      }
+      section.dataset.animated = '1';
+
+      title.classList.add('is-visible');
+
+      setTimeout(function () {
+        boxes.forEach(function (box) {
+          box.classList.add('is-visible');
+        });
+      }, 650);
+    }
+
+    if (typeof IntersectionObserver === 'undefined') {
+      playSequence();
+      return;
+    }
+
+    var observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (!entry.isIntersecting) return;
+        playSequence();
+        observer.unobserve(entry.target);
+      });
+    }, {
+      threshold: 0.28
+    });
+
+    observer.observe(section);
+  }
+
   function bindScrollArrow(arrowId, targetId) {
     var arrow = getById(arrowId);
     var target = getById(targetId);
 
     if (!arrow || !target) return;
-
-    requestAnimationFrame(function () {
-      requestAnimationFrame(function () {
-        arrow.classList.add('is-visible');
-      });
-    });
 
     function scrollToTarget(event) {
       event.preventDefault();
@@ -271,6 +364,12 @@
         block: 'start'
       });
     }
+
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        arrow.classList.add('is-visible');
+      });
+    });
 
     arrow.addEventListener('click', scrollToTarget);
     arrow.addEventListener('keydown', function (event) {
@@ -286,7 +385,12 @@
     initNavScroll();
     initSection1Animations();
     initSection2Animations();
+    initSection3Sequence();
+    initSection4Sequence();
     bindScrollArrow('scrollDownArrow', 'section-1');
+    bindScrollArrow('scrollDownArrow1', 'section-2');
+    bindScrollArrow('scrollDownArrow2', 'section-3');
+    bindScrollArrow('scrollDownArrow3', 'section-4');
   }
 
   if (document.readyState === 'loading') {

@@ -40,4 +40,17 @@ urlpatterns = [
     path("api/deposit-surety/", views.api_deposit_surety_list, name="api_deposit_surety_list"),
     path("api/deposit-other/", views.api_deposit_other_list, name="api_deposit_other_list"),
     path("api/support-pdf/", views.api_support_pdf, name="api_support_pdf"),
+
+    # =========================================================
+    # Collect (환수관리)
+    # 기존 URL name 변경 금지. 신규 추가만.
+    # 업로드는 기존 commission:upload_excel 재사용 (신규 URL 불필요)
+    # =========================================================
+    path("collect/",                    views.collect_home,                name="collect_home"),
+    path("collect/api/list/",           views.api_collect_list,            name="api_collect_list"),
+    path("collect/api/ym-list/",        views.api_collect_ym_list,         name="api_collect_ym_list"),
+    path("collect/api/feedback/",       views.api_collect_feedback_list,   name="api_collect_feedback_list"),
+    path("collect/api/feedback/create/",views.api_collect_feedback_create, name="api_collect_feedback_create"),
+    path("collect/api/feedback/update/",views.api_collect_feedback_update, name="api_collect_feedback_update"),
+    path("collect/api/feedback/delete/",views.api_collect_feedback_delete, name="api_collect_feedback_delete"),
 ]

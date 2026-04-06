@@ -303,3 +303,206 @@ class EfficiencyPayExcess(models.Model):
 
     def __str__(self) -> str:
         return f"{self.ym}/{self.user_id} ({self.pay_amount_sum})"
+    
+# =============================================================================
+# Step 2: 환수관리 전용 모델 3개
+# commission/models.py 최하단에 추가한다.
+# (기존 모델 일절 수정 금지)
+# =============================================================================
+
+# =============================================================================
+# CollectRecord — 환수관리 전용 데이터 (엑셀 36개 컬럼 전체 저장)
+# =============================================================================
+class CollectRecord(models.Model):
+    """
+    환수관리 전용 엑셀 업로드 데이터 테이블.
+
+    [설계 원칙]
+    - emp_id: FK 없이 CharField로 저장
+      → CustomUser에 없는 사번도 저장 가능 (엑셀 원본 그대로 보존)
+    - ym: "202603" (YYYYMM 6자리) 형식으로 저장
+    - UniqueConstraint(emp_id, ym): 같은 사번+월도 재업로드 시 덮어쓰기
+    - None → "" (str 필드) / 0 (int 필드) 정규화 후 저장
+    - 탭 조건(final_payment < 0) 조회: Index(ym, part), Index(ym, bizmoon) 커버
+    """
+
+    # ── 월도 ──
+    ym = models.CharField(
+        max_length=6,
+        db_index=True,
+        verbose_name="월도",
+        help_text="YYYYMM 형식 (예: 202603)",
+    )
+
+    # ── 조직 정보 ──
+    bizmoon_total = models.CharField(max_length=100, blank=True, default="", verbose_name="부문총괄")
+    bizmoon       = models.CharField(max_length=50,  blank=True, default="", verbose_name="부문")
+    total         = models.CharField(max_length=50,  blank=True, default="", verbose_name="총괄")
+    part          = models.CharField(max_length=50,  blank=True, default="", db_index=True, verbose_name="부서")
+    branch        = models.CharField(max_length=100, blank=True, default="", verbose_name="영업가족")
+    branch_code   = models.CharField(max_length=50,  blank=True, default="", verbose_name="영업가족코드")
+    affiliation   = models.CharField(max_length=300, blank=True, default="", verbose_name="소속")
+
+    # ── 개인 정보 ──
+    regist_type = models.CharField(max_length=50,  blank=True, default="", verbose_name="등록구분")
+    emp_name    = models.CharField(max_length=100, blank=True, default="", verbose_name="사원명")
+    work_status = models.CharField(max_length=50,  blank=True, default="", verbose_name="재직(설계사)")
+    enter_date  = models.DateField(null=True, blank=True, verbose_name="입사일")
+    emp_id      = models.CharField(max_length=30,  db_index=True, verbose_name="사번")
+
+    # ── 수수료 핵심 지표 ──
+    final_payment = models.BigIntegerField(default=0, verbose_name="최종지급액")  # 음수 가능
+    approval      = models.CharField(max_length=10,  blank=True, default="", verbose_name="결재")
+    pay_flag      = models.CharField(max_length=10,  blank=True, default="", verbose_name="지급")
+
+    # ── 채권/보증 ──
+    surety_bond_total  = models.BigIntegerField(default=0, verbose_name="보증채권합계")
+    surety_bond_detail = models.CharField(max_length=200, blank=True, default="", verbose_name="보증/채권")
+
+    # ── 환수 관련 ──
+    collect_action = models.CharField(max_length=200, blank=True, default="", verbose_name="환수조치")
+    status         = models.CharField(max_length=100, blank=True, default="", verbose_name="상태")
+    action_detail  = models.CharField(max_length=500, blank=True, default="", verbose_name="조치상세")
+
+    # ── 수수료 세부 항목 ──
+    car      = models.BigIntegerField(default=0, verbose_name="자동차")
+    general  = models.BigIntegerField(default=0, verbose_name="일반")
+    ns_init  = models.BigIntegerField(default=0, verbose_name="손보초회")
+    ns_cont  = models.BigIntegerField(default=0, verbose_name="손보계속")
+    ns_total = models.BigIntegerField(default=0, verbose_name="손보합계")
+    ls_init  = models.BigIntegerField(default=0, verbose_name="생보초회")
+    ls_cont  = models.BigIntegerField(default=0, verbose_name="생보계속")
+    ls_total = models.BigIntegerField(default=0, verbose_name="생보합계")
+
+    # ── 지급/공제 ──
+    etc_pay   = models.BigIntegerField(default=0, verbose_name="기타지급")
+    etc_deduct = models.BigIntegerField(default=0, verbose_name="기타공제")   # 음수 가능
+    prepay    = models.BigIntegerField(default=0, verbose_name="선지급")
+    first_pay = models.BigIntegerField(default=0, verbose_name="1차지급")
+    tax       = models.BigIntegerField(default=0, verbose_name="세금")        # 음수 가능
+    actual_pay  = models.BigIntegerField(default=0, verbose_name="실지급액")
+    self_settle = models.BigIntegerField(default=0, verbose_name="자체정산")
+
+    # ── 메타 ──
+    uploaded_at = models.DateTimeField(auto_now=True, verbose_name="업로드일시")
+
+    class Meta:
+        db_table = "collect_record"
+        verbose_name = "환수관리 레코드"
+        verbose_name_plural = "환수관리 레코드"
+        ordering = ["ym", "part", "emp_id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["emp_id", "ym"],
+                name="uq_collect_record_empid_ym",
+            )
+        ]
+        indexes = [
+            # 탭별 필터 조회 성능 (ym + 부서 / ym + 부문)
+            models.Index(fields=["ym", "part"],    name="idx_collect_record_ym_part"),
+            models.Index(fields=["ym", "bizmoon"], name="idx_collect_record_ym_bizmoon"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.emp_id} ({self.emp_name}) / {self.ym} / {self.final_payment:,}"
+
+
+# =============================================================================
+# CollectFeedback — 환수관리 피드백 (사번 기준, FK 없음)
+# =============================================================================
+class CollectFeedback(models.Model):
+    """
+    환수 대상자에 대한 운영 피드백(메모) 모델.
+
+    [설계 원칙]
+    - emp_id: FK 없이 CharField로 설계
+      → CollectRecord에 없는 사번에도 피드백 입력 가능
+      → 엑셀 업로드 전에도 피드백 미리 입력 가능
+    - author: CustomUser FK — 작성자 추적 및 본인 여부 판정
+    - 수정·삭제 권한: author(본인)만, 서비스 레이어에서 최종 판정
+    - 소프트 삭제 미적용 → 하드 삭제
+    """
+
+    emp_id = models.CharField(
+        max_length=30,
+        db_index=True,
+        verbose_name="대상자 사번",
+        help_text="CollectRecord.emp_id와 동일 형식. FK 없이 독립 저장.",
+    )
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,                       # 작성자 삭제 시 피드백 보존
+        related_name="collect_feedbacks_written",
+        verbose_name="작성자",
+    )
+    content    = models.TextField(verbose_name="피드백 내용")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="작성일시")
+    updated_at = models.DateTimeField(auto_now=True,     verbose_name="수정일시")
+
+    class Meta:
+        db_table = "collect_feedback"
+        verbose_name = "환수 피드백"
+        verbose_name_plural = "환수 피드백"
+        ordering = ["-created_at"]
+        indexes = [
+            # 특정 사번의 최신 피드백 조회 + Subquery 성능
+            models.Index(
+                fields=["emp_id", "-created_at"],
+                name="idx_collect_feedback_empid_dt",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"[{self.emp_id}] by {self.author_id} @ {self.created_at:%Y-%m-%d}"
+
+
+# =============================================================================
+# CollectUploadLog — 환수관리 업로드 이력
+# =============================================================================
+class CollectUploadLog(models.Model):
+    """
+    환수관리 엑셀 업로드 이력 테이블.
+
+    [설계 원칙]
+    - ym 기준 UniqueConstraint: 월도당 1건 (update_or_create 방식)
+    - 재업로드 시 uploaded_at, row_count, file_name이 갱신됨
+    - uploaded_by: 업로드한 superuser 추적
+    - collect_home.html 상단 업로드 현황 표시에 활용
+    """
+
+    ym = models.CharField(
+        max_length=6,
+        db_index=True,
+        verbose_name="업로드 월도",
+        help_text="YYYYMM 형식",
+    )
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="collect_upload_logs",
+        verbose_name="업로드 사용자",
+    )
+    uploaded_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="업로드일시",
+    )
+    row_count = models.IntegerField(default=0, verbose_name="처리 행 수")
+    file_name = models.CharField(max_length=255, blank=True, default="", verbose_name="원본 파일명")
+
+    class Meta:
+        db_table = "collect_upload_log"
+        verbose_name = "환수관리 업로드 이력"
+        verbose_name_plural = "환수관리 업로드 이력"
+        ordering = ["-uploaded_at"]
+        constraints = [
+            # 월도당 1건만 유지 (재업로드 시 갱신)
+            models.UniqueConstraint(
+                fields=["ym"],
+                name="uq_collect_uploadlog_ym",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.ym} / {self.file_name} / {self.row_count}건"

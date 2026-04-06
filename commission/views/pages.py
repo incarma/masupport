@@ -9,8 +9,14 @@ from django.utils import timezone
 
 from accounts.decorators import grade_required
 from accounts.models import CustomUser
-from commission.models import ApprovalPending, DepositUploadLog, EfficiencyPayExcess
+from commission.models import ApprovalPending, DepositUploadLog, EfficiencyPayExcess, CollectRecord, CollectUploadLog
 from commission.upload_handlers.registry import supported_upload_types
+from commission.services.collect import (
+    get_available_yms,
+    get_available_parts,
+    get_available_bizmoons,
+    date_to_ym,
+)
 
 from .constants import EXCESS_THRESHOLD
 
@@ -237,9 +243,51 @@ def approval_home(request):
 # =============================================================================
 # Support Home (현재 미사용)
 # =============================================================================
-
-
 @grade_required("staff", "admin", "superuser")
 def support_home(request):
     # 미사용이면 안전하게 deposit으로 보냄
     return redirect("commission:deposit_home")
+
+
+##############################################################################
+# [Step 7] commission/views/pages.py — collect_home 뷰 추가
+# 파일 최하단에 아래 코드를 추가한다.
+############################################################################## 
+@grade_required("superuser")
+def collect_home(request):
+    """
+    환수관리(Collect Home) 페이지 뷰 — Step 7
+ 
+    [컨텍스트]
+    - available_yms  : 업로드된 월도 목록 (최신순, 드롭다운용)
+    - parts          : 부서 목록 (CollectRecord 기반)
+    - bizmoons       : 부문 목록 (CollectRecord 기반)
+    - default_ym     : 기본 선택 월도 (가장 최신, 없으면 현재 월도)
+    - current_user_id: 로그인 사용자 사번 (피드백 버튼 노출 판단용)
+    - accounts_search_url: 사용자 검색 API URL (search_user_modal 연계)
+    - last_upload_log: 최근 업로드 이력 (없으면 None)
+ 
+    [SSOT 재사용]
+    - _accounts_search_url(): 기존 deposit/approval 공용 함수
+    - API URL은 템플릿에서 {% url %} 태그로 직접 주입 (dataset 규약)
+    """
+    available_yms = get_available_yms()
+    parts         = get_available_parts()
+    bizmoons      = get_available_bizmoons()
+ 
+    # 기본 월도: 가장 최신 업로드 월도, 없으면 현재 월도
+    default_ym = available_yms[0] if available_yms else date_to_ym(timezone.localdate())
+ 
+    # 최근 업로드 이력 (업로드 현황 표시용)
+    last_upload_log = CollectUploadLog.objects.first()
+ 
+    ctx = {
+        "available_yms":    available_yms,
+        "parts":            parts,
+        "bizmoons":         bizmoons,
+        "default_ym":       default_ym,
+        "current_user_id":  str(request.user.id),
+        "accounts_search_url": _accounts_search_url(),
+        "last_upload_log":  last_upload_log,
+    }
+    return render(request, "commission/collect_home.html", ctx)

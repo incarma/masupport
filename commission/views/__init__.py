@@ -54,7 +54,17 @@ _PAGES = {
     "support_home": ("commission.views.pages", "support_home"),
     # legacy alias
     "commission_home": ("commission.views.pages", "redirect_to_deposit"),
+    "collect_home": ("commission.views.pages", "collect_home"),
 }
+
+_COLLECT_API_NAMES = frozenset({
+     "api_collect_list",
+     "api_collect_ym_list",
+     "api_collect_feedback_list",
+     "api_collect_feedback_create",
+     "api_collect_feedback_update",
+     "api_collect_feedback_delete",
+ })
 
 # 2) upload (deposit)
 _UPLOAD = {
@@ -90,6 +100,13 @@ def __getattr__(name: str) -> Any:
         mod_path, attr = _PAGES[name]
         mod = _import_first(mod_path)
         return getattr(mod, attr)
+    
+    # -------------------------------------------------------------------------
+    # Collect API 뷰 lazy import
+    # -------------------------------------------------------------------------
+    if name in _COLLECT_API_NAMES:
+        from commission.views import api_collect as _api_collect
+        return getattr(_api_collect, name)
 
     # -------------------------------------------------------------------------
     # Upload (Deposit SSOT)
@@ -152,4 +169,11 @@ __all__ = [
     "download_upload_fail_excel",
     "download_approval_pending_excel",
     "download_efficiency_excess_excel",
+    "collect_home",
+    "api_collect_list",
+    "api_collect_ym_list",
+    "api_collect_feedback_list",
+    "api_collect_feedback_create",
+    "api_collect_feedback_update",
+    "api_collect_feedback_delete",
 ]

@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Callable, Dict, Iterable, Literal
 
 from . import deposit
+from . import collect as collect_handler
 
 Mode = Literal["df", "file"]
 
@@ -102,6 +103,17 @@ _REGISTRY: Dict[str, UploadSpec] = {
         mode="file",
         fn=deposit.handle_upload_ls_total_from_file,
         msg_tpl="✅ 통산생보 업로드 완료 ({n}건)",
+    ),
+
+    # -----------------------------------------------------------------
+    # 환수관리 전용 업로드 — Step 4
+    # upload_type="환수관리" 로 기존 upload_excel 뷰에서 자동 라우팅
+    # -----------------------------------------------------------------
+    "환수관리": UploadSpec(
+        upload_type="환수관리",
+        mode="df",
+        fn=collect_handler.handle_upload_collect,
+        msg_tpl="✅ 환수관리 업로드 완료 ({n}건)",
     ),
 }
 

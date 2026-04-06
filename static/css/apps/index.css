@@ -673,6 +673,245 @@ body {
 }
 
 /* =============================================
+   Section 3 — WHY 인카를 선택해야 할까요?
+   ============================================= */
+.section-why {
+  position: relative;
+  width: 100%;
+  height: 100svh;
+  min-height: 100vh;
+  background-color: #0f1c38;
+  background-image: var(--section-bg-image);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  overflow: hidden;
+  scroll-snap-align: start;
+  color: #ffffff;
+}
+
+.section-why::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(9, 21, 48, 0.18) 0%,
+    rgba(9, 21, 48, 0.22) 40%,
+    rgba(9, 21, 48, 0.30) 100%
+  );
+  pointer-events: none;
+}
+
+.s3-inner {
+  position: relative;
+  z-index: var(--z-content);
+  width: min(1600px, 100%);
+  height: 100%;
+  margin: 0 auto;
+  padding: 80px 42px 38px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.s3-title-wrap {
+  width: min(820px, 72vw);
+  margin-top: clamp(8px, 2.6vh, 36px);
+}
+
+.s3-title-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  opacity: 1;
+  clip-path: inset(0 0 100% 0);
+  filter: brightness(1);
+  mix-blend-mode: screen;
+  will-change: clip-path;
+  transition: clip-path 1.05s var(--ease-out-expo);
+}
+
+.s3-title-img.is-visible {
+  clip-path: inset(0 0 0 0);
+}
+
+.s3-message-wrap {
+  margin-top: clamp(18px, 2.5vh, 30px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.s3-divider {
+  width: 2px;
+  height: clamp(190px, 24vh, 280px);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.s3-message {
+  margin-top: clamp(26px, 3.4vh, 42px);
+  text-align: center;
+  color: #ffffff;
+  font-weight: 700;
+  line-height: 1.32;
+  letter-spacing: -0.035em;
+  font-size: clamp(2rem, 3.25vw, 3.18rem);
+  text-shadow: 0 4px 18px rgba(0, 0, 0, 0.18);
+}
+
+.s3-boxes {
+  width: 100%;
+  margin-top: auto;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(16px, 1vw, 22px);
+  align-items: end;
+}
+
+.s3-box-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  opacity: 0;
+  transform: translateY(56px);
+  filter: blur(1px);
+  transition:
+    opacity 0.82s var(--ease-out-expo),
+    transform 0.82s var(--ease-out-expo),
+    filter 0.82s var(--ease-out-expo);
+}
+
+.s3-box-img.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+  filter: blur(0);
+}
+
+.s3-box3-wrap {
+  position: relative;
+}
+
+.s3-note-img {
+  position: absolute;
+  right: 8px;
+  bottom: calc(100% + 10px);
+  width: min(290px, 52%);
+  height: auto;
+  opacity: 0;
+  filter: brightness(2.15) blur(1.5px);
+  mix-blend-mode: screen;
+  transform: translateY(4px);
+  transition:
+    opacity 0.7s ease,
+    filter 0.9s ease,
+    transform 0.7s ease;
+}
+
+.s3-note-img.is-visible {
+  opacity: 1;
+  filter: brightness(1) blur(0);
+  transform: translateY(0);
+}
+
+/* =============================================
+   Section 4 — 세일즈 캠퍼스
+   ============================================= */
+.section-campus {
+  position: relative;
+  width: 100%;
+  height: 100svh;
+  min-height: 100vh;
+  background-color: #10203f;
+  background-image: var(--section-bg-image);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  overflow: hidden;
+  scroll-snap-align: start;
+  color: #ffffff;
+}
+
+.section-campus::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    rgba(10, 22, 52, 0.34) 0%,
+    rgba(10, 22, 52, 0.18) 28%,
+    rgba(10, 22, 52, 0.12) 55%,
+    rgba(10, 22, 52, 0.18) 100%
+  );
+  pointer-events: none;
+}
+
+.s4-inner {
+  position: relative;
+  z-index: var(--z-content);
+  width: min(1600px, 100%);
+  height: 100%;
+  margin: 0 auto;
+  padding: 72px 40px 34px;
+  display: flex;
+  flex-direction: column;
+}
+
+.s4-title-wrap {
+  width: min(720px, 44vw);
+  margin-top: clamp(60px, 14vh, 170px);
+  margin-left: clamp(12px, 1.5vw, 24px);
+}
+
+.s4-title-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  opacity: 0;
+  filter: brightness(2.3) blur(1.2px);
+  transform: translateY(4px);
+  will-change: opacity, filter, transform;
+  transition:
+    opacity 0.9s ease,
+    filter 1.0s ease,
+    transform 0.9s ease;
+}
+
+.s4-title-img.is-visible {
+  opacity: 1;
+  filter: brightness(1) blur(0);
+  transform: translateY(0);
+}
+
+.s4-boxes {
+  width: 100%;
+  margin-top: auto;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(16px, 1vw, 22px);
+  align-items: end;
+}
+
+.s4-box-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  opacity: 0;
+  transform: translateY(56px);
+  filter: blur(1px);
+  transition:
+    opacity 0.82s var(--ease-out-expo),
+    transform 0.82s var(--ease-out-expo),
+    filter 0.82s var(--ease-out-expo);
+}
+
+.s4-box-img.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+  filter: blur(0);
+}
+
+/* =============================================
    반응형
    ============================================= */
 @media (max-width: 768px) {
@@ -777,6 +1016,68 @@ body {
     border-radius: 12px;
     padding: 16px;
   }
+
+  .section-why {
+    height: auto;
+    min-height: 100svh;
+    background-position: center;
+  }
+
+  .s3-inner {
+    height: auto;
+    min-height: 100svh;
+    padding: 72px 18px 28px;
+  }
+
+  .s3-title-wrap {
+    width: min(92vw, 760px);
+  }
+
+  .s3-divider {
+    height: 150px;
+  }
+
+  .s3-message {
+    font-size: clamp(1.35rem, 5vw, 2.1rem);
+    line-height: 1.4;
+    margin-top: 22px;
+  }
+
+  .s3-boxes {
+    margin-top: 30px;
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .s3-note-img {
+    width: min(260px, 56vw);
+    right: 4px;
+    bottom: calc(100% + 8px);
+  }
+
+  .section-campus {
+    height: auto;
+    min-height: 100svh;
+    background-position: center;
+  }
+
+  .s4-inner {
+    height: auto;
+    min-height: 100svh;
+    padding: 72px 18px 28px;
+  }
+
+  .s4-title-wrap {
+    width: min(88vw, 720px);
+    margin-top: 90px;
+    margin-left: 0;
+  }
+
+  .s4-boxes {
+    margin-top: auto;
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
 }
 
 @media (max-width: 430px) {
@@ -791,6 +1092,22 @@ body {
 
   .modal-body {
     padding: 20px 20px 36px;
+  }
+
+  .s3-inner {
+    padding: 68px 14px 24px;
+  }
+
+  .s3-divider {
+    height: 120px;
+  }
+
+  .s3-message {
+    font-size: 1.18rem;
+  }
+
+  .s4-inner {
+    padding: 68px 14px 24px;
   }
 }
 
@@ -807,7 +1124,12 @@ body {
   .s1-timeline-img,
   .scroll-down-arrow,
   .s2-title-img,
-  .s2-contents-img {
+  .s2-contents-img,
+  .s3-title-img,
+  .s3-box-img,
+  .s3-note-img,
+  .s4-title-img,
+  .s4-box-img {
     transition: opacity 0.3s ease !important;
     transform: none !important;
   }
@@ -818,5 +1140,9 @@ body {
 
   .arrow-chevron {
     animation: none;
+  }
+
+  .s3-title-img {
+    clip-path: inset(0 0 0 0) !important;
   }
 }

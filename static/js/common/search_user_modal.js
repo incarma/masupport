@@ -69,6 +69,7 @@
       document.getElementById("manage-efficiency") ||
       document.getElementById("manage-calculate") ||
       document.getElementById("manage-table") ||
+      document.getElementById("collect-home") ||
       document.getElementById("deposit-home") ||
       document.getElementById("support-form") ||
       null
@@ -495,6 +496,16 @@
       };
 
       const root = getActiveRoot();
+
+      // ✅ [Step 12] collect-home: 검색 모달만 닫고 피드백 모달 유지
+      // deposit-home의 location.href 방식과 다르다 — 절대 혼동 금지
+      if (root?.id === "collect-home") {
+        dispatchUserSelected(selected);  // collect_home.js의 userSelected 리스너가 처리
+        tryHideModal(modalEl);           // 검색 모달만 닫기
+        if (input) input.value = "";
+        resultsBox.innerHTML = "";
+        return;
+      }
 
       // ✅ deposit-home: 이벤트 발행 금지(=fetch 중단으로 Failed to fetch 유발 방지), 바로 이동
       if (root?.id === "deposit-home") {

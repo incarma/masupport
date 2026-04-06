@@ -141,3 +141,53 @@
 .commission-nowrap-table .money-cell{
   white-space:nowrap !important;
 }
+
+/* ==========================================================
+ 3) Collect Home (환수관리) — Step 13
+ 기존 섹션(1 Deposit / 2 Approval) 수정 없음. 추가만.
+========================================================== */
+
+/* 음수 금액 강조 */
+.amount-negative {
+    color: #dc3545;
+    font-weight: 600;
+}
+
+/* 사번 셀 클릭 UX */
+.collect-emp-id-cell {
+    cursor: pointer;
+    color: #005BAC;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.collect-emp-id-cell:hover { text-decoration: underline; }
+
+/* 최신 피드백 셀 말줄임 */
+.collect-feedback-cell {
+    display: block;
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: pointer;
+    color: #005BAC;
+}
+.collect-feedback-cell:hover { text-decoration: underline; }
+
+/* 피드백 모달 이력 목록 구분선 */
+.collect-feedback-item {
+    border-bottom: 1px solid var(--border-soft);
+    padding: 10px 0;
+}
+.collect-feedback-item:last-child { border-bottom: none; }
+
+/* 수정·삭제 버튼 소형화 */
+.collect-feedback-actions { display: flex; gap: 4px; }
+.collect-feedback-actions .btn { font-size: 11px; padding: 2px 7px; }
+
+/* 수정됨 표시 */
+.collect-feedback-modified {
+    font-size: 11px;
+    color: #6c757d;
+    font-style: italic;
+}
