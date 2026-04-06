@@ -237,6 +237,13 @@
 
       <div class="modal-header bg-light">
         <h6 class="modal-title fw-bold" id="feedbackManagerModalLabel">피드백 관리</h6>
+        <!-- 안내문자 버튼 — 대상자 선택 시 활성화, id 변경 금지 -->
+        <button type="button"
+                id="openSmsTemplateBtn"
+                class="btn btn-outline-primary btn-sm me-2"
+                disabled>
+          안내문자
+        </button>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="닫기"></button>
       </div>
 
@@ -289,6 +296,44 @@
         </div>
 
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- =========================================================
+  안내문자 모달
+  - id="smsTemplateModal" 변경 금지 (JS 의존)
+  - id="smsTemplateBody" 변경 금지 (JS 렌더링 대상)
+  - id="smsCopyBtn" 변경 금지 (JS 의존)
+========================================================== -->
+<div class="modal fade" id="smsTemplateModal" tabindex="-1"
+     aria-labelledby="smsTemplateModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content rounded-4 border-0 shadow">
+
+      <div class="modal-header bg-light">
+        <h6 class="modal-title fw-bold" id="smsTemplateModalLabel">안내문자</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="닫기"></button>
+      </div>
+
+      <div class="modal-body">
+        <!-- JS가 렌더링 — id 변경 금지 -->
+        <pre id="smsTemplateBody"
+             class="bg-light rounded-3 p-3 small"
+             style="white-space:pre-wrap;word-break:break-word;font-family:inherit;"></pre>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button"
+                id="smsCopyBtn"
+                class="btn btn-primary btn-sm">
+          복사
+        </button>
+        <button type="button"
+                class="btn btn-outline-secondary btn-sm"
+                data-bs-dismiss="modal">닫기</button>
+      </div>
+
     </div>
   </div>
 </div>

@@ -365,6 +365,31 @@ function downloadExcel() {
 }
 
 // ============================================================
+// 6-D) 안내문자 스크립트 생성
+// ============================================================
+
+/** 입금계좌 — SSOT (변경 시 이 상수만 수정) */
+const SMS_ACCOUNT = "027-115958-01-049 기업은행(인카금융서비스)";
+
+/**
+ * 대상자 이름과 최종지급액(final_payment)으로 안내문자 스크립트 생성.
+ * final_payment는 음수이므로 그대로 천단위 콤마 포맷으로 출력.
+ */
+function buildSmsTemplate(empName, finalPayment) {
+  const name   = empName || "대상자";
+  const amount = fmtMoney(finalPayment) + "원";   // 음수 포함 그대로 출력
+
+  return `${name}님 안녕하세요. 인카금융서비스 입니다. ${name}님의 현재 환수금액 및 입금계좌를 안내드립니다.
+
+* 환수금액: ${amount}
+* 입금계좌: ${SMS_ACCOUNT}
+
+※ 환수금액이 정상적으로 상환되지 않을 경우 추후 보증보험 청구 등으로 신용상의 불이익이 있을 수 있습니다.
+※ 환수금액 입금 시 처리내역 확인을 위해 반드시 연락 바랍니다.
+※ 환수 관련 문의사항이 있는 경우 근무하셨던 본부(지점) 관리자에게 연락 바랍니다.`;
+}
+
+// ============================================================
 // 7) 테이블 본문 렌더링
 // ============================================================
 
@@ -607,11 +632,15 @@ async function fetchFeedbacks(empId) {
 function updateTargetDisplay(empId, empName) {
   const el = document.getElementById("selectedTargetDisplay");
   if (!el) return;
+  // 안내문자 버튼 활성/비활성 연동
+  const smsBtn = document.getElementById("openSmsTemplateBtn");
   if (!empId) {
     el.textContent = "대상자를 선택해주세요.";
+    if (smsBtn) smsBtn.disabled = true;
     return;
   }
   el.innerHTML = `<strong>${esc(empName || empId)}</strong> <span class="text-muted">(${esc(empId)})</span>`;
+  if (smsBtn) smsBtn.disabled = false;
 }
 
 // ============================================================
@@ -719,6 +748,81 @@ function bindEvents() {
   if (dlBtn) {
     dlBtn.addEventListener("click", () => {
       downloadExcel();
+    });
+  }
+
+  // ── 안내문자 버튼 — 피드백 모달에서 대상자 선택 시 활성화 ──
+  // 클릭 시: state의 selectedEmpId/Name + 현재 탭 rows에서 final_payment 조회
+  const smsBtn = document.getElementById("openSmsTemplateBtn");
+  if (smsBtn) {
+    smsBtn.addEventListener("click", () => {
+      if (!state.selectedEmpId) {
+        alert("대상자를 먼저 선택해주세요.");
+        return;
+      }
+
+      // 현재 탭 캐시에서 대상자 row 탐색 (전체탭 우선, 없으면 다른 탭 순서로)
+      const tabOrder = ["all", "new", "long3", "long6", "long12"];
+      let targetRow = null;
+      for (const tab of tabOrder) {
+        const found = (_allTabData[tab] ?? []).find(
+          r => r.emp_id === state.selectedEmpId
+        );
+        if (found) { targetRow = found; break; }
+      }
+
+      const finalPayment = targetRow ? (targetRow.final_payment ?? 0) : 0;
+      const tmpl = buildSmsTemplate(state.selectedEmpName, finalPayment);
+
+      // 안내문자 모달 렌더링
+      const bodyEl = document.getElementById("smsTemplateBody");
+      if (bodyEl) bodyEl.textContent = tmpl;
+
+      // 피드백 모달 위에 안내문자 모달 오픈
+      // Bootstrap 중첩 모달 우회: 피드백 모달은 닫지 않음
+      // smsTemplateModal은 z-index가 더 높게 렌더됨 (Bootstrap 기본 동작)
+      getOrCreateModal("smsTemplateModal")?.show();
+    });
+  }
+
+  // ── 복사 버튼 — Clipboard API 우선, fallback: execCommand ──
+  const smsCopyBtn = document.getElementById("smsCopyBtn");
+  if (smsCopyBtn) {
+    smsCopyBtn.addEventListener("click", async () => {
+      const bodyEl = document.getElementById("smsTemplateBody");
+      const text   = bodyEl?.textContent || "";
+      if (!text) return;
+
+      try {
+        await navigator.clipboard.writeText(text);
+        // 복사 완료 피드백 (버튼 텍스트 일시 변경)
+        smsCopyBtn.textContent = "복사 완료 ✓";
+        smsCopyBtn.classList.replace("btn-primary", "btn-success");
+        setTimeout(() => {
+          smsCopyBtn.textContent = "복사";
+          smsCopyBtn.classList.replace("btn-success", "btn-primary");
+        }, 2000);
+      } catch {
+        // Clipboard API 실패 시 fallback
+        try {
+          const ta = document.createElement("textarea");
+          ta.value = text;
+          ta.style.position = "fixed";
+          ta.style.opacity  = "0";
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand("copy");
+          document.body.removeChild(ta);
+          smsCopyBtn.textContent = "복사 완료 ✓";
+          smsCopyBtn.classList.replace("btn-primary", "btn-success");
+          setTimeout(() => {
+            smsCopyBtn.textContent = "복사";
+            smsCopyBtn.classList.replace("btn-success", "btn-primary");
+          }, 2000);
+        } catch {
+          alert("복사에 실패했습니다. 텍스트를 직접 선택하여 복사해주세요.");
+        }
+      }
     });
   }
 
