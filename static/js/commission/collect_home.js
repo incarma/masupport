@@ -11,6 +11,15 @@
  * - DOM 존재 가드: if (!el) return 필수
  * - search_user_modal.js의 userSelected 이벤트 수신으로 대상자 선택 처리
  * - 중복 초기화 방지: root.dataset.inited === "1" 가드
+ *
+ * [변경 이력]
+ * - sortKey/sortDir 정렬 상태 추가 + AbortController 누적 방지
+ * - EXTRA_COLS: bond_total/bond_surety/other_total/refund_expected 컬럼 추가
+ * - _searchingUser 플래그: 피드백 모달 ↔ 검색 모달 전환 시 state 보존
+ * - feedbackSearchUserBtn: JS로 searchUserModal 직접 오픈 (data-bs-toggle 금지)
+ * - searchUserModal hidden 시 feedbackManagerModal 자동 복원
+ * - state.branch + 영업가족 드랍다운 동적 갱신 + 클라이언트 필터링
+ * - _allTabData 캐시 + SheetJS 기반 엑셀 다운로드 (탭별 시트)
  * =============================================================================
  */
 
@@ -20,7 +29,6 @@
 const root = document.getElementById("collect-home");
 if (!root) throw new Error("[collect_home] #collect-home not found");
 
-// 중복 초기화 방지 (BFCache/재진입 대비)
 if (root.dataset.inited === "1") throw new Error("[collect_home] already inited");
 root.dataset.inited = "1";
 
@@ -42,19 +50,21 @@ const URLS = {
 // 2) 상태 관리
 // ============================================================
 const state = {
-  tab:             "all",         // 현재 활성 탭
-  ym:              ds.defaultYm || "", // 현재 선택 월도 (YYYYMM)
+  tab:             "all",
+  ym:              ds.defaultYm || "",
   part:            "",
   bizmoon:         "",
-  selectedEmpId:   "",            // 피드백 모달 대상자 사번
-  selectedEmpName: "",            // 피드백 모달 대상자 성명
+  branch:          "",            // 영업가족(지점) 필터
+  selectedEmpId:   "",
+  selectedEmpName: "",
+  sortKey:         "",
+  sortDir:         "asc",
 };
 
 // ============================================================
 // 3) 유틸 함수
 // ============================================================
 
-/** CSRF 토큰 — window.csrfToken → form hidden → cookie 우선순위 */
 function getCSRF() {
   return (
     window.csrfToken ||
@@ -64,7 +74,6 @@ function getCSRF() {
   );
 }
 
-/** XSS 방어용 HTML escape */
 function esc(v) {
   return String(v ?? "")
     .replace(/&/g, "&amp;").replace(/</g, "&lt;")
@@ -72,14 +81,12 @@ function esc(v) {
     .replace(/'/g, "&#039;");
 }
 
-/** 금액 천단위 콤마 포맷 */
 function fmtMoney(val) {
   const n = Number(val);
   if (!Number.isFinite(n)) return "-";
   return n.toLocaleString("ko-KR");
 }
 
-/** Bootstrap Modal 인스턴스 가져오기 또는 새로 생성 */
 function getOrCreateModal(id) {
   const el = document.getElementById(id);
   if (!el || !window.bootstrap?.Modal) return null;
@@ -98,8 +105,7 @@ async function apiFetch(url, params = {}) {
     credentials: "same-origin",
     headers: { "X-Requested-With": "XMLHttpRequest" },
   });
-  const data = await res.json().catch(() => ({}));
-  return data;
+  return res.json().catch(() => ({}));
 }
 
 // ============================================================
@@ -120,63 +126,248 @@ async function apiPost(url, payload = {}) {
 }
 
 // ============================================================
-// 6) 탭별 thead HTML
+// 6) 탭별 thead 컬럼 정의
 // ============================================================
 
-/** 탭별 컬럼 정의 */
+const COMMON_COLS = [
+  { label: "부서",     sortKey: "part" },
+  { label: "부문",     sortKey: "bizmoon" },
+  { label: "영업가족", sortKey: "branch" },
+  { label: "사원명",   sortKey: "emp_name" },
+  { label: "사번",     sortKey: "emp_id" },
+  { label: "재직상태", sortKey: "work_status" },
+];
+
+// 채권합계: CollectRecord.surety_bond_total (엑셀 "보증채권합계" 컬럼 — 가장 안정적)
+// 보증합계: surety_bond_detail 파싱 '보증:' 값
+// 기타합계: DepositSummary.other_total
+// 환수예상: DepositSummary.refund_expected
+const EXTRA_COLS = [
+  { label: "채권합계",  money: true, sortKey: "bond_total" },
+  { label: "보증합계",  money: true, sortKey: "bond_surety" },
+  { label: "기타합계",  money: true, sortKey: "other_total" },
+  { label: "환수예상",  money: true, sortKey: "refund_expected" },
+];
+
 const TAB_COLS = {
   all: [
-    { label: "부서" },    { label: "부문" },     { label: "영업가족" },
-    { label: "사원명" },  { label: "사번" },     { label: "재직상태" },
-    { label: "당월 최종지급액", money: true },
+    ...COMMON_COLS,
+    ...EXTRA_COLS,
+    { label: "당월 최종지급액",     money: true, sortKey: "final_payment" },
     { label: "최신 피드백" },
   ],
   new: [
-    { label: "부서" },    { label: "부문" },     { label: "영업가족" },
-    { label: "사원명" },  { label: "사번" },     { label: "재직상태" },
-    { label: "전월 최종지급액", money: true },
-    { label: "당월 최종지급액", money: true },
+    ...COMMON_COLS,
+    ...EXTRA_COLS,
+    { label: "전월 최종지급액",     money: true, sortKey: "prev_payment" },
+    { label: "당월 최종지급액",     money: true, sortKey: "final_payment" },
     { label: "최신 피드백" },
   ],
   long3: [
-    { label: "부서" },    { label: "부문" },     { label: "영업가족" },
-    { label: "사원명" },  { label: "사번" },     { label: "재직상태" },
-    { label: "2개월전 최종지급액", money: true },
-    { label: "당월 최종지급액", money: true },
+    ...COMMON_COLS,
+    ...EXTRA_COLS,
+    { label: "2개월전 최종지급액",  money: true, sortKey: "oldest_payment" },
+    { label: "당월 최종지급액",     money: true, sortKey: "final_payment" },
     { label: "최신 피드백" },
   ],
   long6: [
-    { label: "부서" },    { label: "부문" },     { label: "영업가족" },
-    { label: "사원명" },  { label: "사번" },     { label: "재직상태" },
-    { label: "5개월전 최종지급액", money: true },
-    { label: "당월 최종지급액", money: true },
+    ...COMMON_COLS,
+    ...EXTRA_COLS,
+    { label: "5개월전 최종지급액",  money: true, sortKey: "oldest_payment" },
+    { label: "당월 최종지급액",     money: true, sortKey: "final_payment" },
     { label: "최신 피드백" },
   ],
   long12: [
-    { label: "부서" },    { label: "부문" },     { label: "영업가족" },
-    { label: "사원명" },  { label: "사번" },     { label: "재직상태" },
-    { label: "11개월전 최종지급액", money: true },
-    { label: "당월 최종지급액", money: true },
+    ...COMMON_COLS,
+    ...EXTRA_COLS,
+    { label: "11개월전 최종지급액", money: true, sortKey: "oldest_payment" },
+    { label: "당월 최종지급액",     money: true, sortKey: "final_payment" },
     { label: "최신 피드백" },
   ],
 };
+
+// ============================================================
+// 6-A) 정렬 상태 및 리스너 누적 방지
+// ============================================================
+
+/** 마지막 렌더링된 rows 캐시 — 정렬 재적용 시 사용 */
+let _lastRows = [];
+
+/**
+ * 정렬 클릭 리스너 누적 방지용 AbortController.
+ * renderTableHead 호출마다 이전 컨트롤러 abort() 후 새로 발급.
+ */
+let _sortAbortCtrl = new AbortController();
+
+function sortRows(rows) {
+  if (!state.sortKey) return rows;
+  const key = state.sortKey;
+  const dir = state.sortDir === "asc" ? 1 : -1;
+  return [...rows].sort((a, b) => {
+    const va = a[key] ?? "";
+    const vb = b[key] ?? "";
+    if (typeof va === "number" && typeof vb === "number") {
+      return (va - vb) * dir;
+    }
+    return String(va).localeCompare(String(vb), "ko") * dir;
+  });
+}
 
 function renderTableHead(tab) {
   const thead = document.getElementById("collectTableHead");
   if (!thead) return;
   const cols = TAB_COLS[tab] || TAB_COLS.all;
+
+  _sortAbortCtrl.abort();
+  _sortAbortCtrl = new AbortController();
+
   thead.innerHTML = `<tr>${
-    cols.map(c =>
-      `<th class="text-nowrap${c.money ? " text-end" : ""}">${esc(c.label)}</th>`
-    ).join("")
+    cols.map(c => {
+      const cls = `text-nowrap${c.money ? " text-end" : ""}`;
+      if (!c.sortKey) {
+        return `<th class="${cls} collect-th-feedback">${esc(c.label)}</th>`;
+      }
+      const isActive = state.sortKey === c.sortKey;
+      const icon = isActive ? (state.sortDir === "asc" ? " ▲" : " ▼") : " ⇅";
+      return `<th class="${cls} collect-sort-th"
+                  style="cursor:pointer;user-select:none;"
+                  data-sort-key="${esc(c.sortKey)}">${esc(c.label)}${icon}</th>`;
+    }).join("")
   }</tr>`;
+
+  thead.addEventListener("click", e => {
+    const th = e.target.closest("[data-sort-key]");
+    if (!th) return;
+    const key = th.dataset.sortKey;
+    if (state.sortKey === key) {
+      state.sortDir = state.sortDir === "asc" ? "desc" : "asc";
+    } else {
+      state.sortKey = key;
+      state.sortDir = "asc";
+    }
+    renderTableHead(tab);
+    renderCollectTable(_lastRows, tab);
+  }, { signal: _sortAbortCtrl.signal });
+}
+
+// ============================================================
+// 6-B) 탭별 데이터 캐시 — 영업가족 필터 + 엑셀 다운로드 공용
+// ============================================================
+
+/**
+ * 탭별 서버 응답 원본 rows 캐시 (영업가족 필터 전 데이터).
+ * 조회 버튼 클릭 / 탭 전환 시 해당 탭 데이터 덮어씀.
+ */
+const _allTabData = {
+  all:    [],
+  new:    [],
+  long3:  [],
+  long6:  [],
+  long12: [],
+};
+
+/**
+ * 영업가족 드랍다운 동적 갱신.
+ * 전체탭 조회 결과(rows)에서 고유 branch 값을 추출하여 옵션 구성.
+ * 현재 선택값 유지.
+ */
+function refreshBranchSelect(rows) {
+  const sel = document.getElementById("branchSelect");
+  if (!sel) return;
+
+  const current = sel.value;
+  const branches = [...new Set(
+    rows.map(r => r.branch || "").filter(Boolean)
+  )].sort((a, b) => a.localeCompare(b, "ko"));
+
+  sel.innerHTML =
+    `<option value="">전체</option>` +
+    branches.map(b =>
+      `<option value="${esc(b)}"${b === current ? " selected" : ""}>${esc(b)}</option>`
+    ).join("");
+}
+
+/**
+ * 클라이언트 사이드 영업가족 필터링.
+ * state.branch가 비어있으면 전체 반환.
+ */
+function applyBranchFilter(rows) {
+  if (!state.branch) return rows;
+  return rows.filter(r => (r.branch || "") === state.branch);
+}
+
+// ============================================================
+// 6-C) 엑셀 다운로드 (SheetJS)
+// ============================================================
+
+/** 탭 컬럼 레이블 배열 반환 (엑셀 헤더용) */
+function getTabHeaders(tab) {
+  return (TAB_COLS[tab] || TAB_COLS.all).map(c => c.label);
+}
+
+/**
+ * row 객체를 탭 컬럼 순서에 맞는 값 배열로 변환 (엑셀 데이터용).
+ * money 컬럼은 숫자 그대로 → 엑셀에서 숫자 셀로 인식.
+ */
+function rowToArray(row, tab) {
+  return (TAB_COLS[tab] || TAB_COLS.all).map(c => {
+    if (!c.sortKey) return row.latest_feedback || "";
+    const v = row[c.sortKey];
+    if (c.money) return typeof v === "number" ? v : (Number(v) || 0);
+    return v ?? "";
+  });
+}
+
+/**
+ * SheetJS 기반 엑셀 다운로드.
+ * 전체/신규/장기3/6/12 탭 데이터를 시트별로 구분한 1개 파일 생성.
+ * 조회된 데이터가 없는 탭은 시트 생성 생략.
+ */
+function downloadExcel() {
+  if (typeof XLSX === "undefined") {
+    alert("엑셀 라이브러리를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.");
+    return;
+  }
+
+  const TAB_LABELS = {
+    all:    "전체",
+    new:    "신규",
+    long3:  "장기3개월",
+    long6:  "장기6개월",
+    long12: "장기12개월",
+  };
+
+  const wb = XLSX.utils.book_new();
+  let hasData = false;
+
+  for (const [tab, label] of Object.entries(TAB_LABELS)) {
+    const rows = _allTabData[tab];
+    if (!rows || rows.length === 0) continue;
+    hasData = true;
+
+    const headers   = getTabHeaders(tab);
+    const sheetData = [headers, ...rows.map(r => rowToArray(r, tab))];
+    const ws        = XLSX.utils.aoa_to_sheet(sheetData);
+
+    ws["!cols"] = headers.map(() => ({ wch: 15 }));
+    XLSX.utils.book_append_sheet(wb, ws, label);
+  }
+
+  if (!hasData) {
+    alert("다운로드할 데이터가 없습니다. 먼저 조회해주세요.");
+    return;
+  }
+
+  const ym    = state.ym   || "전체";
+  const part  = state.part || "전체부서";
+  const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  XLSX.writeFile(wb, `환수관리_${ym}_${part}_${today}.xlsx`);
 }
 
 // ============================================================
 // 7) 테이블 본문 렌더링
 // ============================================================
 
-/** 금액 td (음수 → .amount-negative 강조) */
 function moneyTd(val) {
   const n = Number(val);
   const cls = Number.isFinite(n) && n < 0 ? " amount-negative" : "";
@@ -184,7 +375,6 @@ function moneyTd(val) {
 }
 
 function buildRowHtml(row, tab) {
-  // 공통 셀
   const commonCells = `
     <td class="text-nowrap">${esc(row.part    || "-")}</td>
     <td class="text-nowrap">${esc(row.bizmoon || "-")}</td>
@@ -197,37 +387,40 @@ function buildRowHtml(row, tab) {
         ${esc(row.emp_id)}
       </span>
     </td>
-    <td class="text-nowrap">${esc(row.work_status || "-")}</td>`;
+    <td class="text-nowrap">${esc(row.work_status || "-")}</td>
+    ${moneyTd(row.bond_total      ?? 0)}
+    ${moneyTd(row.bond_surety     ?? 0)}
+    ${moneyTd(row.other_total     ?? 0)}
+    ${moneyTd(row.refund_expected ?? 0)}`;
 
-  // 탭별 금액 셀
   let moneyCells = "";
   if (tab === "all") {
     moneyCells = moneyTd(row.final_payment);
   } else if (tab === "new") {
     moneyCells = moneyTd(row.prev_payment) + moneyTd(row.final_payment);
   } else {
-    // long3 / long6 / long12
     moneyCells = moneyTd(row.oldest_payment) + moneyTd(row.final_payment);
   }
 
-  // 최신 피드백 셀 (말줄임, 클릭 시 피드백 모달 오픈)
   const fbCell = row.latest_feedback
-    ? `<td><span class="collect-feedback-cell"
+    ? `<td class="collect-td-feedback"><span class="collect-feedback-cell"
                data-emp-id="${esc(row.emp_id)}"
                data-emp-name="${esc(row.emp_name || "")}"
                title="${esc(row.latest_feedback)}">
          ${esc(row.latest_feedback)}
        </span></td>`
-    : `<td class="text-muted small">-</td>`;
+    : `<td class="collect-td-feedback text-muted small">-</td>`;
 
   return `<tr>${commonCells}${moneyCells}${fbCell}</tr>`;
 }
 
 function renderCollectTable(rows, tab) {
-  const tbody = document.getElementById("collectTableBody");
+  _lastRows = rows;
+  const sorted = sortRows(rows);
+  const tbody  = document.getElementById("collectTableBody");
   if (!tbody) return;
 
-  if (!rows || rows.length === 0) {
+  if (!sorted || sorted.length === 0) {
     const colCount = (TAB_COLS[tab] || TAB_COLS.all).length;
     tbody.innerHTML = `
       <tr>
@@ -238,7 +431,7 @@ function renderCollectTable(rows, tab) {
     return;
   }
 
-  tbody.innerHTML = rows.map(r => buildRowHtml(r, tab)).join("");
+  tbody.innerHTML = sorted.map(r => buildRowHtml(r, tab)).join("");
 }
 
 // ============================================================
@@ -247,7 +440,7 @@ function renderCollectTable(rows, tab) {
 async function fetchCollectList() {
   if (!state.ym) return;
 
-  const tbody = document.getElementById("collectTableBody");
+  const tbody    = document.getElementById("collectTableBody");
   const colCount = (TAB_COLS[state.tab] || TAB_COLS.all).length;
   if (tbody) {
     tbody.innerHTML = `
@@ -276,8 +469,25 @@ async function fetchCollectList() {
       return;
     }
 
+    const rawRows = data.data?.rows ?? [];
+
+    // 전체탭 조회 시 영업가족 드랍다운 갱신 (서버 원본 rows 기준)
+    if (state.tab === "all") {
+      refreshBranchSelect(rawRows);
+    }
+
+    // 탭별 캐시 저장 (엑셀 다운로드 — 영업가족 필터 전 원본)
+    _allTabData[state.tab] = rawRows;
+
+    // 영업가족 필터 적용 후 렌더링
+    const filteredRows = applyBranchFilter(rawRows);
+
     renderTableHead(state.tab);
-    renderCollectTable(data.data?.rows ?? [], state.tab);
+    renderCollectTable(filteredRows, state.tab);
+
+    // 엑셀 다운로드 버튼 활성화
+    const dlBtn = document.getElementById("collectExcelDownloadBtn");
+    if (dlBtn) dlBtn.disabled = false;
 
   } catch (err) {
     console.error("[collect_home] fetchCollectList 오류:", err);
@@ -303,14 +513,13 @@ async function refreshYmSelect() {
     const data = await apiFetch(URLS.ymList);
     if (!data.ok || !data.data?.yms?.length) return;
 
-    const yms = data.data.yms;
+    const yms     = data.data.yms;
     const current = ymSelect.value;
 
     ymSelect.innerHTML = yms.map(ym =>
       `<option value="${esc(ym)}"${ym === current ? " selected" : ""}>${esc(ym)}</option>`
     ).join("");
 
-    // 현재 선택값이 목록에 없으면 첫 번째로
     if (!yms.includes(current) && yms.length) {
       ymSelect.value = yms[0];
       state.ym = yms[0];
@@ -332,7 +541,6 @@ function renderFeedbackList(feedbacks) {
     return;
   }
 
-  // data-current-user-id: 본인 여부 판단 (서버 재검증 필수)
   const currentUserId = String(ds.currentUserId || "");
 
   container.innerHTML = feedbacks.map(fb => {
@@ -342,7 +550,6 @@ function renderFeedbackList(feedbacks) {
       ? `<span class="collect-feedback-modified ms-1">(수정됨: ${esc(fb.updated_at)})</span>`
       : "";
 
-    // 수정·삭제 버튼: 본인 것만 노출 (서버에서 최종 재검증)
     const actionBtns = isMine ? `
       <div class="collect-feedback-actions mt-1">
         <button type="button"
@@ -455,7 +662,12 @@ function bindEvents() {
       if (!btn) return;
       tabsEl.querySelectorAll("[data-tab]").forEach(b => b.classList.remove("active"));
       btn.classList.add("active");
-      state.tab = btn.dataset.tab;
+      state.tab     = btn.dataset.tab;
+      state.branch  = "";     // 탭 전환 시 영업가족 필터 초기화
+      state.sortKey = "";
+      state.sortDir = "asc";
+      const bSel = document.getElementById("branchSelect");
+      if (bSel) bSel.value = "";
       fetchCollectList();
     });
   }
@@ -467,6 +679,12 @@ function bindEvents() {
       state.ym      = document.getElementById("ymSelect")?.value      || "";
       state.part    = document.getElementById("partSelect")?.value    || "";
       state.bizmoon = document.getElementById("bizmoonSelect")?.value || "";
+      state.branch  = "";     // 조회 버튼 클릭 시 영업가족 필터 초기화
+      state.sortKey = "";
+      state.sortDir = "asc";
+      // 영업가족 드랍다운 초기화 (새 조회 결과로 재구성)
+      const bSel = document.getElementById("branchSelect");
+      if (bSel) bSel.innerHTML = `<option value="">전체</option>`;
       fetchCollectList();
     });
   }
@@ -480,7 +698,31 @@ function bindEvents() {
     });
   }
 
-  // ── 피드백 관리 버튼 (대상자 미선택 상태로 모달 오픈) ─────
+  // ── 영업가족(지점) 드랍다운 변경 — 클라이언트 필터링 ─────
+  // 서버 재요청 없이 _allTabData[현재탭] 캐시에서 필터링하여 재렌더링
+  const branchSel = document.getElementById("branchSelect");
+  if (branchSel) {
+    branchSel.addEventListener("change", () => {
+      state.branch  = branchSel.value;
+      state.sortKey = "";
+      state.sortDir = "asc";
+      const cached   = _allTabData[state.tab] ?? [];
+      const filtered = applyBranchFilter(cached);
+      renderTableHead(state.tab);
+      renderCollectTable(filtered, state.tab);
+    });
+  }
+
+  // ── 엑셀 다운로드 버튼 ────────────────────────────────────
+  // 조회 완료 후 활성화됨 (초기 disabled)
+  const dlBtn = document.getElementById("collectExcelDownloadBtn");
+  if (dlBtn) {
+    dlBtn.addEventListener("click", () => {
+      downloadExcel();
+    });
+  }
+
+  // ── 피드백 관리 버튼 ──────────────────────────────────────
   const openFbBtn = document.getElementById("openFeedbackManagerBtn");
   if (openFbBtn) {
     openFbBtn.addEventListener("click", () => {
@@ -510,7 +752,7 @@ function bindEvents() {
     });
   }
 
-  // ── 피드백 저장 버튼 (dataset.submitting 중복 제출 방지) ──
+  // ── 피드백 저장 버튼 ──────────────────────────────────────
   const submitBtn = document.getElementById("feedbackSubmitBtn");
   if (submitBtn) {
     submitBtn.addEventListener("click", async () => {
@@ -532,7 +774,7 @@ function bindEvents() {
         if (!data.ok) { alert(data.message || "저장에 실패했습니다."); return; }
         if (textarea) textarea.value = "";
         await fetchFeedbacks(state.selectedEmpId);
-        fetchCollectList(); // 테이블 최신 피드백 컬럼 갱신
+        fetchCollectList();
       } catch (err) {
         console.error("[collect_home] feedbackCreate 오류:", err);
         alert("저장 중 오류가 발생했습니다.");
@@ -548,7 +790,6 @@ function bindEvents() {
   if (fbListBody) {
     fbListBody.addEventListener("click", async e => {
 
-      // 수정 버튼
       const editBtn = e.target?.closest?.(".feedback-edit-btn");
       if (editBtn) {
         const itemEl = editBtn.closest(".collect-feedback-item");
@@ -556,18 +797,16 @@ function bindEvents() {
         return;
       }
 
-      // 수정 취소
       const cancelBtn = e.target?.closest?.(".feedback-edit-cancel-btn");
       if (cancelBtn) {
         cancelFeedbackEdit(cancelBtn.closest(".collect-feedback-item"));
         return;
       }
 
-      // 수정 저장 (dataset.submitting 패턴)
       const saveBtn = e.target?.closest?.(".feedback-edit-save-btn");
       if (saveBtn) {
         if (saveBtn.dataset.submitting === "1") return;
-        const itemEl  = saveBtn.closest(".collect-feedback-item");
+        const itemEl   = saveBtn.closest(".collect-feedback-item");
         const textarea = itemEl?.querySelector?.("textarea");
         const content  = (textarea?.value || "").trim();
         if (!content) { alert("내용을 입력해주세요."); return; }
@@ -592,7 +831,6 @@ function bindEvents() {
         return;
       }
 
-      // 삭제 버튼
       const deleteBtn = e.target?.closest?.(".feedback-delete-btn");
       if (deleteBtn) {
         if (!confirm("피드백을 삭제하시겠습니까?")) return;
@@ -617,10 +855,40 @@ function bindEvents() {
     });
   }
 
+  // ============================================================
+  // 피드백 모달 ↔ 대상자 검색 모달 연동
+  //
+  // [문제] Bootstrap 5는 모달 중첩 미지원.
+  //   data-bs-toggle로 searchUserModal 오픈 시 feedbackManagerModal이
+  //   자동 닫히고 hidden.bs.modal 발동 → state 초기화 → 복원 불가.
+  //
+  // [해결] _searchingUser 플래그:
+  //   1. feedbackSearchUserBtn 클릭 → 플래그 ON + searchUserModal JS 직접 오픈
+  //   2. feedbackManagerModal hidden.bs.modal → 플래그 ON이면 초기화 생략
+  //   3. userSelected 이벤트 → 플래그 ON이면 대상자 state 갱신
+  //   4. searchUserModal hidden.bs.modal → 플래그 OFF + feedbackManagerModal 재오픈
+  // ============================================================
+
+  let _searchingUser = false;
+
+  // ── 피드백 대상자 검색 버튼 ──────────────────────────────
+  // data-bs-toggle 방식 금지: feedbackManagerModal 자동 닫힘 + state 초기화 부작용
+  const feedbackSearchBtn = document.getElementById("feedbackSearchUserBtn");
+  if (feedbackSearchBtn) {
+    feedbackSearchBtn.addEventListener("click", () => {
+      const searchModalEl = document.getElementById("searchUserModal");
+      if (!searchModalEl) return;
+      _searchingUser = true;
+      bootstrap.Modal.getOrCreateInstance(searchModalEl).show();
+    });
+  }
+
   // ── 피드백 모달 닫힘 → 상태 초기화 ──────────────────────
   const fbModal = document.getElementById("feedbackManagerModal");
   if (fbModal) {
     fbModal.addEventListener("hidden.bs.modal", () => {
+      if (_searchingUser) return;   // 검색 중 자동 닫힘이면 초기화 생략
+
       state.selectedEmpId   = "";
       state.selectedEmpName = "";
       updateTargetDisplay("", "");
@@ -633,13 +901,10 @@ function bindEvents() {
     });
   }
 
-  // ── search_user_modal.js userSelected 이벤트 수신 ─────────
-  // collect-home root가 있는 페이지에서만 처리 (다른 페이지 오염 방지)
-  // search_user_modal.js의 collect-home 분기가 발행하는 CustomEvent
+  // ── userSelected 이벤트 수신 ─────────────────────────────
+  // _searchingUser 플래그 기준으로 피드백 모달 컨텍스트 여부 판단
   document.addEventListener("userSelected", e => {
-    // 피드백 모달이 열려 있을 때만 처리
-    const fbModalEl = document.getElementById("feedbackManagerModal");
-    if (!fbModalEl?.classList.contains("show")) return;
+    if (!_searchingUser) return;
 
     const selected = e.detail;
     if (!selected?.id) return;
@@ -650,9 +915,18 @@ function bindEvents() {
     fetchFeedbacks(state.selectedEmpId);
   });
 
-  // ── 업로드 완료 후 월도 드롭다운 + 테이블 자동 갱신 ──────
-  // excel_upload.js가 새로고침 버튼을 클릭하기 전에 갱신되도록
-  // excelUploadResultModal이 닫힐 때 refreshYmSelect 호출
+  // ── searchUserModal 닫힘 → feedbackManagerModal 복원 ────────
+  const searchModalEl = document.getElementById("searchUserModal");
+  if (searchModalEl) {
+    searchModalEl.addEventListener("hidden.bs.modal", () => {
+      if (_searchingUser) {
+        _searchingUser = false;
+        getOrCreateModal("feedbackManagerModal")?.show();
+      }
+    });
+  }
+
+  // ── 업로드 완료 후 월도 드랍다운 + 테이블 자동 갱신 ──────
   const resultModal = document.getElementById("excelUploadResultModal");
   if (resultModal) {
     resultModal.addEventListener("hidden.bs.modal", async () => {
@@ -672,13 +946,10 @@ function bindEvents() {
 // ============================================================
 function init() {
   bindEvents();
-  // 초기 thead 렌더링
   renderTableHead(state.tab);
-  // 데이터가 있으면 자동 조회
   if (state.ym) fetchCollectList();
 }
 
-// DOMContentLoaded 이후 실행 보장
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", init);
 } else {

@@ -736,30 +736,6 @@ body {
   clip-path: inset(0 0 0 0);
 }
 
-.s3-message-wrap {
-  margin-top: clamp(18px, 2.5vh, 30px);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.s3-divider {
-  width: 2px;
-  height: clamp(190px, 24vh, 280px);
-  background: rgba(255, 255, 255, 0.92);
-}
-
-.s3-message {
-  margin-top: clamp(26px, 3.4vh, 42px);
-  text-align: center;
-  color: #ffffff;
-  font-weight: 700;
-  line-height: 1.32;
-  letter-spacing: -0.035em;
-  font-size: clamp(2rem, 3.25vw, 3.18rem);
-  text-shadow: 0 4px 18px rgba(0, 0, 0, 0.18);
-}
-
 .s3-boxes {
   width: 100%;
   margin-top: auto;
@@ -912,6 +888,90 @@ body {
 }
 
 /* =============================================
+    Section 5 — 상품 전략 가이드
+    ============================================= */
+.section-guide {
+  position: relative;
+  width: 100%;
+  height: 100svh;
+  min-height: 100vh;
+  background-color: #0f1c38;
+  background-image: var(--section-bg-image);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  overflow: hidden;
+  scroll-snap-align: start;
+  color: #ffffff;
+}
+
+.section-guide::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+}
+
+.s5-inner {
+  position: relative;
+  z-index: var(--z-content);
+  width: min(1600px, 100%);
+  height: 100%;
+  margin: 0 auto;
+  padding: 72px 40px 34px;
+  display: flex;
+  flex-direction: column;
+}
+
+.s5-title-wrap {
+  width: min(720px, 44vw);
+  margin-top: clamp(80px, 16vh, 180px);
+  margin-left: auto;
+}
+
+.s5-title-img {
+  width: 100%;
+  opacity: 0;
+  filter: brightness(2.2) blur(1.5px);
+  transform: translateY(6px);
+  transition:
+    opacity 0.9s ease,
+    filter 1s ease,
+    transform 0.9s ease;
+}
+
+.s5-title-img.is-visible {
+  opacity: 1;
+  filter: brightness(1) blur(0);
+  transform: translateY(0);
+}
+
+.s5-boxes {
+  width: 100%;
+  margin-top: auto;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+
+.s5-box-img {
+  width: 100%;
+  opacity: 0;
+  transform: translateY(60px);
+  filter: blur(1px);
+  transition:
+    opacity 0.8s var(--ease-out-expo),
+    transform 0.8s var(--ease-out-expo),
+    filter 0.8s var(--ease-out-expo);
+}
+
+.s5-box-img.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+  filter: blur(0);
+}
+
+/* =============================================
    반응형
    ============================================= */
 @media (max-width: 768px) {
@@ -1033,16 +1093,6 @@ body {
     width: min(92vw, 760px);
   }
 
-  .s3-divider {
-    height: 150px;
-  }
-
-  .s3-message {
-    font-size: clamp(1.35rem, 5vw, 2.1rem);
-    line-height: 1.4;
-    margin-top: 22px;
-  }
-
   .s3-boxes {
     margin-top: 30px;
     grid-template-columns: 1fr;
@@ -1096,14 +1146,6 @@ body {
 
   .s3-inner {
     padding: 68px 14px 24px;
-  }
-
-  .s3-divider {
-    height: 120px;
-  }
-
-  .s3-message {
-    font-size: 1.18rem;
   }
 
   .s4-inner {

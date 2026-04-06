@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import logging
 from datetime import date
+import re
 from typing import Optional
 
 from dateutil.relativedelta import relativedelta
@@ -22,7 +23,7 @@ from django.db import transaction
 from django.db.models import OuterRef, Subquery
 
 from accounts.models import CustomUser
-from commission.models import CollectFeedback, CollectRecord
+from commission.models import CollectFeedback, CollectRecord, DepositSummary
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +61,53 @@ def offset_ym(base_ym: str, months: int) -> str:
 # =============================================================================
 # 내부 헬퍼
 # =============================================================================
+def _parse_surety_bond_detail(detail: str) -> tuple[int, int]:
+    """
+    '채권:0 / 보증:0' 형식 문자열 파싱 → (채권합계, 보증합계)
+    '채권:0 / 보증:0' 형식 문자열 파싱 → (bond_debt, bond_surety)
+    반환: (채권:값, 보증:값)
+    콤마 포함 숫자 지원: '채권:22,080,000 / 보증:40,000,000'
+
+    예시:
+        "채권:1500000 / 보증:500000" → (1500000, 500000)
+        "채권:0 / 보증:0"            → (0, 0)
+        ""                           → (0, 0)
+    """
+    debt, surety = 0, 0
+    if not detail:
+        return debt, surety
+    try:
+        # [\d,]+ : 콤마 포함 숫자 매칭 후 콤마 제거
+        m_debt   = re.search(r"채권:(-?[\d,]+)", detail)
+        m_surety = re.search(r"보증:(-?[\d,]+)", detail)
+        if m_debt:   debt   = int(m_debt.group(1).replace(",", ""))
+        if m_surety: surety = int(m_surety.group(1).replace(",", ""))
+    except Exception:
+        pass
+    return debt, surety
+
+
+def _build_deposit_map(emp_ids: list[str]) -> dict[str, dict]:
+    """
+    emp_id 목록을 받아 DepositSummary의 채권관련 4개 필드를 dict로 반환한다.
+    반환 형태: {emp_id: {"debt_total": int, "surety_total": int, "other_total": int, "refund_expected": int}}
+    DepositSummary.user_id == emp_id (CustomUser PK = 사번 문자열) 규약 활용.
+    DepositSummary에 없는 emp_id는 0으로 처리.
+    N+1 방지: bulk IN 쿼리 1회.
+    """
+    if not emp_ids:
+        return {}
+    qs = DepositSummary.objects.filter(
+        user_id__in=emp_ids
+    ).values_list("user_id", "other_total", "refund_expected")
+    return {
+        uid: {"other_total": o, "refund_expected": r}
+        for uid, o, r in qs
+    }
+
+_DEPOSIT_DEFAULTS = {
+    "other_total": 0, "refund_expected": 0
+}
 
 def _latest_feedback_subquery() -> Subquery:
     """
@@ -87,11 +135,17 @@ def _apply_scope(qs, part: str = "", bizmoon: str = ""):
     return qs
 
 
-def _serialize_record(r: CollectRecord, extra: dict | None = None) -> dict:
+def _serialize_record(
+    r: CollectRecord,
+    extra: dict | None = None,
+    deposit_data: dict | None = None,
+) -> dict:
     """
     CollectRecord 인스턴스를 API 응답용 dict로 직렬화한다.
     extra: 탭별 추가 컬럼 (prev_payment, oldest_payment 등)
     """
+    bond_debt, bond_surety = _parse_surety_bond_detail(r.surety_bond_detail)
+    _dep = deposit_data or _DEPOSIT_DEFAULTS
     row = {
         "emp_id":          r.emp_id,
         "emp_name":        r.emp_name,
@@ -100,7 +154,11 @@ def _serialize_record(r: CollectRecord, extra: dict | None = None) -> dict:
         "branch":          r.branch,
         "work_status":     r.work_status,
         "final_payment":   r.final_payment,
-        # annotate된 최신 피드백 (없으면 빈 문자열)
+        "bond_total":      r.surety_bond_total,
+        "bond_debt":       bond_debt,
+        "bond_surety":     bond_surety,
+        "other_total":     _dep["other_total"],  # DepositSummary.other_total (기타합계)
+        "refund_expected": _dep["refund_expected"],  # DepositSummary.refund_expected (환수예상)
         "latest_feedback": getattr(r, "latest_feedback_content", None) or "",
     }
     if extra:
@@ -150,28 +208,22 @@ def get_available_bizmoons() -> list[str]:
 # =============================================================================
 # 탭별 쿼리 함수
 # =============================================================================
-
 def get_collect_all(
     ym: str,
     part: str = "",
     bizmoon: str = "",
 ) -> list[dict]:
-    """
-    [전체 탭] 해당 월도에서 final_payment < 0 인 전체 환수 대상자 조회.
-
-    반환 컬럼:
-        emp_id / emp_name / part / bizmoon / branch / work_status
-        / final_payment(당월) / latest_feedback
-    """
     qs = (
         CollectRecord.objects
         .filter(ym=ym, final_payment__lt=0)
         .annotate(latest_feedback_content=_latest_feedback_subquery())
     )
     qs = _apply_scope(qs, part=part, bizmoon=bizmoon)
+    records = list(qs.order_by("part", "branch", "emp_id"))
+    deposit_map = _build_deposit_map([r.emp_id for r in records])
     return [
-        _serialize_record(r)
-        for r in qs.order_by("part", "branch", "emp_id")
+        _serialize_record(r, deposit_data=deposit_map.get(r.emp_id))
+        for r in records
     ]
 
 
@@ -180,19 +232,8 @@ def get_collect_new(
     part: str = "",
     bizmoon: str = "",
 ) -> list[dict]:
-    """
-    [신규 탭] 당월 final_payment < 0 AND 전월 final_payment >= 0 인 신규 환수 대상자.
-
-    조건:
-    - 당월 < 0 (이번 달 환수 발생)
-    - 전월 >= 0 (전월은 정상 지급)
-    - 전월 이력이 없으면 제외 (신규 입사 등 판단 불가)
-
-    반환 추가 컬럼: prev_ym / prev_payment
-    """
     prev_ym = offset_ym(ym, -1)
 
-    # 당월 환수 대상자 emp_id 집합
     curr_neg: set[str] = set(
         CollectRecord.objects
         .filter(ym=ym, final_payment__lt=0)
@@ -201,7 +242,6 @@ def get_collect_new(
     if not curr_neg:
         return []
 
-    # 전월 정상 지급자 중 당월 환수 대상자와 교집합
     prev_ok: set[str] = set(
         CollectRecord.objects
         .filter(ym=prev_ym, emp_id__in=curr_neg, final_payment__gte=0)
@@ -211,7 +251,6 @@ def get_collect_new(
     if not target_ids:
         return []
 
-    # 당월 QS (스코프 필터 적용)
     curr_qs = (
         CollectRecord.objects
         .filter(ym=ym, emp_id__in=target_ids)
@@ -219,19 +258,21 @@ def get_collect_new(
     )
     curr_qs = _apply_scope(curr_qs, part=part, bizmoon=bizmoon)
 
-    # 전월 금액 딕셔너리 {emp_id: final_payment}
     prev_map: dict[str, int] = dict(
         CollectRecord.objects
         .filter(ym=prev_ym, emp_id__in=target_ids)
         .values_list("emp_id", "final_payment")
     )
 
+    records = list(curr_qs.order_by("part", "branch", "emp_id"))
+    deposit_map = _build_deposit_map([r.emp_id for r in records])
+
     rows = []
-    for r in curr_qs.order_by("part", "branch", "emp_id"):
+    for r in records:
         rows.append(_serialize_record(r, extra={
             "prev_ym":      prev_ym,
             "prev_payment": prev_map.get(r.emp_id, 0),
-        }))
+        }, deposit_data=deposit_map.get(r.emp_id)))
     return rows
 
 
@@ -241,31 +282,12 @@ def get_collect_long(
     part: str = "",
     bizmoon: str = "",
 ) -> list[dict]:
-    """
-    [장기 탭] base_ym 포함 직전 months개월 모두 final_payment < 0 인 장기 환수 대상자.
-
-    months: 3 / 6 / 12 중 하나.
-
-    [쿼리 전략]
-    1. 직전 months개월의 ym 목록 생성
-    2. 각 월도별 final_payment < 0 인 emp_id 집합 구성
-    3. 교집합 (모든 월도에서 음수인 emp_id)
-    4. 당월 + oldest_ym QS 조회
-
-    [이력 부족 처리]
-    테이블 생성 초기에는 이력이 부족하므로 빈 결과를 반환한다. 정상 동작.
-
-    반환 추가 컬럼: oldest_ym / oldest_payment
-    """
     if months not in (3, 6, 12):
         raise ValueError(f"months는 3, 6, 12 중 하나여야 합니다. 입력값: {months}")
 
-    # 대상 월도 목록: base_ym 포함 역순 months개
-    # 예) ym="202603", months=3 → ["202603", "202602", "202601"]
     ym_range = [offset_ym(ym, -i) for i in range(months)]
-    oldest_ym = ym_range[-1]   # (months-1)개월 전
+    oldest_ym = ym_range[-1]
 
-    # 각 월도별 final_payment < 0 인 emp_id 집합
     sets: list[set[str]] = [
         set(
             CollectRecord.objects
@@ -275,12 +297,10 @@ def get_collect_long(
         for m in ym_range
     ]
 
-    # 모든 월도에서 음수인 emp_id (교집합)
     target_ids = set.intersection(*sets) if sets else set()
     if not target_ids:
         return []
 
-    # 당월 QS (스코프 필터 적용)
     curr_qs = (
         CollectRecord.objects
         .filter(ym=ym, emp_id__in=target_ids)
@@ -288,19 +308,21 @@ def get_collect_long(
     )
     curr_qs = _apply_scope(curr_qs, part=part, bizmoon=bizmoon)
 
-    # oldest_ym 금액 딕셔너리 {emp_id: final_payment}
     oldest_map: dict[str, int] = dict(
         CollectRecord.objects
         .filter(ym=oldest_ym, emp_id__in=target_ids)
         .values_list("emp_id", "final_payment")
     )
 
+    records = list(curr_qs.order_by("part", "branch", "emp_id"))
+    deposit_map = _build_deposit_map([r.emp_id for r in records])
+
     rows = []
-    for r in curr_qs.order_by("part", "branch", "emp_id"):
+    for r in records:
         rows.append(_serialize_record(r, extra={
             "oldest_ym":      oldest_ym,
             "oldest_payment": oldest_map.get(r.emp_id, 0),
-        }))
+        }, deposit_data=deposit_map.get(r.emp_id)))
     return rows
 
 

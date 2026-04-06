@@ -8,7 +8,22 @@
 /* ==========================================================
  0) Shared tokens / layout helpers
 ========================================================== */
+/* 채권관리(deposit_home): 기존 폭 유지 */
 .deposit-maxw { max-width: 1100px; }
+
+/* 환수관리(collect_home): partner 앱과 동일한 wide 레이아웃 */
+.collect-wide {
+  width: 86vw;
+  max-width: none;
+  margin-left: calc(-43vw + 50%);
+}
+
+@media (max-width: 576px) {
+  .collect-wide {
+    width: 100%;
+    margin-left: 0;
+  }
+}
 
 .deposit-title { color: #003f7d; }
 .deposit-section-title { color: #000; }
@@ -146,6 +161,85 @@
  3) Collect Home (환수관리) — Step 13
  기존 섹션(1 Deposit / 2 Approval) 수정 없음. 추가만.
 ========================================================== */
+/* ----------------------------------------------------------
+ 3-0) 필터 바 — 한 줄 flex 배치
+  - collect-filter-item: 각 select 컨테이너 (고정폭)
+  - collect-filter-btn: 조회 버튼 컨테이너
+  - 모바일: wrap 허용
+---------------------------------------------------------- */
+.collect-filter-bar {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+/* 월도: 가장 좁게 */
+.collect-filter-bar .collect-filter-item:nth-child(1) { flex: 0 0 110px; }
+/* 부문 */
+.collect-filter-bar .collect-filter-item:nth-child(2) { flex: 0 0 160px; }
+/* 부서 */
+.collect-filter-bar .collect-filter-item:nth-child(3) { flex: 0 0 150px; }
+/* 영업가족 */
+.collect-filter-bar .collect-filter-item:nth-child(4) { flex: 1 1 160px; min-width: 120px; max-width: 220px; }
+/* 조회 버튼 */
+.collect-filter-bar .collect-filter-btn               { flex: 0 0 72px; }
+
+/* select 폰트 통일 */
+.collect-filter-bar .form-select { font-size: .875rem; }
+
+/* 모바일: 2열 wrap */
+@media (max-width: 576px) {
+  .collect-filter-bar { flex-wrap: wrap; }
+  .collect-filter-bar .collect-filter-item,
+  .collect-filter-bar .collect-filter-btn { flex: 1 1 calc(50% - 4px); }
+}
+
+/* ----------------------------------------------------------
+ 3-1) 환수 테이블 컬럼폭 제어
+  - commission-nowrap-table 안에서 collect 전용 폭 오버라이드
+  - 피드백 컬럼이 가장 넓도록 나머지를 좁게 제한
+  - nth-child 기준: COMMON(6) + EXTRA(4) + 금액(1~2) + 피드백(1)
+    전체탭 기준 총 12컬럼:
+      1:부서 2:부문 3:영업가족 4:사원명 5:사번 6:재직상태
+      7:채권합계 8:보증합계 9:기타합계 10:환수예상
+      11:당월최종지급액 12:최신피드백
+---------------------------------------------------------- */
+
+/* 컬럼폭 제어: collectTableHead 스코프 */
+#collectTableHead th:nth-child(1)  { min-width: 70px;  max-width: 90px;  } /* 부서 */
+#collectTableHead th:nth-child(2)  { min-width: 55px;  max-width: 70px;  } /* 부문 */
+#collectTableHead th:nth-child(3)  { min-width: 80px;  max-width: 120px; } /* 영업가족 */
+#collectTableHead th:nth-child(4)  { min-width: 60px;  max-width: 80px;  } /* 사원명 */
+#collectTableHead th:nth-child(5)  { min-width: 75px;  max-width: 90px;  } /* 사번 */
+#collectTableHead th:nth-child(6)  { min-width: 70px;  max-width: 85px;  } /* 재직상태 */
+#collectTableHead th:nth-child(7)  { min-width: 80px;  max-width: 100px; } /* 채권합계 */
+#collectTableHead th:nth-child(8)  { min-width: 80px;  max-width: 100px; } /* 보증합계 */
+#collectTableHead th:nth-child(9)  { min-width: 80px;  max-width: 100px; } /* 기타합계 */
+#collectTableHead th:nth-child(10) { min-width: 80px;  max-width: 100px; } /* 환수예상 */
+#collectTableHead th:nth-child(11) { min-width: 90px;  max-width: 120px; } /* 최종지급액 */
+/* 최신 피드백 헤더: sortKey 없는 마지막 컬럼 — JS 렌더 시 collect-th-feedback 클래스 부여 */
+#collectTableHead th.collect-th-feedback { min-width: 200px; width: auto; }
+
+/* tbody도 동일 적용 */
+#collectTableBody td:nth-child(1)  { min-width: 70px;  max-width: 90px;  }
+#collectTableBody td:nth-child(2)  { min-width: 55px;  max-width: 70px;  }
+#collectTableBody td:nth-child(3)  { min-width: 80px;  max-width: 120px; }
+#collectTableBody td:nth-child(4)  { min-width: 60px;  max-width: 80px;  }
+#collectTableBody td:nth-child(5)  { min-width: 75px;  max-width: 90px;  }
+#collectTableBody td:nth-child(6)  { min-width: 70px;  max-width: 85px;  }
+#collectTableBody td:nth-child(7)  { min-width: 80px;  max-width: 100px; }
+#collectTableBody td:nth-child(8)  { min-width: 80px;  max-width: 100px; }
+#collectTableBody td:nth-child(9)  { min-width: 80px;  max-width: 100px; }
+#collectTableBody td:nth-child(10) { min-width: 80px;  max-width: 100px; }
+#collectTableBody td:nth-child(11) { min-width: 90px;  max-width: 120px; }
+/* 피드백 셀: 탭 무관 클래스 기반 (탭별 컬럼 수 차이 해결) */
+#collectTableBody td.collect-td-feedback {
+  min-width: 200px;
+  width: auto;
+  white-space: normal !important;
+  word-break: break-word;
+}
 
 /* 음수 금액 강조 */
 .amount-negative {

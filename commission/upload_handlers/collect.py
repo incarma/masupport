@@ -37,6 +37,7 @@ from commission.upload_handlers.deposit import (
     _to_int,
 )
 
+
 logger = logging.getLogger(__name__)
 
 
@@ -44,6 +45,10 @@ logger = logging.getLogger(__name__)
 # 컬럼 → 모델 필드 매핑 (가이드맵 v2 COL_MAP 기준)
 # key: 엑셀 헤더 컬럼명, value: (모델 필드명, 타입)
 # =============================================================================
+PART_ALIAS: dict[str, str] = {
+    "1인GA사업부": "MA사업4부",
+}
+
 COL_MAP: dict[str, tuple[str, str]] = {
     "월도":         ("ym",               "ym_str"),
     "부문총괄":     ("bizmoon_total",    "str"),
@@ -243,7 +248,11 @@ def handle_upload_collect(df: pd.DataFrame) -> dict:
                     "branch":            100,
                 }
                 maxlen = maxlen_map.get(field, 50)
-                kwargs[field] = _norm_str(raw_val, maxlen=maxlen)
+                _v = _norm_str(raw_val, maxlen=maxlen)
+                # [수정 3] 부서명 alias 치환 — SSOT PART_ALIAS 기준
+                if field == "part":
+                    _v = PART_ALIAS.get(_v, _v)
+                kwargs[field] = _v
             else:
                 kwargs[field] = _norm_str(raw_val)
 

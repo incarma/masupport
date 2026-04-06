@@ -351,6 +351,46 @@
     observer.observe(section);
   }
 
+  function initSection5Sequence() {
+    var section = getById('section-5');
+    var title = getById('s5TitleImg');
+    var boxes = [
+      getById('s5Box1'),
+      getById('s5Box2'),
+      getById('s5Box3')
+    ].filter(Boolean);
+
+    if (!section || !title || !boxes.length) return;
+
+    function playSequence() {
+      if (section.dataset.animated === '1') return;
+      section.dataset.animated = '1';
+
+      title.classList.add('is-visible');
+
+      setTimeout(function () {
+        boxes.forEach(function (box) {
+          box.classList.add('is-visible');
+        });
+      }, 650);
+    }
+
+    if (typeof IntersectionObserver === 'undefined') {
+      playSequence();
+      return;
+    }
+
+    var observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (!entry.isIntersecting) return;
+        playSequence();
+        observer.unobserve(entry.target);
+      });
+    }, { threshold: 0.28 });
+
+    observer.observe(section);
+  }
+
   function bindScrollArrow(arrowId, targetId) {
     var arrow = getById(arrowId);
     var target = getById(targetId);
@@ -387,10 +427,12 @@
     initSection2Animations();
     initSection3Sequence();
     initSection4Sequence();
+    initSection5Sequence();
     bindScrollArrow('scrollDownArrow', 'section-1');
     bindScrollArrow('scrollDownArrow1', 'section-2');
     bindScrollArrow('scrollDownArrow2', 'section-3');
     bindScrollArrow('scrollDownArrow3', 'section-4');
+    bindScrollArrow('scrollDownArrow4', 'section-5');
   }
 
   if (document.readyState === 'loading') {

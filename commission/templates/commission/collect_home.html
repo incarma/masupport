@@ -41,7 +41,7 @@
 ========================================================== -->
 
 <div class="container mt-5">
-  <div class="mx-auto deposit-maxw">
+  <div class="collect-wide">
 
     <!-- =========================================================
       0) JS Boot Root
@@ -100,76 +100,90 @@
         2) 필터 영역
       ========================================================== -->
       <div class="card shadow-sm border-0 rounded-4 p-3 mb-3">
-        <div class="row g-2 align-items-end">
+          <!-- 필터: flex 한 줄 배치 — col-* 그리드 제거 -->
+          <div class="collect-filter-bar">
 
-          <!-- 월도 드롭다운 -->
-          <div class="col-12 col-md-3">
-            <label for="ymSelect" class="form-label form-label-sm fw-semibold mb-1">월도</label>
-            <select id="ymSelect" class="form-select form-select-sm">
-              {% if available_yms %}
-                {% for ym in available_yms %}
-                  <option value="{{ ym }}"{% if ym == default_ym %} selected{% endif %}>{{ ym }}</option>
+            <div class="collect-filter-item">
+              <label for="ymSelect" class="form-label form-label-sm fw-semibold mb-1">월도</label>
+              <select id="ymSelect" class="form-select form-select-sm">
+                {% if available_yms %}
+                  {% for ym in available_yms %}
+                    <option value="{{ ym }}"{% if ym == default_ym %} selected{% endif %}>{{ ym }}</option>
+                  {% endfor %}
+                {% else %}
+                  <option value="">-- 데이터 없음 --</option>
+                {% endif %}
+              </select>
+            </div>
+
+            <div class="collect-filter-item">
+              <label for="bizmoonSelect" class="form-label form-label-sm fw-semibold mb-1">부문</label>
+              <select id="bizmoonSelect" class="form-select form-select-sm">
+                <option value="">전체</option>
+                {% for bm in bizmoons %}
+                  <option value="{{ bm }}">{{ bm }}</option>
                 {% endfor %}
-              {% else %}
-                <option value="">-- 데이터 없음 --</option>
-              {% endif %}
-            </select>
-          </div>
+              </select>
+            </div>
 
-          <!-- 부문 드롭다운 -->
-          <div class="col-12 col-md-3">
-            <label for="bizmoonSelect" class="form-label form-label-sm fw-semibold mb-1">부문</label>
-            <select id="bizmoonSelect" class="form-select form-select-sm">
-              <option value="">전체</option>
-              {% for bm in bizmoons %}
-                <option value="{{ bm }}">{{ bm }}</option>
-              {% endfor %}
-            </select>
-          </div>
+            <div class="collect-filter-item">
+              <label for="partSelect" class="form-label form-label-sm fw-semibold mb-1">부서</label>
+              <select id="partSelect" class="form-select form-select-sm">
+                <option value="">전체</option>
+                {% for p in parts %}
+                  <option value="{{ p }}">{{ p }}</option>
+                {% endfor %}
+              </select>
+            </div>
 
-          <!-- 부서 드롭다운 -->
-          <div class="col-12 col-md-3">
-            <label for="partSelect" class="form-label form-label-sm fw-semibold mb-1">부서</label>
-            <select id="partSelect" class="form-select form-select-sm">
-              <option value="">전체</option>
-              {% for p in parts %}
-                <option value="{{ p }}">{{ p }}</option>
-              {% endfor %}
-            </select>
-          </div>
+            <div class="collect-filter-item">
+              <label for="branchSelect" class="form-label form-label-sm fw-semibold mb-1">영업가족</label>
+              <select id="branchSelect" class="form-select form-select-sm">
+                <option value="">전체</option>
+              </select>
+            </div>
 
-          <!-- 조회 버튼 -->
-          <div class="col-12 col-md-3">
-            <button type="button" id="collectSearchBtn"
-                    class="btn btn-primary btn-sm w-100">조회</button>
-          </div>
+            <div class="collect-filter-btn">
+              <label class="form-label form-label-sm fw-semibold mb-1 invisible">조회</label>
+              <button type="button" id="collectSearchBtn"
+                      class="btn btn-primary btn-sm w-100">조회</button>
+            </div>
 
+          </div>
         </div>
-      </div>
 
       <!-- =========================================================
         3) 탭 + 테이블 영역
       ========================================================== -->
       <div class="card shadow-sm border-0 rounded-4 p-3">
-
-        <!-- Bootstrap Tabs — data-tab 값 변경 금지 -->
-        <ul class="nav nav-tabs mb-3" id="collectTabs" role="tablist">
-          <li class="nav-item" role="presentation">
-            <button class="nav-link active" data-tab="all" type="button" role="tab">전체</button>
-          </li>
-          <li class="nav-item" role="presentation">
-            <button class="nav-link" data-tab="new" type="button" role="tab">신규</button>
-          </li>
-          <li class="nav-item" role="presentation">
-            <button class="nav-link" data-tab="long3" type="button" role="tab">장기 3개월</button>
-          </li>
-          <li class="nav-item" role="presentation">
-            <button class="nav-link" data-tab="long6" type="button" role="tab">장기 6개월</button>
-          </li>
-          <li class="nav-item" role="presentation">
-            <button class="nav-link" data-tab="long12" type="button" role="tab">장기 12개월</button>
-          </li>
-        </ul>
+      
+        <!-- 탭 + 엑셀 다운로드 버튼 -->
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <ul class="nav nav-tabs mb-0" id="collectTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+              <button class="nav-link active" data-tab="all" type="button" role="tab">전체</button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link" data-tab="new" type="button" role="tab">신규</button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link" data-tab="long3" type="button" role="tab">장기 3개월</button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link" data-tab="long6" type="button" role="tab">장기 6개월</button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link" data-tab="long12" type="button" role="tab">장기 12개월</button>
+            </li>
+          </ul>
+          <!-- 엑셀 다운로드 버튼 — id="collectExcelDownloadBtn" (JS 의존, 변경 금지) -->
+          <button type="button"
+                  id="collectExcelDownloadBtn"
+                  class="btn btn-outline-success btn-sm ms-2"
+                  disabled>
+            엑셀 다운로드
+          </button>
+        </div>
 
         <!-- 가로 스크롤 래퍼 (approval 동일 패턴) -->
         <div class="commission-table-scroll">
@@ -232,8 +246,13 @@
         <div class="mb-3 p-3 bg-light rounded-3">
           <div class="d-flex align-items-center gap-2 mb-2">
             <span class="fw-semibold small">대상자</span>
-            <!-- .btnOpenSearch: search_user_modal.js 트리거 -->
-            <button type="button" class="btn btn-outline-secondary btn-sm btnOpenSearch">
+            <!-- .btnOpenSearch: search_user_modal.js capture 핸들러 트리거 (클래스 유지 필수) -->
+            <!-- data-bs-toggle 금지: feedbackManagerModal 자동 닫힘 부작용 발생 -->
+            <!-- JS에서 직접 searchUserModal.show() 호출 (id="feedbackSearchUserBtn") -->
+            <button type="button"
+                    class="btn btn-outline-secondary btn-sm btnOpenSearch"
+                    id="feedbackSearchUserBtn"
+                    data-bs-search-trigger="true">
               검색
             </button>
           </div>
@@ -373,6 +392,7 @@
   8) 스크립트 로드 순서
   Commission 공용 유틸 → collect_home.js(module) → excel_upload.js
 ========================================================== -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="{% static 'js/commission/_dom.js' %}{% if STATIC_VERSION %}?v={{ STATIC_VERSION }}{% endif %}"></script>
 <script src="{% static 'js/commission/_format.js' %}{% if STATIC_VERSION %}?v={{ STATIC_VERSION }}{% endif %}"></script>
 <script src="{% static 'js/commission/_net_json.js' %}{% if STATIC_VERSION %}?v={{ STATIC_VERSION }}{% endif %}"></script>

@@ -497,6 +497,17 @@
 
       const root = getActiveRoot();
 
+      // ✅ [수정 1] collect-home: 검색 모달만 닫고 피드백 모달은 유지
+      // deposit-home의 location.href 방식과 다름 — 혼동 금지
+      // collect_home.js의 userSelected 이벤트 리스너가 대상자 선택을 처리함
+      if (root?.id === "collect-home") {
+        dispatchUserSelected(selected);
+        tryHideModal(modalEl);
+        if (input) input.value = "";
+        resultsBox.innerHTML = "";
+        return;
+      }
+
       // ✅ [Step 12] collect-home: 검색 모달만 닫고 피드백 모달 유지
       // deposit-home의 location.href 방식과 다르다 — 절대 혼동 금지
       if (root?.id === "collect-home") {
