@@ -79,7 +79,7 @@
 
     <!-- ② 물건유형 + KB시세 + 채권최고액 한 줄 배치 -->
     <div class="row g-2 mb-3">
-      <div class="col-12 col-md-4">
+      <div class="col-12 col-md-3">
         <label for="propertyType" class="form-label fw-semibold">
           물건 유형 <span class="text-danger">*</span>
         </label>
@@ -93,7 +93,7 @@
           <option value="etc">기타 (계산불가)</option>
         </select>
       </div>
-      <div class="col-12 col-md-4">
+      <div class="col-12 col-md-3">
         <label for="kbPrice" class="form-label fw-semibold">
           KB부동산 시세 <span class="text-danger">*</span>
         </label>
@@ -103,10 +103,18 @@
           <span class="input-group-text">원</span>
         </div>
       </div>
-      <div class="col-12 col-md-4">
+      <div class="col-12 col-md-3">
         <label for="priorDebt" class="form-label fw-semibold">기설정 채권최고액</label>
         <div class="input-group">
           <input type="text" id="priorDebt" class="form-control text-end"
+                 placeholder="0" inputmode="numeric" autocomplete="off" value="0">
+          <span class="input-group-text">원</span>
+        </div>
+      </div>
+      <div class="col-12 col-md-3">
+        <label for="leaseDeposit" class="form-label fw-semibold">임차보증금</label>
+        <div class="input-group">
+          <input type="text" id="leaseDeposit" class="form-control text-end"
                  placeholder="0" inputmode="numeric" autocomplete="off" value="0">
           <span class="input-group-text">원</span>
         </div>
@@ -187,6 +195,7 @@
             <th class="text-nowrap">주소</th>
             <th class="text-end text-nowrap">KB시세</th>
             <th class="text-end text-nowrap">채권최고액</th>
+            <th class="text-end text-nowrap">임차보증금</th>
             <th class="text-end text-nowrap">설정가능금액</th>
             {% if can_delete %}
             <th class="text-center text-nowrap">삭제</th>
@@ -229,6 +238,9 @@
             <td class="text-end text-nowrap money-cell">
               {{ ev.prior_debt|intcomma }}
             </td>
+            <td class="text-end text-nowrap money-cell">
+              {{ ev.lease_deposit|intcomma }}
+            </td>
             <td class="text-end text-nowrap fw-semibold money-cell
               {% if ev.max_collateral == 0 %}text-danger{% else %}text-success{% endif %}">
               {{ ev.max_collateral|intcomma }}
@@ -244,12 +256,6 @@
             {% endif %}
           </tr>
           {% empty %}
-          <tr id="emptyRow">
-            <td colspan="{% if can_delete %}11{% else %}10{% endif %}"
-                class="text-center text-muted py-4">
-              아직 조회 이력이 없습니다.
-            </td>
-          </tr>
           {% endfor %}
         </tbody>
       </table>

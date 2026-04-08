@@ -144,6 +144,7 @@
         lengthMenu:  "_MENU_ 건씩 보기",
         info:        "_START_–_END_ / 전체 _TOTAL_건",
         infoEmpty:   "조회 이력 없음",
+        emptyTable:  "아직 조회 이력이 없습니다.",
         zeroRecords: "검색 결과 없음",
         paginate:    { previous: "이전", next: "다음" },
       },
@@ -218,6 +219,7 @@
       /* 금액 */
       '<td class="text-end text-nowrap money-cell">' + fmt(payload.kb_price)   + '</td>' +
       '<td class="text-end text-nowrap money-cell">' + fmt(payload.prior_debt) + '</td>' +
+      '<td class="text-end text-nowrap money-cell">' + fmt(payload.lease_deposit || 0) + '</td>' +
       '<td class="text-end text-nowrap fw-semibold money-cell ' + colorCls + '">' +
         fmt(maxVal) +
       '</td>' +
@@ -242,6 +244,7 @@
     var propertyType = propertyTypeEl.value;
     var kbPrice      = parse(kbPriceEl.value);
     var priorDebt    = parse(priorDebtEl.value);
+    var leaseDeposit = parse(qs("#leaseDeposit") ? qs("#leaseDeposit").value : "0");
     var address      = (qs("#address") ? qs("#address").value : "").trim();
     var memo         = (qs("#memo")    ? qs("#memo").value    : "").trim();
 
@@ -267,6 +270,7 @@
       property_type:  propertyType,
       kb_price:       kbPrice,
       prior_debt:     priorDebt,
+      lease_deposit:  leaseDeposit,
       address:        address,
       memo:           memo,
       target_user_id: _targetUserId || null,
@@ -445,6 +449,7 @@
     /* 금액 입력 자동 콤마 */
     bindMoneyFmt(qs("#kbPrice"));
     bindMoneyFmt(qs("#priorDebt"));
+    bindMoneyFmt(qs("#leaseDeposit"));
 
     /* 물건 유형 변경 시 결과/오류 초기화 */
     var typeSelect = qs("#propertyType");
@@ -462,7 +467,7 @@
     if (calcBtn) calcBtn.addEventListener("click", onCalcSubmit);
 
     /* Enter 키 제출 (입력 필드 공통) */
-    ["#kbPrice", "#priorDebt", "#address", "#memo"].forEach(function (s) {
+    ["#kbPrice", "#priorDebt", "#leaseDeposit", "#address", "#memo"].forEach(function (s) {
       var el = qs(s);
       if (el) {
         el.addEventListener("keydown", function (ev) {

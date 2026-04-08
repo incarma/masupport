@@ -352,6 +352,7 @@ class CollateralEval(models.Model):
     # ── 핵심 금액 ──────────────────────────────────────────
     kb_price      = models.BigIntegerField(verbose_name="KB시세(원)")
     prior_debt    = models.BigIntegerField(default=0, verbose_name="기설정 채권최고액(원)")
+    lease_deposit = models.BigIntegerField(default=0, verbose_name="임차보증금(원)")
     
     # ── 계산 결과 ──────────────────────────────────────────
     apply_rate    = models.DecimalField(

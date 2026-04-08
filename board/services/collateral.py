@@ -26,6 +26,7 @@ def calculate_collateral(
     property_type: str,
     kb_price: int,
     prior_debt: int,
+    lease_deposit: int = 0,
 ) -> dict:
     """
     담보 설정 가능 금액 계산 (DB 미접촉)
@@ -60,7 +61,7 @@ def calculate_collateral(
 
     apply_rate   = Decimal(str(rate))
     base_amount  = int(kb_price * rate / 100)
-    max_col      = max(0, base_amount - prior_debt)
+    max_col      = max(0, base_amount - prior_debt - lease_deposit)
 
     return {
         "calculable":     True,
@@ -84,6 +85,7 @@ def save_collateral_eval(
     memo: str = "",
     source: str = "manual",
     target_user=None,
+    lease_deposit: int = 0,
 ) -> tuple:
     """
     계산 수행 후 CollateralEval 저장
@@ -93,7 +95,7 @@ def save_collateral_eval(
     """
     from board.models import CollateralEval
 
-    result = calculate_collateral(property_type, kb_price, prior_debt)
+    result = calculate_collateral(property_type, kb_price, prior_debt, lease_deposit)
 
     if not result["calculable"]:
         return None, result
@@ -106,6 +108,7 @@ def save_collateral_eval(
             address=address,
             kb_price=kb_price,
             prior_debt=prior_debt,
+            lease_deposit=lease_deposit,
             apply_rate=result["apply_rate"],
             max_collateral=result["max_collateral"],
             source=source,

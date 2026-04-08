@@ -79,6 +79,7 @@ def collateral_calc(request):
     try:
         kb_price   = int(str(body.get("kb_price",   0)).replace(",", ""))
         prior_debt = int(str(body.get("prior_debt", 0)).replace(",", ""))
+        lease_deposit = int(str(body.get("lease_deposit", 0)).replace(",", ""))
     except (ValueError, TypeError):
         return _json_error("금액 형식이 올바르지 않습니다.")
 
@@ -104,21 +105,23 @@ def collateral_calc(request):
         memo=memo,
         source="manual",
         target_user=target_user,
+        lease_deposit=lease_deposit,
     )
 
     # 감사 로그
     log_action(
-        actor=request.user,
+        request,
         action=AUDIT_ACTION_COLLATERAL_EVAL,
-        target=f"CollateralEval/{obj.pk if obj else 'N/A'}",
-        metadata={
+        object_type="CollateralEval",
+        object_id=str(obj.pk) if obj else "N/A",
+        meta={
             "property_type":  property_type,
             "address":        address,
             "kb_price":       kb_price,
             "prior_debt":     prior_debt,
+            "lease_deposit":  lease_deposit,
             "max_collateral": result.get("max_collateral"),
             "target_user_id": str(target_user_id) if target_user_id else None,
-            "ip":             request.META.get("REMOTE_ADDR"),
         },
         success=obj is not None,
     )
@@ -157,10 +160,10 @@ def collateral_delete(request, eval_id: int):
     success, message = delete_collateral_eval(request.user, eval_id)
 
     log_action(
-        actor=request.user,
+        request,
         action=f"{AUDIT_ACTION_COLLATERAL_EVAL}_delete",
-        target=f"CollateralEval/{eval_id}",
-        metadata={"ip": request.META.get("REMOTE_ADDR")},
+        object_type="CollateralEval",
+        object_id=str(eval_id),
         success=success,
     )
 
