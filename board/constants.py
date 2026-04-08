@@ -65,3 +65,30 @@ SUPPORT_CONTRACT_FIELDS = [
     ("계약자(피보험자)", "contractor_", 3),
     ("보험료", "premium_", 2),
 ]
+
+
+# ──────────────────────────────────────────────
+# 담보평가 비율 상수 (SSOT)
+# ──────────────────────────────────────────────
+
+# 주거용 부동산 적용 비율 (%)
+COLLATERAL_RATE_RESIDENTIAL = 70
+
+# 토지(지목:대) 적용 비율 (%)
+COLLATERAL_RATE_LAND = 50
+
+# 계산 불가 유형 코드 목록
+COLLATERAL_UNCALCULABLE_TYPES = {"etc"}
+
+# 물건 유형 → 적용 비율 매핑
+COLLATERAL_RATE_MAP = {
+    "apt":       COLLATERAL_RATE_RESIDENTIAL,
+    "villa":     COLLATERAL_RATE_RESIDENTIAL,
+    "officetel": COLLATERAL_RATE_RESIDENTIAL,
+    "house":     COLLATERAL_RATE_RESIDENTIAL,
+    "land":      COLLATERAL_RATE_LAND,
+    # "etc" → 계산 불가, 매핑 없음
+}
+
+# Audit 액션 상수
+AUDIT_ACTION_COLLATERAL_EVAL = "collateral_eval_create"

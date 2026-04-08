@@ -1,0 +1,293 @@
+{% extends "board/base_board.html" %}
+{% load static %}
+{% load humanize %}
+
+<!-- ============================================================
+  board/collateral.html — 담보평가(근저당조회) 계산기
+  ─────────────────────────────────────────────────────────────
+  상속 : board/base_board.html
+         → .board-scope 자동 래핑 + board.css 자동 로드
+  Boot : #collateralBoot  (JS 는 이 div 의 dataset 만 읽음)
+  모달 : search_user_modal.js IIFE 재사용
+         ✅ 요구 id: searchUserModal / searchUserForm /
+                     searchKeyword / searchResults
+  이력 : DataTables (정렬·검색·페이지네이션)
+  금액 : intcomma 필터 (django.contrib.humanize)
+============================================================ -->
+
+{% block title %}근저당조회{% endblock %}
+
+<!-- DataTables CSS -->
+{% block extra_head %}
+<link rel="stylesheet"
+      href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+{% endblock %}
+
+<!-- 페이지 스크립트 -->
+{% block extra_js %}
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script src="{% static 'js/common/search_user_modal.js' %}?v={% now 'U' %}"></script>
+<script src="{% static 'js/board/collateral.js' %}?v={% now 'U' %}"></script>
+{% endblock %}
+
+{% block content %}
+
+<!-- ══════════════════════════════════════════════════════════
+     Boot div — JS 가 읽는 URL / 권한 플래그 주입
+     ✅ id="collateralBoot" 만 사용 (JS Boot 패턴 SSOT)
+     ✅ data-search-url 은 모달 el.dataset.searchUrl 로 직접 주입
+════════════════════════════════════════════════════════════ -->
+<div id="collateralBoot"
+     data-calc-url="{% url 'board:collateral_calc' %}"
+     data-delete-base-url="/board/collateral/"
+     data-can-delete="{{ can_delete|yesno:'true,false' }}"
+     style="display:none;">
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     메인 카드 — 입력 폼
+════════════════════════════════════════════════════════════ -->
+<div class="card shadow-sm mb-4">
+  <div class="card-header bg-white fw-semibold">
+    <i class="bi bi-building me-1"></i> 담보 설정 가능 금액 계산
+  </div>
+  <div class="card-body">
+
+    <!-- ① 대상자 검색 행 -->
+    <div class="mb-3">
+      <label class="form-label fw-semibold">대상자</label>
+      <div class="d-flex gap-2 align-items-center flex-wrap">
+        <!-- hidden: 서버로 전송되는 사번 -->
+        <input type="hidden" id="targetUserId">
+        <!-- readonly 표시 필드 -->
+        <input type="text" id="targetUserDisplay"
+               class="form-control" style="max-width:280px;"
+               placeholder="성명 또는 사번 검색" readonly>
+        <button type="button" id="btnSearchTarget"
+                class="btn btn-outline-secondary btn-sm">
+          <i class="bi bi-search me-1"></i>검색
+        </button>
+        <button type="button" id="btnClearTarget"
+                class="btn btn-outline-danger btn-sm d-none">
+          <i class="bi bi-x me-1"></i>초기화
+        </button>
+        <!-- 선택된 대상자 소속 표시 -->
+        <span id="targetBranchDisplay" class="text-muted small"></span>
+      </div>
+    </div>
+
+    <!-- ② 물건유형 + KB시세 + 채권최고액 한 줄 배치 -->
+    <div class="row g-2 mb-3">
+      <div class="col-12 col-md-4">
+        <label for="propertyType" class="form-label fw-semibold">
+          물건 유형 <span class="text-danger">*</span>
+        </label>
+        <select id="propertyType" class="form-select">
+          <option value="">-- 선택 --</option>
+          <option value="apt">아파트 (70%)</option>
+          <option value="villa">빌라/다세대/연립 (70%)</option>
+          <option value="officetel">주거용 오피스텔 (70%)</option>
+          <option value="house">단독주택 (70%)</option>
+          <option value="land">토지 (40%) *지목이 '대'인 경우에만 설정 가능</option>
+          <option value="etc">기타 (계산불가)</option>
+        </select>
+      </div>
+      <div class="col-12 col-md-4">
+        <label for="kbPrice" class="form-label fw-semibold">
+          KB부동산 시세 <span class="text-danger">*</span>
+        </label>
+        <div class="input-group">
+          <input type="text" id="kbPrice" class="form-control text-end"
+                 placeholder="0" inputmode="numeric" autocomplete="off">
+          <span class="input-group-text">원</span>
+        </div>
+      </div>
+      <div class="col-12 col-md-4">
+        <label for="priorDebt" class="form-label fw-semibold">기설정 채권최고액</label>
+        <div class="input-group">
+          <input type="text" id="priorDebt" class="form-control text-end"
+                 placeholder="0" inputmode="numeric" autocomplete="off" value="0">
+          <span class="input-group-text">원</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ③ 주소 + 메모 -->
+    <div class="row g-2 mb-3">
+      <div class="col-12 col-md-6">
+        <label for="address" class="form-label">
+          주소 <small class="text-muted">(참고용)</small>
+        </label>
+        <input type="text" id="address" class="form-control"
+               placeholder="예) 서울 강남구 ...">
+      </div>
+      <div class="col-12 col-md-6">
+        <label for="memo" class="form-label">
+          메모 <small class="text-muted">(선택)</small>
+        </label>
+        <input type="text" id="memo" class="form-control"
+               placeholder="고객명, 메모 등">
+      </div>
+    </div>
+
+    <!-- ④ 관련 홈페이지 안내 -->
+    <div class="alert alert-light border mb-3 py-2 px-3" style="font-size:.875rem;">
+      <span class="fw-semibold me-2">관련 사이트:</span>
+      <a href="https://www.iros.go.kr/index.jsp" target="_blank" rel="noopener"
+         class="me-3 text-decoration-none">
+        <i class="bi bi-box-arrow-up-right me-1"></i>등기부등본 (대법원 인터넷등기소)
+      </a>
+      <a href="https://kbland.kr" target="_blank" rel="noopener"
+         class="text-decoration-none">
+        <i class="bi bi-box-arrow-up-right me-1"></i>부동산시세 (KB부동산)
+      </a>
+    </div>
+
+    <!-- ⑤ 계산 버튼 -->
+    <div class="d-flex gap-2 justify-content-end">
+      <button id="calcBtn" type="button" class="btn btn-primary px-4">
+        <i class="bi bi-calculator me-1"></i> 계산하기
+      </button>
+    </div>
+
+  </div><!-- /card-body -->
+</div><!-- /메인 카드 -->
+
+<!-- ── 계산 결과 카드 (초기 hidden) ─────────────────────── -->
+<div id="calcResultCard" class="card mb-4 d-none">
+  <div class="card-header fw-semibold" id="resultCardHeader">계산 결과</div>
+  <div class="card-body" id="calcResultBody"></div>
+</div>
+
+<!-- ── 오류 메시지 영역 (초기 hidden) ───────────────────── -->
+<div id="calcErrorBox" class="alert alert-warning d-none" role="alert"></div>
+
+<!-- ══════════════════════════════════════════════════════════
+     조회 이력 테이블
+     - 금액: intcomma 필터 (1,000단위 콤마)
+     - DataTables: 10/25/50/100 건씩 보기 + 검색 + 페이지네이션
+════════════════════════════════════════════════════════════ -->
+<div class="card shadow-sm">
+  <div class="card-header bg-white fw-semibold">
+    <i class="bi bi-clock-history me-1"></i> 조회 이력
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0 align-middle"
+             id="evalHistoryTable">
+        <thead class="table-light">
+          <tr>
+            <th class="ps-3 text-nowrap">일시</th>
+            <th class="text-nowrap">요청자 소속</th>
+            <th class="text-nowrap">요청자</th>
+            <th class="text-nowrap">대상자 소속</th>
+            <th class="text-nowrap">대상자</th>
+            <th class="text-nowrap">물건유형</th>
+            <th class="text-nowrap">주소</th>
+            <th class="text-end text-nowrap">KB시세</th>
+            <th class="text-end text-nowrap">채권최고액</th>
+            <th class="text-end text-nowrap">설정가능금액</th>
+            {% if can_delete %}
+            <th class="text-center text-nowrap">삭제</th>
+            {% endif %}
+          </tr>
+        </thead>
+        <tbody id="evalHistoryTbody">
+          {% for ev in history %}
+          <tr data-eval-id="{{ ev.pk }}">
+            <td class="ps-3 text-nowrap text-muted" style="font-size:.85rem;">
+              {{ ev.created_at|date:"Y-m-d H:i" }}
+            </td>
+            <!-- 요청자 소속 -->
+            <td class="text-nowrap">{{ ev.requester.branch|default:"—" }}</td>
+            <!-- 요청자 성명(사번) -->
+            <td class="text-nowrap">
+              {% if ev.requester %}
+                {{ ev.requester.name }}({{ ev.requester.pk }})
+              {% else %}—{% endif %}
+            </td>
+            <!-- 대상자 소속 -->
+            <td class="text-nowrap">{{ ev.target_user.branch|default:"—" }}</td>
+            <!-- 대상자 성명(사번) -->
+            <td class="text-nowrap">
+              {% if ev.target_user %}
+                {{ ev.target_user.name }}({{ ev.target_user.pk }})
+              {% else %}—{% endif %}
+            </td>
+            <!-- 물건유형 -->
+            <td class="text-nowrap">{{ ev.get_property_type_display }}</td>
+            <!-- 주소 -->
+            <td class="board-ellipsis" style="max-width:160px;"
+                title="{{ ev.address }}">
+              {{ ev.address|default:"—" }}
+            </td>
+            <!-- 금액 3종: intcomma 필터로 1,000단위 콤마 -->
+            <td class="text-end text-nowrap money-cell">
+              {{ ev.kb_price|intcomma }}
+            </td>
+            <td class="text-end text-nowrap money-cell">
+              {{ ev.prior_debt|intcomma }}
+            </td>
+            <td class="text-end text-nowrap fw-semibold money-cell
+              {% if ev.max_collateral == 0 %}text-danger{% else %}text-success{% endif %}">
+              {{ ev.max_collateral|intcomma }}
+            </td>
+            {% if can_delete %}
+            <td class="text-center">
+              <button type="button"
+                      class="btn btn-outline-danger btn-sm btn-delete-eval"
+                      data-eval-id="{{ ev.pk }}">
+                삭제
+              </button>
+            </td>
+            {% endif %}
+          </tr>
+          {% empty %}
+          <tr id="emptyRow">
+            <td colspan="{% if can_delete %}11{% else %}10{% endif %}"
+                class="text-center text-muted py-4">
+              아직 조회 이력이 없습니다.
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     대상자 검색 모달
+     ✅ search_user_modal.js 요구 구조 (SSOT):
+        modalEl  → id="searchUserModal"
+        form     → id="searchUserForm"   (submit 이벤트 바인딩)
+        input    → id="searchKeyword"    (검색어)
+        results  → id="searchResults"    (결과 렌더링 대상)
+        searchUrl→ modalEl.dataset.searchUrl
+════════════════════════════════════════════════════════════ -->
+<div class="modal fade" id="searchUserModal" tabindex="-1" aria-hidden="true"
+     data-search-url="{% url 'board:search_user' %}">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">대상자 검색</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"
+                aria-label="닫기"></button>
+      </div>
+      <div class="modal-body">
+        <form id="searchUserForm" autocomplete="off">
+          <div class="input-group mb-3">
+            <input type="text" id="searchKeyword" class="form-control"
+                   placeholder="성명 또는 사번 입력">
+            <button class="btn btn-primary" type="submit">검색</button>
+          </div>
+        </form>
+        <!-- search_user_modal.js 가 결과를 렌더링하는 컨테이너 -->
+        <div id="searchResults" class="list-group"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

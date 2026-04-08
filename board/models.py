@@ -297,3 +297,90 @@ class TaskComment(models.Model):
         ordering = ["-created_at"]
         verbose_name = "직원업무 댓글"
         verbose_name_plural = "직원업무 댓글 목록"
+
+
+class CollateralEval(models.Model):
+    """
+    담보평가 이력 모델
+    - 플래너(requester)가 고객 부동산의 채권담보 설정 가능 금액을 조회/저장
+    - 1단계: 수동 입력 기반
+    - 2단계: API 자동 조회 기반 (source 필드로 구분)
+    """
+
+    # ── 물건 유형 ──────────────────────────────────────────
+    PROPERTY_TYPE_CHOICES = [
+        ("apt",        "아파트"),
+        ("villa",      "빌라/다세대/연립"),
+        ("officetel",  "주거용 오피스텔"),
+        ("house",      "단독주택"),
+        ("land",       "토지(지목:대)"),
+        ("etc",        "기타(계산불가)"),
+    ]
+
+    # ── 데이터 입력 방식 ────────────────────────────────────
+    SOURCE_CHOICES = [
+        ("manual", "수동 입력"),    # 1단계
+        ("api",    "API 자동조회"), # 2단계
+    ]
+
+    # ── 관계 ───────────────────────────────────────────────
+    requester     = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="collateral_evals",
+        verbose_name="조회자(플래너)",
+    )
+
+    target_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="collateral_evals_as_target",
+        verbose_name="대상자",
+    )
+
+    # ── 물건 정보 ──────────────────────────────────────────
+    property_type = models.CharField(
+        max_length=20,
+        choices=PROPERTY_TYPE_CHOICES,
+        verbose_name="물건 유형",
+    )
+    address       = models.CharField(max_length=300, blank=True, verbose_name="주소")
+    
+    # ── 핵심 금액 ──────────────────────────────────────────
+    kb_price      = models.BigIntegerField(verbose_name="KB시세(원)")
+    prior_debt    = models.BigIntegerField(default=0, verbose_name="기설정 채권최고액(원)")
+    
+    # ── 계산 결과 ──────────────────────────────────────────
+    apply_rate    = models.DecimalField(
+        max_digits=5, decimal_places=2,
+        verbose_name="적용비율(%)",
+    )  # 70.00 or 50.00
+    max_collateral = models.BigIntegerField(verbose_name="담보설정 가능금액(원)")
+    # = kb_price * apply_rate/100 - prior_debt
+    # 음수면 0으로 저장
+    
+    # ── 메타 ───────────────────────────────────────────────
+    source        = models.CharField(
+        max_length=10,
+        choices=SOURCE_CHOICES,
+        default="manual",
+        verbose_name="입력방식",
+    )
+    memo          = models.TextField(blank=True, verbose_name="메모")
+    created_at    = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "담보평가"
+        verbose_name_plural = "담보평가 이력"
+
+    def __str__(self):
+        return (
+            f"[{self.get_property_type_display()}] "
+            f"{self.address or '주소없음'} / "
+            f"설정가능: {self.max_collateral:,}원 "
+            f"({self.created_at:%Y-%m-%d})"
+        )

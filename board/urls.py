@@ -1,27 +1,52 @@
-# django_ma/board/urls.py
+# board/urls.py
+# =============================================================
+# Board 앱 URL 설정
+#
+# ┌─ 그룹 구조 ─────────────────────────────────────────────┐
+# │  post_patterns      업무요청 게시판(Post)                │
+# │  support_patterns   서식/PDF (support_form, states_form) │
+# │  task_patterns      직원업무 게시판 (superuser 전용)     │
+# │  collateral_patterns 담보평가 계산기 (로그인 전체 허용)  │
+# └──────────────────────────────────────────────────────────┘
+# =============================================================
 
 from django.urls import path
 from . import views
 
 app_name = "board"
 
-# -------------------------------
+
+# ---------------------------------------------------------------
 # Post (업무요청 게시판)
-# -------------------------------
+# ---------------------------------------------------------------
 post_patterns = [
     path("", views.post_list, name="post_list"),
     path("posts/create/", views.post_create, name="post_create"),
     path("posts/<int:pk>/", views.post_detail, name="post_detail"),
     path("posts/<int:pk>/edit/", views.post_edit, name="post_edit"),
-    path("ajax/update-post-field/", views.ajax_update_post_field, name="ajax_update_post_field"),
-    path("ajax/posts/<int:pk>/update-field/", views.ajax_update_post_field_detail, name="ajax_update_post_field_detail"),
-    path("posts/attachments/<int:att_id>/download/", views.post_attachment_download, name="post_attachment_download"),
-
+    # 인라인 업데이트 (목록 / 상세 공용)
+    path(
+        "ajax/update-post-field/",
+        views.ajax_update_post_field,
+        name="ajax_update_post_field",
+    ),
+    path(
+        "ajax/posts/<int:pk>/update-field/",
+        views.ajax_update_post_field_detail,
+        name="ajax_update_post_field_detail",
+    ),
+    # 첨부 다운로드 (보안 경유 — FieldFile.url 직접 노출 금지)
+    path(
+        "posts/attachments/<int:att_id>/download/",
+        views.post_attachment_download,
+        name="post_attachment_download",
+    ),
 ]
 
-# -------------------------------
-# Support/States Form + PDF
-# -------------------------------
+
+# ---------------------------------------------------------------
+# Support / States Form + PDF
+# ---------------------------------------------------------------
 support_patterns = [
     path("support_form/", views.support_form, name="support_form"),
     path("states_form/", views.states_form, name="states_form"),
@@ -30,21 +55,51 @@ support_patterns = [
     path("search-user/", views.search_user, name="search_user"),
 ]
 
-# -------------------------------
-# Task (직원업무 게시판) - superuser only (views에서 강제)
-# -------------------------------
+
+# ---------------------------------------------------------------
+# Task (직원업무 게시판) — superuser only (뷰 레벨에서 강제)
+# ---------------------------------------------------------------
 task_patterns = [
     path("tasks/", views.task_list, name="task_list"),
     path("tasks/create/", views.task_create, name="task_create"),
     path("tasks/<int:pk>/", views.task_detail, name="task_detail"),
     path("tasks/<int:pk>/edit/", views.task_edit, name="task_edit"),
-    path("ajax/tasks/update-task-field/", views.ajax_update_task_field, name="ajax_update_task_field"),
-    path("ajax/tasks/<int:pk>/update-field/", views.ajax_update_task_field_detail, name="ajax_update_task_field_detail"),
-    path("tasks/attachments/<int:att_id>/download/", views.task_attachment_download, name="task_attachment_download"),
+    # 인라인 업데이트 (목록 / 상세 공용)
+    path(
+        "ajax/tasks/update-task-field/",
+        views.ajax_update_task_field,
+        name="ajax_update_task_field",
+    ),
+    path(
+        "ajax/tasks/<int:pk>/update-field/",
+        views.ajax_update_task_field_detail,
+        name="ajax_update_task_field_detail",
+    ),
+    # 첨부 다운로드 (보안 경유)
+    path(
+        "tasks/attachments/<int:att_id>/download/",
+        views.task_attachment_download,
+        name="task_attachment_download",
+    ),
 ]
 
+
+# ---------------------------------------------------------------
+# Collateral (담보평가) — 로그인 사용자 전체 허용 (뷰 레벨: login_required)
+# ---------------------------------------------------------------
+collateral_patterns = [
+    path("collateral/", views.collateral_page, name="collateral"),
+    path("collateral/calc/", views.collateral_calc, name="collateral_calc"),
+    path("collateral/<int:eval_id>/delete/", views.collateral_delete, name="collateral_delete"),
+]
+
+
+# ---------------------------------------------------------------
+# URL 조합
+# ---------------------------------------------------------------
 urlpatterns = [
     *post_patterns,
     *support_patterns,
     *task_patterns,
+    *collateral_patterns,
 ]
