@@ -412,3 +412,322 @@
   border-color: #d3d6d8;
   color: #41464b;
 }
+
+/* ==========================================================
+ 9) Collateral (담보평가) 전용 스타일
+    스코프: .board-scope 내부 (모든 선택자 .board-scope 하위 준수)
+========================================================== */
+
+/* ── 9-1) 페이지 Wide 너비 ... ── */
+.board-scope #collateral-wide {
+  width: 86vw;
+  max-width: none;
+  margin-left: calc(-43vw + 50%);
+}
+
+@media (max-width: 576px) {
+  .board-scope #collateral-wide {
+    width: 100%;
+    margin-left: 0;
+  }
+}
+
+/* ── 9-1-1) partner/manage_charts 톤 정렬 ───────────────── */
+.board-scope #collateral-wide .card{
+  border: 0 !important;
+  border-radius: 1rem !important; /* rounded-4보다 약간 자연스럽게 */
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+
+.board-scope #collateral-wide .card-header{
+  background: #fff !important;
+  border-bottom: 1px solid #eef3f8 !important;
+  padding: 14px 18px;
+}
+
+.board-scope #collateral-wide .card-body{
+  padding: 18px;
+}
+
+.board-scope #collateral-wide .table-responsive{
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.board-scope #collateral-wide .form-label{
+  margin-bottom: 6px;
+  white-space: nowrap;
+}
+
+.board-scope #collateral-wide .form-control,
+.board-scope #collateral-wide .form-select,
+.board-scope #collateral-wide .input-group-text{
+  border-radius: 0.65rem;
+}
+
+.board-scope #collateral-wide .btn{
+  border-radius: 0.65rem;
+}
+
+/* ── 9-2) 이력 테이블 폰트·레이아웃
+         partner.css 편제변경 mainTable 기준:
+         th 12px (partner 0번 섹션) / td 13px (#manage-structure --tbl-font-td)
+   ── */
+.board-scope #evalHistoryTable {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.board-scope #evalHistoryTable thead th {
+  font-size: 12px;        /* partner th 기준 */
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.board-scope #evalHistoryTable tbody td {
+  font-size: 13px;        /* partner td 기준 */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.board-scope #evalHistoryTable tbody td :is(.btn, input, select) {
+  font-size: 13px;
+}
+
+/* ── 9-3) colgroup 컬럼 너비 (13px 기준 내용 fit)
+         일시       "####-##-## ##:##"  → 130px
+         소속       "OOOOOOO"           →  90px
+         성명(사번) "홍길동(#######)"   → 120px
+         물건유형   "OO/OOO/OOOO"       → 140px
+         금액       "#,###,###,###"     → 110px
+         삭제 버튼                      →  58px
+         주소       나머지 전부 흡수 (min-width:100px)
+   ── */
+.board-scope #evalHistoryTable col.coll-c-date     { width: 130px; }
+.board-scope #evalHistoryTable col.coll-c-branch   { width:  90px; }
+.board-scope #evalHistoryTable col.coll-c-name     { width: 120px; }
+.board-scope #evalHistoryTable col.coll-c-proptype { width: 140px; }
+.board-scope #evalHistoryTable col.coll-c-memo     { width: 180px; }
+.board-scope #evalHistoryTable col.coll-c-addr     { min-width: 100px; } /* 나머지 흡수 */
+.board-scope #evalHistoryTable col.coll-c-money    { width: 110px; }
+.board-scope #evalHistoryTable col.coll-c-del      { width:  58px; }
+
+/* ── 9-4) 주소 셀 — 말줄임 + 클릭 커서
+         table-layout:fixed + colgroup 이 너비를 결정하므로 max-width 불필요
+   ── */
+.board-scope .collateral-popup-cell {
+  cursor: pointer;
+}
+
+.board-scope .collateral-popup-text {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-decoration: underline dotted #6c757d;
+}
+
+.board-scope .collateral-popup-cell:hover .collateral-popup-text {
+  color: var(--inka-blue2);
+  text-decoration: underline;
+}
+
+/* ── 9-4-1) 조회이력 DataTables UI — partner 메인시트 톤 정렬 ── */
+.board-scope #evalHistoryTable_wrapper{
+  padding: 14px 16px 16px;
+}
+
+.board-scope #evalHistoryTable_wrapper .collateral-dt-top,
+.board-scope #evalHistoryTable_wrapper .collateral-dt-bottom{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.board-scope #evalHistoryTable_wrapper .collateral-dt-top{
+  margin-bottom: 12px;
+}
+
+.board-scope #evalHistoryTable_wrapper .collateral-dt-bottom{
+  margin-top: 12px;
+}
+
+.board-scope #evalHistoryTable_wrapper .dataTables_length,
+.board-scope #evalHistoryTable_wrapper .dataTables_filter,
+.board-scope #evalHistoryTable_wrapper .dataTables_info,
+.board-scope #evalHistoryTable_wrapper .dataTables_paginate{
+  margin: 0;
+}
+
+.board-scope #evalHistoryTable_wrapper .dataTables_length label,
+.board-scope #evalHistoryTable_wrapper .dataTables_filter label,
+.board-scope #evalHistoryTable_wrapper .dataTables_info{
+  font-size: 13px;
+  color: #6c757d;
+}
+
+.board-scope #evalHistoryTable_wrapper .dataTables_filter{
+  margin-left: auto;
+}
+
+.board-scope #evalHistoryTable_wrapper .dataTables_filter input,
+.board-scope #evalHistoryTable_wrapper .dataTables_length select{
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  min-height: 34px;
+  padding: 4px 10px;
+  box-shadow: none;
+}
+
+.board-scope #evalHistoryTable_wrapper .dataTables_paginate{
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.board-scope #evalHistoryTable_wrapper .paginate_button{
+  min-width: 36px;
+  min-height: 36px;
+  padding: 6px 10px !important;
+  border-radius: 10px !important;
+}
+
+.board-scope #evalHistoryTable_wrapper .paginate_button.current{
+  font-weight: 700;
+}
+
+/* ── 9-5) 이력 테이블 일시 셀 폰트 ── */
+.board-scope .collateral-hist-date {
+  font-size: .85rem;
+}
+
+/* ── 9-6) 관련 사이트 안내 박스 ── */
+.board-scope .collateral-site-alert {
+  font-size: .875rem;
+}
+
+/* ── 9-7) 입력 폼 배치
+         요청사항:
+         - 첫 줄을 좌/우 절반 2그룹으로 분리
+         - 좌측: 대상자/소유자관계/소유자성명/소유자연락처
+         - 우측: 물건유형/KB시세/채권최고액/임차보증금
+   ── */
+.board-scope .collateral-form-grid{
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.board-scope .collateral-form-col{
+  min-width: 0;
+}
+
+.board-scope .collateral-form-row {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: flex-end;
+  gap: 10px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 4px;
+}
+
+.board-scope .collateral-form-field {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+/* 좌측 절반 */
+.board-scope .collateral-f-target     { flex: 1.7 1 0; min-width: 240px; }
+.board-scope .collateral-f-ownerrel   { flex: 1.15 1 0; min-width: 150px; }
+.board-scope .collateral-f-ownername  { flex: 0.95 1 0; min-width: 120px; }
+.board-scope .collateral-f-ownerphone { flex: 1.15 1 0; min-width: 150px; }
+
+/* 우측 절반 */
+.board-scope .collateral-f-proptype   { flex: 1.35 1 0; min-width: 185px; }
+.board-scope .collateral-f-money      { flex: 1 1 0; min-width: 145px; }
+
+/* 대상자 input — input-group 내 flex 자동, min-width:0 으로 넘침 방지 */
+.board-scope .collateral-target-display {
+  min-width: 0;
+}
+
+/* 대상자 소속 서브텍스트 */
+.board-scope .collateral-branch-sub {
+  display: block;
+  font-size: 11px;
+  color: #6c757d;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+}
+
+/* 주소 모달 전체 텍스트 줄바꿈 */
+.board-scope .collateral-addr-full-text {
+  word-break: break-word;
+}
+
+/* 태블릿 이하: 좌/우 절반을 세로 적층 */
+@media (max-width: 1200px) {
+  .board-scope .collateral-form-grid{
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+}
+
+@media (max-width: 768px){
+  .board-scope #evalHistoryTable_wrapper .collateral-dt-top,
+  .board-scope #evalHistoryTable_wrapper .collateral-dt-bottom{
+    align-items: stretch;
+  }
+
+  .board-scope #evalHistoryTable_wrapper .dataTables_filter,
+  .board-scope #evalHistoryTable_wrapper .dataTables_paginate{
+    margin-left: 0;
+    justify-content: flex-start;
+  }
+}
+
+/* 모바일(768px 이하): 각 절반 내부도 wrap */
+@media (max-width: 768px) {
+  .board-scope .collateral-form-row {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+  .board-scope .collateral-form-field {
+    flex: 1 1 140px;
+  }
+}
+
+/* ── 9-8) 카드 라운드 — partner card.border-0.rounded-4 기준 ── */
+/* Bootstrap rounded-4 = border-radius: var(--bs-border-radius-xl) = 0.75rem(12px) */
+.board-scope .collateral-card {
+  border-radius: 1rem !important;
+  border: 0 !important;
+  overflow: hidden;
+}
+
+/* ── 9-9) 카드 타이틀 — partner h5.fw-bold color:#005BAC 기준 ── */
+.board-scope .collateral-card-title {
+  font-size: 1.0rem;
+  font-weight: 700;
+  color: #005BAC;
+}
+
+/* 결과/오류 박스도 라운드 통일 */
+.board-scope #calcResultCard,
+.board-scope #calcErrorBox{
+  border-radius: 1rem !important;
+}

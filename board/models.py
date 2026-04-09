@@ -309,18 +309,27 @@ class CollateralEval(models.Model):
 
     # ── 물건 유형 ──────────────────────────────────────────
     PROPERTY_TYPE_CHOICES = [
-        ("apt",        "아파트"),
-        ("villa",      "빌라/다세대/연립"),
-        ("officetel",  "주거용 오피스텔"),
-        ("house",      "단독주택"),
-        ("land",       "토지(지목:대)"),
-        ("etc",        "기타(계산불가)"),
+        ("apt",       "아파트"),
+        ("villa_new", "빌라/다세대/오피스텔 (연식 20년 미만)"),
+        ("villa_old", "빌라/다세대/오피스텔 (연식 20년 이상)"),
+        ("house",     "주택/단독주택"),
+        ("land",      "토지(대)"),
+        ("etc",       "기타(계산불가)"),
     ]
 
     # ── 데이터 입력 방식 ────────────────────────────────────
     SOURCE_CHOICES = [
         ("manual", "수동 입력"),    # 1단계
         ("api",    "API 자동조회"), # 2단계
+    ]
+
+    # ── 소유자 관계 ────────────────────────────────────────
+    OWNER_REL_CHOICES = [
+        ("self",    "본인(FA)"),
+        ("spouse",  "배우자"),
+        ("lineal",  "직계존비속"),
+        ("sibling", "형제자매"),
+        ("third",   "기타 제3자 (근저당 설정 불가)"),
     ]
 
     # ── 관계 ───────────────────────────────────────────────
@@ -348,6 +357,17 @@ class CollateralEval(models.Model):
         verbose_name="물건 유형",
     )
     address       = models.CharField(max_length=300, blank=True, verbose_name="주소")
+
+    # ── 소유자 정보 ────────────────────────────────────────
+    owner_rel     = models.CharField(
+        max_length=10,
+        choices=OWNER_REL_CHOICES,
+        blank=True,
+        default="self",
+        verbose_name="소유자 관계",
+    )
+    owner_name    = models.CharField(max_length=50, blank=True, verbose_name="소유자 성명")
+    owner_phone   = models.CharField(max_length=20, blank=True, verbose_name="소유자 연락처")
     
     # ── 핵심 금액 ──────────────────────────────────────────
     kb_price      = models.BigIntegerField(verbose_name="KB시세(원)")
@@ -358,7 +378,7 @@ class CollateralEval(models.Model):
     apply_rate    = models.DecimalField(
         max_digits=5, decimal_places=2,
         verbose_name="적용비율(%)",
-    )  # 70.00 or 50.00
+    )  # 70.00 / 60.00 / 50.00 / 40.00
     max_collateral = models.BigIntegerField(verbose_name="담보설정 가능금액(원)")
     # = kb_price * apply_rate/100 - prior_debt
     # 음수면 0으로 저장

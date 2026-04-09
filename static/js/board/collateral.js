@@ -138,6 +138,7 @@
       pageLength:   10,
       lengthMenu:   [10, 25, 50, 100],
       lengthChange: true,
+      dom: '<"collateral-dt-top"l f>rt<"collateral-dt-bottom"i p>',
       searching:    true,
       language: {
         search:      "검색:",
@@ -202,7 +203,7 @@
     var tr = document.createElement("tr");
     tr.setAttribute("data-eval-id", String(data.eval_id));
     tr.innerHTML =
-      '<td class="ps-3 text-nowrap text-muted" style="font-size:.85rem;">' + ymd + '</td>' +
+      '<td class="ps-3 text-nowrap text-muted collateral-hist-date">' + ymd + '</td>' +
       /* 요청자 소속/성명: JS 에서는 서버 정보가 없으므로 페이지 새로고침 전까지 — 표시 */
       '<td class="text-nowrap">—</td>' +
       '<td class="text-nowrap">—</td>' +
@@ -211,10 +212,17 @@
       '<td class="text-nowrap">' + targetDisplay + '</td>' +
       /* 물건유형 */
       '<td class="text-nowrap">' + typeLabel + '</td>' +
+      /* 메모 */
+      '<td class="collateral-popup-cell text-nowrap"' +
+          ' data-popup-title="메모 전체 보기"' +
+          ' data-fulltext="' + String(payload.memo || "").replace(/"/g, "&quot;") + '">' +
+        '<span class="collateral-popup-text">' + (payload.memo || "—") + '</span>' +
+      '</td>' +
       /* 주소 */
-      '<td class="board-ellipsis" style="max-width:160px;"' +
-          ' title="' + String(payload.address || "") + '">' +
-        (payload.address || "—") +
+      '<td class="collateral-popup-cell text-nowrap"' +
+          ' data-popup-title="주소 전체 보기"' +
+          ' data-fulltext="' + String(payload.address || "").replace(/"/g, "&quot;") + '">' +
+        '<span class="collateral-popup-text">' + (payload.address || "—") + '</span>' +
       '</td>' +
       /* 금액 */
       '<td class="text-end text-nowrap money-cell">' + fmt(payload.kb_price)   + '</td>' +
@@ -247,6 +255,10 @@
     var leaseDeposit = parse(qs("#leaseDeposit") ? qs("#leaseDeposit").value : "0");
     var address      = (qs("#address") ? qs("#address").value : "").trim();
     var memo         = (qs("#memo")    ? qs("#memo").value    : "").trim();
+    var ownerRelEl   = qs("#ownerRel");
+    var ownerRel     = ownerRelEl ? ownerRelEl.value : "self";
+    var ownerName    = (qs("#ownerName")  ? qs("#ownerName").value  : "").trim();
+    var ownerPhone   = (qs("#ownerPhone") ? qs("#ownerPhone").value : "").trim();
 
     /* 클라이언트 유효성 검사 */
     if (!propertyType) {
@@ -254,7 +266,11 @@
       return;
     }
     if (propertyType === "etc") {
-      renderError("해당 물건 유형은 담보 설정이 불가합니다.");
+      renderError("임야·상가·업무용 오피스텔 등은 담보 설정이 불가합니다. 물건 유형을 다시 확인해 주세요.");
+      return;
+    }
+    if (ownerRel === "third") {
+      renderError("기타 제3자 소유 부동산은 근저당 설정이 불가합니다.");
       return;
     }
     if (kbPrice <= 0) {
@@ -274,6 +290,9 @@
       address:        address,
       memo:           memo,
       target_user_id: _targetUserId || null,
+      owner_rel:      ownerRel,
+      owner_name:     ownerName,
+      owner_phone:    ownerPhone,
     };
 
     fetch(_calcUrl, {
@@ -418,12 +437,45 @@
 
   /* ── 삭제 버튼 이벤트 위임 ──────────────────────────── */
   function bindDeleteButtons() {
-    var tbody = qs("#evalHistoryTbody");
-    if (!tbody) return;
-    tbody.addEventListener("click", function (e) {
+    /* DataTables 가 tbody 를 재구성할 수 있으므로 table 전체에 위임 */
+    var tbl = qs("#evalHistoryTable");
+    if (!tbl) return;
+    tbl.addEventListener("click", function (e) {
       var btn = e.target.closest(".btn-delete-eval");
       if (!btn) return;
       onDeleteEval(btn.dataset.evalId);
+    });
+  }
+
+  /* ── 주소 셀 클릭 → 전체 주소 모달 ─────────────────── */
+  function bindAddrModal() {
+    /* tbody 대신 table 에 위임:
+       DataTables 페이지 전환 시 tbody 내부 DOM 을 재구성하므로
+       tbody 직접 참조는 재구성 후 이벤트가 유실됨 */
+    var tbl = qs("#evalHistoryTable");
+    if (!tbl) return;
+    tbl.addEventListener("click", function (e) {
+      /* 삭제 버튼 클릭이면 주소 모달 처리 건너뜀 */
+      if (e.target.closest(".btn-delete-eval")) return;
+
+      var cell = e.target.closest(".collateral-popup-cell");
+      if (!cell) return;
+
+      var fullText = (cell.dataset.fulltext || "").trim();
+      var title = (cell.dataset.popupTitle || "전체 보기").trim();
+      /* 빈값 또는 대시(—)면 모달 열지 않음 */
+      if (!fullText || fullText === "\u2014") return;
+
+      var textEl = document.getElementById("addrFullText");
+      if (textEl) textEl.textContent = fullText;
+      var titleEl = document.getElementById("addrFullModalTitle");
+      if (titleEl) titleEl.textContent = title;
+
+      var modalEl = document.getElementById("addrFullModal");
+      if (!modalEl) return;
+      var bsModal = window.bootstrap &&
+                    bootstrap.Modal.getOrCreateInstance(modalEl);
+      if (bsModal) bsModal.show();
     });
   }
 
@@ -462,6 +514,27 @@
       });
     }
 
+    /* 소유자 관계 드롭다운 — 초기화 + 이벤트 바인딩 */
+    var ownerRelSel = qs("#ownerRel");
+    if (ownerRelSel) {
+      /* 제3자 option 텍스트 앞 경고 기호 삽입 (최초 1회) */
+      var thirdOpt = ownerRelSel.querySelector('option[value="third"]');
+      if (thirdOpt && !thirdOpt.dataset.marked) {
+        thirdOpt.textContent = "⚠️ " + thirdOpt.textContent;
+        thirdOpt.dataset.marked = "1";
+      }
+      /* 변경 시 결과/오류 초기화 + 제3자 경고 */
+      ownerRelSel.addEventListener("change", function () {
+        var c = qs("#calcResultCard");
+        var e = qs("#calcErrorBox");
+        if (c) c.classList.add("d-none");
+        if (e) e.classList.add("d-none");
+        if (this.value === "third") {
+          renderError("기타 제3자 소유 부동산은 근저당 설정이 불가합니다.");
+        }
+      });
+    }
+
     /* 계산 버튼 */
     var calcBtn = qs("#calcBtn");
     if (calcBtn) calcBtn.addEventListener("click", onCalcSubmit);
@@ -478,6 +551,7 @@
 
     setupTargetSearch();
     bindDeleteButtons();
+    bindAddrModal();
     initDT();
   }
 

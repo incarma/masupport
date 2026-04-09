@@ -75,6 +75,9 @@ def collateral_calc(request):
     address         = str(body.get("address", "")).strip()
     memo            = str(body.get("memo", "")).strip()
     target_user_id  = body.get("target_user_id") or None
+    owner_rel       = str(body.get("owner_rel",   "self")).strip() or "self"
+    owner_name      = str(body.get("owner_name",  "")).strip()
+    owner_phone     = str(body.get("owner_phone", "")).strip()
 
     try:
         kb_price   = int(str(body.get("kb_price",   0)).replace(",", ""))
@@ -106,6 +109,9 @@ def collateral_calc(request):
         source="manual",
         target_user=target_user,
         lease_deposit=lease_deposit,
+        owner_rel=owner_rel,
+        owner_name=owner_name,
+        owner_phone=owner_phone,
     )
 
     # 감사 로그
@@ -122,6 +128,8 @@ def collateral_calc(request):
             "lease_deposit":  lease_deposit,
             "max_collateral": result.get("max_collateral"),
             "target_user_id": str(target_user_id) if target_user_id else None,
+            "owner_rel":      owner_rel,
+            "owner_name":     owner_name,
         },
         success=obj is not None,
     )

@@ -17,11 +17,8 @@
 
 {% block title %}근저당조회{% endblock %}
 
-<!-- DataTables CSS -->
-{% block extra_head %}
-<link rel="stylesheet"
-      href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
-{% endblock %}
+<!-- DataTables CSS 는 base.css가 datatables.css 로 전역 로드 중 — 중복 제거 -->
+{% block extra_head %}{% endblock %}
 
 <!-- 페이지 스크립트 -->
 {% block extra_js %}
@@ -33,93 +30,140 @@
 
 {% block content %}
 
+<!-- partner manage_charts.html 의 86vw 넓이와 동일한 wide wrapper -->
+<div id="collateral-wide"
+     class="collateral-page-wide">
+
 <!-- ══════════════════════════════════════════════════════════
      Boot div — JS 가 읽는 URL / 권한 플래그 주입
      ✅ id="collateralBoot" 만 사용 (JS Boot 패턴 SSOT)
      ✅ data-search-url 은 모달 el.dataset.searchUrl 로 직접 주입
 ════════════════════════════════════════════════════════════ -->
 <div id="collateralBoot"
-     data-calc-url="{% url 'board:collateral_calc' %}"
-     data-delete-base-url="/board/collateral/"
-     data-can-delete="{{ can_delete|yesno:'true,false' }}"
-     style="display:none;">
+      data-calc-url="{% url 'board:collateral_calc' %}"
+      data-delete-base-url="/board/collateral/"
+      data-can-delete="{{ can_delete|yesno:'true,false' }}"
+      class="d-none">
 </div>
 
 <!-- ══════════════════════════════════════════════════════════
      메인 카드 — 입력 폼
 ════════════════════════════════════════════════════════════ -->
-<div class="card shadow-sm mb-4">
-  <div class="card-header bg-white fw-semibold">
-    <i class="bi bi-building me-1"></i> 담보 설정 가능 금액 계산
+<div class="card shadow collateral-card mb-4">
+  <div class="card-header bg-white border-0">
+    <h5 class="collateral-card-title mb-0">
+      <i class="bi bi-building me-1"></i> 담보 설정 가능 금액 계산
+    </h5>
   </div>
   <div class="card-body">
 
-    <!-- ① 대상자 검색 행 -->
-    <div class="mb-3">
-      <label class="form-label fw-semibold">대상자</label>
-      <div class="d-flex gap-2 align-items-center flex-wrap">
-        <!-- hidden: 서버로 전송되는 사번 -->
-        <input type="hidden" id="targetUserId">
-        <!-- readonly 표시 필드 -->
-        <input type="text" id="targetUserDisplay"
-               class="form-control" style="max-width:280px;"
-               placeholder="성명 또는 사번 검색" readonly>
-        <button type="button" id="btnSearchTarget"
-                class="btn btn-outline-secondary btn-sm">
-          <i class="bi bi-search me-1"></i>검색
-        </button>
-        <button type="button" id="btnClearTarget"
-                class="btn btn-outline-danger btn-sm d-none">
-          <i class="bi bi-x me-1"></i>초기화
-        </button>
-        <!-- 선택된 대상자 소속 표시 -->
-        <span id="targetBranchDisplay" class="text-muted small"></span>
-      </div>
-    </div>
+    <!-- ① 첫 줄 입력 필드 — 좌/우 2열 그룹 -->
+    <div class="collateral-form-grid mb-3">
+      <div class="collateral-form-col">
+        <div class="collateral-form-row">
+          <!-- 대상자 -->
+          <div class="collateral-form-field collateral-f-target">
+            <label class="form-label fw-semibold">대상자</label>
+            <input type="hidden" id="targetUserId">
+            <div class="input-group input-group-sm">
+              <input type="text" id="targetUserDisplay"
+                     class="form-control collateral-target-display"
+                     placeholder="성명/사번 검색" readonly>
+             <button type="button" id="btnSearchTarget"
+                      class="btn btn-outline-secondary">
+                검색
+              </button>
+              <button type="button" id="btnClearTarget"
+                      class="btn btn-outline-danger d-none">
+                초기화
+              </button>
+            </div>
+           <span id="targetBranchDisplay" class="collateral-branch-sub"></span>
+          </div>
 
-    <!-- ② 물건유형 + KB시세 + 채권최고액 한 줄 배치 -->
-    <div class="row g-2 mb-3">
-      <div class="col-12 col-md-3">
-        <label for="propertyType" class="form-label fw-semibold">
-          물건 유형 <span class="text-danger">*</span>
-        </label>
-        <select id="propertyType" class="form-select">
-          <option value="">-- 선택 --</option>
-          <option value="apt">아파트 (70%)</option>
-          <option value="villa">빌라/다세대/연립 (70%)</option>
-          <option value="officetel">주거용 오피스텔 (70%)</option>
-          <option value="house">단독주택 (70%)</option>
-          <option value="land">토지 (40%) *지목이 '대'인 경우에만 설정 가능</option>
-          <option value="etc">기타 (계산불가)</option>
-        </select>
-      </div>
-      <div class="col-12 col-md-3">
-        <label for="kbPrice" class="form-label fw-semibold">
-          KB부동산 시세 <span class="text-danger">*</span>
-        </label>
-        <div class="input-group">
-          <input type="text" id="kbPrice" class="form-control text-end"
-                 placeholder="0" inputmode="numeric" autocomplete="off">
-          <span class="input-group-text">원</span>
+          <!-- 소유자 관계 -->
+          <div class="collateral-form-field collateral-f-ownerrel">
+            <label for="ownerRel" class="form-label fw-semibold">
+              소유자 관계 <span class="text-danger">*</span>
+            </label>
+            <select id="ownerRel" class="form-select form-select-sm">
+              <option value="self">본인(FA)</option>
+              <option value="spouse">배우자</option>
+              <option value="lineal">직계존비속</option>
+              <option value="sibling">형제자매</option>
+              <option value="third">기타 제3자 — 설정불가</option>
+            </select>
+          </div>
+
+          <!-- 소유자 성명 -->
+          <div class="collateral-form-field collateral-f-ownername">
+            <label for="ownerName" class="form-label fw-semibold">소유자 성명</label>
+            <input type="text" id="ownerName" class="form-control form-control-sm"
+                   placeholder="소유자 성명">
+          </div>
+
+          <!-- 소유자 연락처 -->
+          <div class="collateral-form-field collateral-f-ownerphone">
+            <label for="ownerPhone" class="form-label fw-semibold">소유자 연락처</label>
+            <input type="text" id="ownerPhone" class="form-control form-control-sm"
+                   placeholder="010-0000-0000" inputmode="tel">
+          </div>
         </div>
       </div>
-      <div class="col-12 col-md-3">
-        <label for="priorDebt" class="form-label fw-semibold">기설정 채권최고액</label>
-        <div class="input-group">
-          <input type="text" id="priorDebt" class="form-control text-end"
-                 placeholder="0" inputmode="numeric" autocomplete="off" value="0">
-          <span class="input-group-text">원</span>
+
+      <div class="collateral-form-col">
+        <div class="collateral-form-row">
+          <!-- 물건 유형 -->
+          <div class="collateral-form-field collateral-f-proptype">
+            <label for="propertyType" class="form-label fw-semibold">
+              물건 유형 <span class="text-danger">*</span>
+            </label>
+            <select id="propertyType" class="form-select form-select-sm">
+              <option value="">-- 선택 --</option>
+              <option value="apt">아파트 (70%)</option>
+              <option value="villa_new">빌라/오피스텔 20년미만 (60%)</option>
+              <option value="villa_old">빌라/오피스텔 20년이상 (50%)</option>
+              <option value="house">주택/단독주택 (50%)</option>
+              <option value="land">토지(대) (40%)</option>
+              <option value="etc">기타 (계산불가)</option>
+            </select>
+          </div>
+
+          <!-- KB시세 -->
+          <div class="collateral-form-field collateral-f-money">
+            <label for="kbPrice" class="form-label fw-semibold">
+              KB시세 <span class="text-danger">*</span>
+            </label>
+            <div class="input-group input-group-sm">
+              <input type="text" id="kbPrice" class="form-control text-end"
+                     placeholder="0" inputmode="numeric" autocomplete="off">
+              <span class="input-group-text">원</span>
+            </div>
+          </div>
+
+          <!-- 채권최고액 -->
+          <div class="collateral-form-field collateral-f-money">
+            <label for="priorDebt" class="form-label fw-semibold">채권최고액</label>
+            <div class="input-group input-group-sm">
+              <input type="text" id="priorDebt" class="form-control text-end"
+                     placeholder="0" inputmode="numeric" autocomplete="off" value="0">
+              <span class="input-group-text">원</span>
+            </div>
+          </div>
+
+          <!-- 임차보증금 -->
+          <div class="collateral-form-field collateral-f-money">
+            <label for="leaseDeposit" class="form-label fw-semibold">임차보증금</label>
+            <div class="input-group input-group-sm">
+              <input type="text" id="leaseDeposit" class="form-control text-end"
+                     placeholder="0" inputmode="numeric" autocomplete="off" value="0">
+              <span class="input-group-text">원</span>
+            </div>
+          </div>
         </div>
       </div>
-      <div class="col-12 col-md-3">
-        <label for="leaseDeposit" class="form-label fw-semibold">임차보증금</label>
-        <div class="input-group">
-          <input type="text" id="leaseDeposit" class="form-control text-end"
-                 placeholder="0" inputmode="numeric" autocomplete="off" value="0">
-          <span class="input-group-text">원</span>
-        </div>
-      </div>
-    </div>
+
+    </div><!-- /collateral-form-grid -->
 
     <!-- ③ 주소 + 메모 -->
     <div class="row g-2 mb-3">
@@ -140,7 +184,7 @@
     </div>
 
     <!-- ④ 관련 홈페이지 안내 -->
-    <div class="alert alert-light border mb-3 py-2 px-3" style="font-size:.875rem;">
+    <div class="alert alert-light border mb-3 py-2 px-3 collateral-site-alert">
       <span class="fw-semibold me-2">관련 사이트:</span>
       <a href="https://www.iros.go.kr/index.jsp" target="_blank" rel="noopener"
          class="me-3 text-decoration-none">
@@ -176,14 +220,31 @@
      - 금액: intcomma 필터 (1,000단위 콤마)
      - DataTables: 10/25/50/100 건씩 보기 + 검색 + 페이지네이션
 ════════════════════════════════════════════════════════════ -->
-<div class="card shadow-sm">
-  <div class="card-header bg-white fw-semibold">
-    <i class="bi bi-clock-history me-1"></i> 조회 이력
+<div class="card shadow collateral-card">
+  <div class="card-header bg-white border-0">
+    <h5 class="collateral-card-title mb-0">
+      <i class="bi bi-clock-history me-1"></i> 조회 이력
+    </h5>
   </div>
   <div class="card-body p-0">
     <div class="table-responsive">
       <table class="table table-sm table-hover mb-0 align-middle"
              id="evalHistoryTable">
+        <colgroup>
+          <col class="coll-c-date">      <!-- 일시     120px -->
+          <col class="coll-c-branch">    <!-- 요청자소속 100px -->
+          <col class="coll-c-name">      <!-- 요청자    130px -->
+          <col class="coll-c-branch">    <!-- 대상자소속 100px -->
+          <col class="coll-c-name">      <!-- 대상자    130px -->
+          <col class="coll-c-proptype">  <!-- 물건유형  150px -->
+          <col class="coll-c-memo">      <!-- 메모      180px -->
+          <col class="coll-c-addr">      <!-- 주소  나머지 전부 -->
+          <col class="coll-c-money">     <!-- KB시세    115px -->
+          <col class="coll-c-money">     <!-- 채권최고액 115px -->
+          <col class="coll-c-money">     <!-- 임차보증금 115px -->
+          <col class="coll-c-money">     <!-- 설정가능금액 115px -->
+          {% if can_delete %}<col class="coll-c-del">{% endif %}
+        </colgroup>
         <thead class="table-light">
           <tr>
             <th class="ps-3 text-nowrap">일시</th>
@@ -192,6 +253,7 @@
             <th class="text-nowrap">대상자 소속</th>
             <th class="text-nowrap">대상자</th>
             <th class="text-nowrap">물건유형</th>
+            <th class="text-nowrap">메모</th>
             <th class="text-nowrap">주소</th>
             <th class="text-end text-nowrap">KB시세</th>
             <th class="text-end text-nowrap">채권최고액</th>
@@ -205,7 +267,7 @@
         <tbody id="evalHistoryTbody">
           {% for ev in history %}
           <tr data-eval-id="{{ ev.pk }}">
-            <td class="ps-3 text-nowrap text-muted" style="font-size:.85rem;">
+            <td class="ps-3 text-nowrap text-muted collateral-hist-date">
               {{ ev.created_at|date:"Y-m-d H:i" }}
             </td>
             <!-- 요청자 소속 -->
@@ -226,10 +288,17 @@
             </td>
             <!-- 물건유형 -->
             <td class="text-nowrap">{{ ev.get_property_type_display }}</td>
+            <!-- 메모 -->
+            <td class="collateral-popup-cell text-nowrap"
+                data-popup-title="메모 전체 보기"
+                data-fulltext="{{ ev.memo|default:''|escape }}">
+              <span class="collateral-popup-text">{{ ev.memo|default:"—" }}</span>
+            </td>
             <!-- 주소 -->
-            <td class="board-ellipsis" style="max-width:160px;"
-                title="{{ ev.address }}">
-              {{ ev.address|default:"—" }}
+            <td class="collateral-popup-cell text-nowrap"
+                data-popup-title="주소 전체 보기"
+                data-fulltext="{{ ev.address|default:''|escape }}">
+              <span class="collateral-popup-text">{{ ev.address|default:"—" }}</span>
             </td>
             <!-- 금액 3종: intcomma 필터로 1,000단위 콤마 -->
             <td class="text-end text-nowrap money-cell">
@@ -256,6 +325,7 @@
             {% endif %}
           </tr>
           {% empty %}
+          <tr id="emptyRow"><td colspan="{{ can_delete|yesno:'12,11' }}" class="text-center text-muted py-3">아직 조회 이력이 없습니다.</td></tr>
           {% endfor %}
         </tbody>
       </table>
@@ -295,5 +365,23 @@
     </div>
   </div>
 </div>
+
+<!-- ══ 주소/메모 전체 보기 공용 모달 ═════════════════════ -->
+<div class="modal fade" id="addrFullModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title fw-semibold" id="addrFullModalTitle">전체 보기</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"
+                aria-label="닫기"></button>
+      </div>
+      <div class="modal-body">
+        <p id="addrFullText" class="mb-0 collateral-addr-full-text"></p>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /collateral-page-wide -->
 
 {% endblock %}

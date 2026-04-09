@@ -71,24 +71,29 @@ SUPPORT_CONTRACT_FIELDS = [
 # 담보평가 비율 상수 (SSOT)
 # ──────────────────────────────────────────────
 
-# 주거용 부동산 적용 비율 (%)
-COLLATERAL_RATE_RESIDENTIAL = 70
+# ── 물건 유형별 적용 비율 (%) ─────────────────────────────
+# ⚠️ 규칙 변경 시 이 파일만 수정한다. 뷰·서비스에 하드코딩 금지.
+COLLATERAL_RATE_APT       = 70   # 아파트
+COLLATERAL_RATE_VILLA_NEW = 60   # 빌라/다세대/오피스텔 (연식 20년 미만)
+COLLATERAL_RATE_VILLA_OLD = 50   # 빌라/다세대/오피스텔 (연식 20년 이상)
+COLLATERAL_RATE_HOUSE     = 50   # 주택/단독주택
+COLLATERAL_RATE_LAND      = 40   # 토지(지목:대)
 
-# 토지(지목:대) 적용 비율 (%)
-COLLATERAL_RATE_LAND = 50
-
-# 계산 불가 유형 코드 목록
+# 계산 불가 유형 코드 집합
 COLLATERAL_UNCALCULABLE_TYPES = {"etc"}
 
-# 물건 유형 → 적용 비율 매핑
+# 물건 유형 코드 → 적용 비율 매핑 (SSOT)
 COLLATERAL_RATE_MAP = {
-    "apt":       COLLATERAL_RATE_RESIDENTIAL,
-    "villa":     COLLATERAL_RATE_RESIDENTIAL,
-    "officetel": COLLATERAL_RATE_RESIDENTIAL,
-    "house":     COLLATERAL_RATE_RESIDENTIAL,
+    "apt":       COLLATERAL_RATE_APT,
+    "villa_new": COLLATERAL_RATE_VILLA_NEW,
+    "villa_old": COLLATERAL_RATE_VILLA_OLD,
+    "house":     COLLATERAL_RATE_HOUSE,
     "land":      COLLATERAL_RATE_LAND,
     # "etc" → 계산 불가, 매핑 없음
 }
 
 # Audit 액션 상수
 AUDIT_ACTION_COLLATERAL_EVAL = "collateral_eval_create"
+
+# 소유자 관계 중 근저당 설정 불가 코드 집합
+COLLATERAL_OWNER_REL_BLOCKED = {"third"}
