@@ -129,10 +129,10 @@
             </select>
           </div>
 
-          <!-- KB시세 -->
+          <!-- 시세 -->
           <div class="collateral-form-field collateral-f-money">
             <label for="kbPrice" class="form-label fw-semibold">
-              KB시세 <span class="text-danger">*</span>
+              시세 <span class="text-danger">*</span>
             </label>
             <div class="input-group input-group-sm">
               <input type="text" id="kbPrice" class="form-control text-end"
@@ -151,9 +151,9 @@
             </div>
           </div>
 
-          <!-- 임차보증금 -->
+          <!-- 임대보증금 -->
           <div class="collateral-form-field collateral-f-money">
-            <label for="leaseDeposit" class="form-label fw-semibold">임차보증금</label>
+            <label for="leaseDeposit" class="form-label fw-semibold">임대보증금</label>
             <div class="input-group input-group-sm">
               <input type="text" id="leaseDeposit" class="form-control text-end"
                      placeholder="0" inputmode="numeric" autocomplete="off" value="0">
@@ -184,16 +184,61 @@
     </div>
 
     <!-- ④ 관련 홈페이지 안내 -->
-    <div class="alert alert-light border mb-3 py-2 px-3 collateral-site-alert">
-      <span class="fw-semibold me-2">관련 사이트:</span>
-      <a href="https://www.iros.go.kr/index.jsp" target="_blank" rel="noopener"
-         class="me-3 text-decoration-none">
-        <i class="bi bi-box-arrow-up-right me-1"></i>등기부등본 (대법원 인터넷등기소)
-      </a>
-      <a href="https://kbland.kr" target="_blank" rel="noopener"
-         class="text-decoration-none">
-        <i class="bi bi-box-arrow-up-right me-1"></i>부동산시세 (KB부동산)
-      </a>
+   <div class="collateral-site-guide mb-3">
+      <div class="collateral-site-guide-head">
+        <div class="collateral-site-guide-title">
+          <i class="bi bi-link-45deg me-1"></i> 관련 사이트 안내
+        </div>
+        <div class="collateral-site-guide-sub">
+          물건 유형별 조회 사이트를 아래 기준으로 참고해 주세요.
+        </div>
+      </div>
+
+      <div class="collateral-site-list">
+        <a class="collateral-site-item"
+           href="https://www.iros.go.kr/index.jsp"
+           target="_blank" rel="noopener">
+          <span class="collateral-site-num">1</span>
+          <span class="collateral-site-body">
+            <span class="collateral-site-label">채권최고액 조회</span>
+            <span class="collateral-site-desc">대법원 인터넷 등기소</span>
+          </span>
+          <i class="bi bi-box-arrow-up-right"></i>
+        </a>
+
+        <a class="collateral-site-item"
+           href="https://kbland.kr/map?xy=37.5205559,126.9265729,17"
+           target="_blank" rel="noopener">
+          <span class="collateral-site-num">2</span>
+          <span class="collateral-site-body">
+            <span class="collateral-site-label">아파트 및 오피스텔 시세 조회</span>
+            <span class="collateral-site-desc">KB부동산 하위평균가</span>
+          </span>
+          <i class="bi bi-box-arrow-up-right"></i>
+        </a>
+
+        <a class="collateral-site-item"
+           href="https://www.howsmuch.com/"
+           target="_blank" rel="noopener">
+          <span class="collateral-site-num">3</span>
+          <span class="collateral-site-body">
+            <span class="collateral-site-label">빌라 및 다세대 시세 조회</span>
+            <span class="collateral-site-desc">하우스머치 하위가</span>
+          </span>
+          <i class="bi bi-box-arrow-up-right"></i>
+        </a>
+
+        <a class="collateral-site-item"
+           href="https://www.realtyprice.kr/notice/main/mainBody.htm"
+           target="_blank" rel="noopener">
+          <span class="collateral-site-num">4</span>
+          <span class="collateral-site-body">
+            <span class="collateral-site-label">단독 및 토지 시세 조회</span>
+            <span class="collateral-site-desc">국토교통부 실거래가 <span class="text-muted">(단독은 건물가 + 토지가)</span></span>
+          </span>
+          <i class="bi bi-box-arrow-up-right"></i>
+        </a>
+      </div>
     </div>
 
     <!-- ⑤ 계산 버튼 -->
@@ -239,9 +284,9 @@
           <col class="coll-c-proptype">  <!-- 물건유형  150px -->
           <col class="coll-c-memo">      <!-- 메모      180px -->
           <col class="coll-c-addr">      <!-- 주소  나머지 전부 -->
-          <col class="coll-c-money">     <!-- KB시세    115px -->
+          <col class="coll-c-money">     <!-- 시세    115px -->
           <col class="coll-c-money">     <!-- 채권최고액 115px -->
-          <col class="coll-c-money">     <!-- 임차보증금 115px -->
+          <col class="coll-c-money">     <!-- 임대보증금 115px -->
           <col class="coll-c-money">     <!-- 설정가능금액 115px -->
           {% if can_delete %}<col class="coll-c-del">{% endif %}
         </colgroup>
@@ -255,9 +300,9 @@
             <th class="text-nowrap">물건유형</th>
             <th class="text-nowrap">메모</th>
             <th class="text-nowrap">주소</th>
-            <th class="text-end text-nowrap">KB시세</th>
+            <th class="text-end text-nowrap">시세</th>
             <th class="text-end text-nowrap">채권최고액</th>
-            <th class="text-end text-nowrap">임차보증금</th>
+            <th class="text-end text-nowrap">임대보증금</th>
             <th class="text-end text-nowrap">설정가능금액</th>
             {% if can_delete %}
             <th class="text-center text-nowrap">삭제</th>
