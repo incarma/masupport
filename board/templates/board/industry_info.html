@@ -8,7 +8,7 @@
 <!-- board 업계정보 페이지 루트 -->
 <div
   id="industryInfoRoot"
-  class="support-scope"
+  class="industry-scope"
   data-preference-url-template="{% url 'board:api_industry_preference' 0 %}"
   data-click-url-template="{% url 'board:api_industry_click' 0 %}"
 >
@@ -21,7 +21,7 @@
   </div>
 
   <!-- 토픽 필터 -->
-  <div class="support-filter-bar card mb-4">
+  <div class="industry-filter-bar card mb-4">
     <div class="card-body">
       <div class="d-flex flex-wrap gap-2">
         <a
@@ -52,7 +52,7 @@
         </div>
         <div class="card-body">
           {% if recommended_articles %}
-            <div class="support-card-list">
+            <div class="industry-card-list">
               {% for article in recommended_articles %}
                 {% include "board/partials/_industry_article_card.html" with article=article pref=pref_map|get_item:article.id recommend_reason=article.recommend_reason only %}
               {% endfor %}
@@ -74,7 +74,7 @@
         </div>
         <div class="card-body">
           {% if latest_articles %}
-            <div class="support-card-list">
+            <div class="industry-card-list">
               {% for article in latest_articles %}
                 {% include "board/partials/_industry_article_card.html" with article=article pref=pref_map|get_item:article.id recommend_reason="" only %}
               {% endfor %}
@@ -92,7 +92,7 @@
 
 <!-- 초기 사용자 선호도 맵 -->
 <script>
-  window.supportPrefMap = {
+  window.industryPrefMap = {
     {% for article_id, pref in pref_map.items %}
       "{{ article_id }}": {
         rating: {{ pref.rating|default:"null" }},

@@ -871,27 +871,28 @@
 }
 
 /* ==========================================================
-10) Industry Info (support → board 1단계 브리지)
-   - 기존 support 클래스명을 유지한 채 .board-scope 하위로만 흡수
+10) Industry Info
+   - 업계정보 전용 스타일
+   - .board-scope 하위 + industry-* 네이밍으로만 적용
 ========================================================== */
-.board-scope .support-card-list{
+.board-scope .industry-card-list{
   display: grid;
   gap: 16px;
 }
 
-.board-scope .support-article-card{
+.board-scope .industry-article-card{
   border: 1px solid #e5e7eb;
   border-radius: 16px;
   padding: 16px;
   background: #fff;
 }
 
-.board-scope .support-article-card.is-busy{
+.board-scope .industry-article-card.is-busy{
   opacity: 0.65;
   pointer-events: none;
 }
 
-.board-scope .support-article-head{
+.board-scope .industry-article-head{
   display: flex;
   justify-content: space-between;
   gap: 12px;
@@ -899,39 +900,39 @@
   font-size: 0.875rem;
 }
 
-.board-scope .support-topic{
+.board-scope .industry-topic{
   font-weight: 700;
 }
 
-.board-scope .support-title{
+.board-scope .industry-title{
   font-size: 1.05rem;
   margin-bottom: 8px;
 }
 
-.board-scope .support-reason{
+.board-scope .industry-reason{
   color: #2563eb;
   font-size: 0.9rem;
   margin-bottom: 8px;
 }
 
-.board-scope .support-summary{
+.board-scope .industry-summary{
   color: #4b5563;
   margin-bottom: 10px;
 }
 
-.board-scope .support-meta{
+.board-scope .industry-meta{
   color: #6b7280;
   font-size: 0.875rem;
   margin-bottom: 12px;
 }
 
-.board-scope .support-actions{
+.board-scope .industry-actions{
   display: grid;
   gap: 10px;
 }
 
-.board-scope .support-rating-group,
-.board-scope .support-action-group{
+.board-scope .industry-rating-group,
+.board-scope .industry-action-group{
   display: flex;
   flex-wrap: wrap;
   gap: 8px;

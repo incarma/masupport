@@ -1,14 +1,22 @@
-# django_ma/support/models.py
+# django_ma/board/models_industry.py
+# =========================================================
+# Board Industry Models
+# - 업계정보 기능의 실체 모델
+# - support 앱 삭제를 전제로 board가 완전 소유
+# - 기존 support 데이터는 이관하지 않고 board 신규 테이블로 시작
+# =========================================================
+
+from __future__ import annotations
 
 from django.conf import settings
 from django.db import models
 
-from .constants import SOURCE_CHOICES, SOURCE_DIRECT, TOPIC_CHOICES
+from .constants_industry import SOURCE_CHOICES, SOURCE_DIRECT, TOPIC_CHOICES
 
 
-class TimeStampedModel(models.Model):
+class IndustryTimeStampedModel(models.Model):
     """
-    공통 생성/수정 시각 추상 모델
+    업계정보 공통 생성/수정 시각 추상 모델
     """
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -18,7 +26,7 @@ class TimeStampedModel(models.Model):
         abstract = True
 
 
-class SupportArticle(TimeStampedModel):
+class IndustryArticle(IndustryTimeStampedModel):
     """
     업계정보 기사 메타데이터 SSOT
 
@@ -49,24 +57,21 @@ class SupportArticle(TimeStampedModel):
     topic = models.CharField(max_length=50, choices=TOPIC_CHOICES, blank=True)
     tags_json = models.JSONField(default=list, blank=True)
 
-    # 중복 제거용 해시
     normalized_hash = models.CharField(max_length=64, unique=True, db_index=True)
 
-    # 운영 노출 제어
     is_active = models.BooleanField(default=True)
     is_hidden = models.BooleanField(default=False)
 
-    # 디버깅/운영 확인용 원본 payload 최소 보관
     raw_payload_json = models.JSONField(default=dict, blank=True)
 
     class Meta:
-        db_table = "support_article"
+        db_table = "board_industry_article"
         ordering = ["-published_at", "-id"]
         indexes = [
-            models.Index(fields=["-published_at"], name="support_art_pub_idx"),
-            models.Index(fields=["topic"], name="support_art_topic_idx"),
-            models.Index(fields=["source_name"], name="support_art_source_idx"),
-            models.Index(fields=["is_active", "is_hidden"], name="support_art_vis_idx"),
+            models.Index(fields=["-published_at"], name="board_ind_pub_idx"),
+            models.Index(fields=["topic"], name="board_ind_topic_idx"),
+            models.Index(fields=["source_name"], name="board_ind_source_idx"),
+            models.Index(fields=["is_active", "is_hidden"], name="board_ind_vis_idx"),
         ]
 
     def __str__(self) -> str:
@@ -82,24 +87,18 @@ class SupportArticle(TimeStampedModel):
         return self.original_url or self.portal_url
 
 
-class SupportUserPreference(TimeStampedModel):
+class IndustryUserPreference(IndustryTimeStampedModel):
     """
     사용자별 기사 선호도
-
-    포함 항목:
-    - 평점
-    - 북마크
-    - 관심없음(숨김)
-    - 읽음/클릭 기록
     """
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        related_name="support_preferences",
+        related_name="industry_preferences",
     )
     article = models.ForeignKey(
-        SupportArticle,
+        IndustryArticle,
         on_delete=models.CASCADE,
         related_name="preferences",
     )
@@ -114,37 +113,34 @@ class SupportUserPreference(TimeStampedModel):
     dwell_seconds = models.PositiveIntegerField(default=0)
 
     class Meta:
-        db_table = "support_user_preference"
+        db_table = "board_industry_user_preference"
         constraints = [
             models.UniqueConstraint(
                 fields=["user", "article"],
-                name="uq_support_user_article",
+                name="uq_board_industry_user_article",
             ),
         ]
         indexes = [
-            models.Index(fields=["user", "updated_at"], name="support_pref_user_idx"),
-            models.Index(fields=["article"], name="support_pref_article_idx"),
+            models.Index(fields=["user", "updated_at"], name="board_ind_pref_user_idx"),
+            models.Index(fields=["article"], name="board_ind_pref_article_idx"),
         ]
 
     def __str__(self) -> str:
         return f"{self.user} - {self.article}"
 
 
-class SupportRecommendation(TimeStampedModel):
+class IndustryRecommendation(IndustryTimeStampedModel):
     """
     추천 결과 스냅샷
-
-    현재 MVP에서는 실시간 추천이 중심이지만,
-    추후 저장형 추천/배치형 추천으로 확장할 수 있도록 모델을 먼저 둡니다.
     """
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        related_name="support_recommendations",
+        related_name="industry_recommendations",
     )
     article = models.ForeignKey(
-        SupportArticle,
+        IndustryArticle,
         on_delete=models.CASCADE,
         related_name="recommendations",
     )
@@ -159,21 +155,19 @@ class SupportRecommendation(TimeStampedModel):
     clicked_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        db_table = "support_recommendation"
+        db_table = "board_industry_recommendation"
         indexes = [
-            models.Index(fields=["user", "-created_at"], name="support_rec_user_idx"),
-            models.Index(fields=["model_version"], name="support_rec_model_idx"),
+            models.Index(fields=["user", "-created_at"], name="board_ind_rec_user_idx"),
+            models.Index(fields=["model_version"], name="board_ind_rec_model_idx"),
         ]
 
     def __str__(self) -> str:
         return f"{self.user} - {self.article} ({self.score})"
 
 
-class SupportCollectJobLog(TimeStampedModel):
+class IndustryCollectJobLog(IndustryTimeStampedModel):
     """
     기사 수집 작업 로그
-
-    운영자가 확인할 수 있도록 수집 성공/실패와 처리 건수를 기록합니다.
     """
 
     STATUS_READY = "ready"
@@ -203,14 +197,14 @@ class SupportCollectJobLog(TimeStampedModel):
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name="support_collect_jobs",
+        related_name="industry_collect_jobs",
     )
 
     message = models.TextField(blank=True)
     meta_json = models.JSONField(default=dict, blank=True)
 
     class Meta:
-        db_table = "support_collect_job_log"
+        db_table = "board_industry_collect_job_log"
         ordering = ["-created_at", "-id"]
 
     def __str__(self) -> str:

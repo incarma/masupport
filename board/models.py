@@ -405,3 +405,16 @@ class CollateralEval(models.Model):
             f"설정가능: {self.max_collateral:,}원 "
             f"({self.created_at:%Y-%m-%d})"
         )
+    
+
+# =========================================================
+# Industry Info Models Import
+# - board 앱의 업계정보 실체 모델을 app registry에 등록
+# - Django는 board.models import 시 이 모델들도 함께 로드한다
+# =========================================================
+from .models_industry import (  # noqa: E402,F401
+    IndustryArticle,
+    IndustryUserPreference,
+    IndustryRecommendation,
+    IndustryCollectJobLog,
+)

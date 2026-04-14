@@ -16,7 +16,7 @@
 
   const prefUrlTemplate = root.dataset.preferenceUrlTemplate || "";
   const clickUrlTemplate = root.dataset.clickUrlTemplate || "";
-  const prefMap = window.supportPrefMap || {};
+  const prefMap = window.industryPrefMap || {};
 
   // =========================================================
   // CSRF
@@ -123,7 +123,7 @@
   // 이벤트 위임
   // =========================================================
   root.addEventListener("click", async (e) => {
-    const card = e.target.closest(".support-article-card");
+    const card = e.target.closest(".industry-article-card");
     if (!card) return;
 
     const rateBtn = e.target.closest(".js-rate-btn");

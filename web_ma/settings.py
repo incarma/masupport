@@ -141,7 +141,6 @@ INSTALLED_APPS = [
     "django.contrib.humanize",
     # Local apps
     "home",
-    "support.apps.SupportConfig",
     "join",
     "board",
     "accounts.apps.AccountsConfig",

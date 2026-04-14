@@ -54,7 +54,6 @@ urlpatterns = [
     path("board/", include("board.urls")),
     path("commission/", include("commission.urls")),
     path("dash/", include("dash.urls")),
-    path("support/", include(("support.urls", "support"), namespace="support")),
     path("partner/", include(("partner.urls", "partner"), namespace="partner")),
     path("manual/", include("manual.urls")),
     path("ckeditor/", include("ckeditor_uploader.urls")),
