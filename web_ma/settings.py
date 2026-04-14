@@ -242,7 +242,7 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 LOGIN_URL = "/login/"
-LOGIN_REDIRECT_URL = "support:industry_info"
+LOGIN_REDIRECT_URL = '/board/industry-info/'
 LOGOUT_REDIRECT_URL = "/"
 
 # =============================================================================

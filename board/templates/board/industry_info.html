@@ -1,26 +1,21 @@
-<!-- django_ma/support/templates/support/industry_info.html-->
-
-{% extends "base.html" %}
-{% load static support_tags %}
+<!-- django_ma/board/templates/board/industry_info.html -->
+{% extends "board/base_board.html" %}
+{% load static industry_tags %}
 
 {% block title %}업계정보{% endblock %}
 
-{% block app_css %}
-  <link rel="stylesheet" href="{% static 'css/apps/support.css' %}">
-{% endblock %}
-
 {% block content %}
-<!-- support 업계정보 페이지 루트 -->
+<!-- board 업계정보 페이지 루트 -->
 <div
   id="industryInfoRoot"
   class="support-scope"
-  data-preference-url-template="{% url 'support:api_preference' 0 %}"
-  data-click-url-template="{% url 'support:api_click' 0 %}"
+  data-preference-url-template="{% url 'board:api_industry_preference' 0 %}"
+  data-click-url-template="{% url 'board:api_industry_click' 0 %}"
 >
   <!-- 페이지 헤더 -->
   <div class="d-flex justify-content-between align-items-center mb-3">
     <div>
-      <h2 class="mb-1">업계정보</h2>
+      <h2 class="mb-1 board-page-title">업계정보</h2>
       <div class="text-muted">보험 업계 주요 뉴스와 맞춤 추천을 확인하세요.</div>
     </div>
   </div>
@@ -30,7 +25,7 @@
     <div class="card-body">
       <div class="d-flex flex-wrap gap-2">
         <a
-          href="{% url 'support:industry_info' %}"
+          href="{% url 'board:industry_info' %}"
           class="btn btn-sm {% if not selected_topic %}btn-primary{% else %}btn-outline-secondary{% endif %}"
         >
           전체
@@ -38,7 +33,7 @@
 
         {% for value, label in topics %}
           <a
-            href="{% url 'support:industry_info' %}?topic={{ value|urlencode }}"
+            href="{% url 'board:industry_info' %}?topic={{ value|urlencode }}"
             class="btn btn-sm {% if selected_topic == value %}btn-primary{% else %}btn-outline-secondary{% endif %}"
           >
             {{ label }}
@@ -59,7 +54,7 @@
           {% if recommended_articles %}
             <div class="support-card-list">
               {% for article in recommended_articles %}
-                {% include "support/partials/_article_card.html" with article=article pref=pref_map|get_item:article.id recommend_reason=article.recommend_reason only %}
+                {% include "board/partials/_industry_article_card.html" with article=article pref=pref_map|get_item:article.id recommend_reason=article.recommend_reason only %}
               {% endfor %}
             </div>
           {% else %}
@@ -81,7 +76,7 @@
           {% if latest_articles %}
             <div class="support-card-list">
               {% for article in latest_articles %}
-                {% include "support/partials/_article_card.html" with article=article pref=pref_map|get_item:article.id recommend_reason="" only %}
+                {% include "board/partials/_industry_article_card.html" with article=article pref=pref_map|get_item:article.id recommend_reason="" only %}
               {% endfor %}
             </div>
           {% else %}
@@ -107,7 +102,9 @@
     {% endfor %}
   };
 </script>
+{% endblock %}
 
+{% block extra_js %}
 <!-- 업계정보 페이지 전용 JS -->
-<script src="{% static 'js/support/industry_info.js' %}"></script>
+<script src="{% static 'js/board/industry_info.js' %}?v={% now 'U' %}"></script>
 {% endblock %}

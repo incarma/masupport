@@ -1,4 +1,4 @@
-# django_ma/support/templatetags/support_tags.py
+# django_ma/board/templatetags/industry_tags.py
 
 from django import template
 
@@ -10,9 +10,8 @@ def get_item(mapping, key):
     """
     딕셔너리에서 key로 값을 꺼내기 위한 템플릿 필터
 
-    레거시 호환:
-    - 업계정보 템플릿 기준은 board로 이동했지만
-      기존 support 템플릿/partial 경로 호환을 위해 유지합니다.
+    사용 예:
+        pref_map|get_item:article.id
     """
     if not mapping:
         return None

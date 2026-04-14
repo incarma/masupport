@@ -11,6 +11,12 @@ from django.utils.html import format_html
 from django.utils.timezone import localtime
 
 from accounts.custom_admin import custom_admin_site
+from .industry_models import (
+    IndustryArticle,
+    IndustryCollectJobLog,
+    IndustryRecommendation,
+    IndustryUserPreference,
+)
 from .models import Post
 
 
@@ -209,3 +215,71 @@ class PostAdmin(admin.ModelAdmin):
     def get_created_at(self, obj):
         return localtime(obj.created_at).strftime("%Y-%m-%d %H:%M")
     get_created_at.short_description = "최초등록일"
+
+
+
+# =========================================================
+# Industry Info Admin (Proxy Models)
+# - 실제 DB는 support_* 테이블을 사용
+# - board에서 운영/검수 화면을 통합 제공
+# =========================================================
+@admin.register(IndustryArticle, site=custom_admin_site)
+class IndustryArticleAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "title",
+        "source_name",
+        "topic",
+        "published_at",
+        "is_active",
+        "is_hidden",
+    )
+    list_filter = ("source_portal", "topic", "is_active", "is_hidden")
+    search_fields = ("title", "summary", "source_name", "keyword_query")
+    ordering = ("-published_at", "-id")
+
+
+@admin.register(IndustryUserPreference, site=custom_admin_site)
+class IndustryUserPreferenceAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "user",
+        "article",
+        "rating",
+        "is_bookmarked",
+        "is_hidden",
+        "updated_at",
+    )
+    list_filter = ("is_bookmarked", "is_hidden", "is_read")
+    search_fields = ("user__id", "article__title")
+
+
+@admin.register(IndustryRecommendation, site=custom_admin_site)
+class IndustryRecommendationAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "user",
+        "article",
+        "score",
+        "reason_code",
+        "model_version",
+        "created_at",
+    )
+    list_filter = ("reason_code", "model_version", "clicked")
+    search_fields = ("user__id", "article__title")
+
+
+@admin.register(IndustryCollectJobLog, site=custom_admin_site)
+class IndustryCollectJobLogAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "source",
+        "query",
+        "status",
+        "fetched_count",
+        "inserted_count",
+        "error_count",
+        "created_at",
+    )
+    list_filter = ("source", "status")
+    search_fields = ("query", "message")

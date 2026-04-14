@@ -1,4 +1,15 @@
+// django_ma/static/js/board/industry_info.js
+// =========================================================
+// Board Industry Info Page JS
+// - support 업계정보 UI를 board에서 동일 동작으로 제공
+// - dataset 기반 URL 템플릿 사용
+// - CSRF cookie 기반 fetch
+// - 이벤트 위임 기반 rating / bookmark / hide / click 처리
+// =========================================================
+
 (function () {
+  "use strict";
+
   const root = document.getElementById("industryInfoRoot");
   if (!root || root.dataset.inited === "1") return;
   root.dataset.inited = "1";
@@ -7,12 +18,10 @@
   const clickUrlTemplate = root.dataset.clickUrlTemplate || "";
   const prefMap = window.supportPrefMap || {};
 
-  /**
-   * CSRF 토큰 조회
-   * - 현재 프로젝트는 CSRF 쿠키 기반 fetch 패턴을 사용합니다.
-   * - 운영 환경에서 과거 host-only 쿠키가 일시적으로 남아 같은 이름의
-   *   csrftoken이 2개 보일 수 있으므로, 마지막 값을 우선 사용합니다.
-   */
+  // =========================================================
+  // CSRF
+  // - 운영 환경에서 csrftoken이 여러 개 보이는 경우를 고려해 마지막 값을 우선 사용
+  // =========================================================
   function getCSRFToken() {
     const raw = document.cookie || "";
     if (!raw) return "";
@@ -29,23 +38,24 @@
     return decodeURIComponent(values[values.length - 1]);
   }
 
-  /**
-   * 템플릿 URL에서 article_id 치환
-   * 예: /support/api/articles/0/preference/ -> /support/api/articles/12/preference/
-   */
+  // =========================================================
+  // URL Builder
+  // - 템플릿 URL의 /0/ 부분을 실제 article id로 치환
+  // =========================================================
   function buildUrl(template, articleId) {
     return template.replace("/0/", `/${articleId}/`);
   }
 
-  /**
-   * 공용 POST JSON helper
-   */
+  // =========================================================
+  // 공용 POST JSON helper
+  // =========================================================
   async function postJson(url, payload) {
     const resp = await fetch(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "X-CSRFToken": getCSRFToken(),
+        "X-Requested-With": "XMLHttpRequest",
       },
       credentials: "same-origin",
       body: JSON.stringify(payload || {}),
@@ -54,11 +64,10 @@
     return resp.json();
   }
 
-  /**
-   * 카드 busy 상태 토글
-   * - 중복 클릭 방지
-   * - 진행 중 UI 피드백
-   */
+  // =========================================================
+  // Busy 상태 토글
+  // - 카드 전체 중복 클릭 방지
+  // =========================================================
   function setBusy(card, busy) {
     if (!card) return;
 
@@ -70,12 +79,10 @@
     });
   }
 
-  /**
-   * 선호도 저장 공통 처리
-   * - rating
-   * - bookmark
-   * - hide
-   */
+  // =========================================================
+  // 선호도 저장 공통 처리
+  // - rating / bookmark / hide
+  // =========================================================
   async function handlePreference(card, payload) {
     const articleId = card.dataset.articleId;
     setBusy(card, true);
@@ -112,13 +119,9 @@
     }
   }
 
-  /**
-   * 이벤트 위임 처리
-   * - 평점
-   * - 북마크
-   * - 관심없음
-   * - 원문보기 클릭기록
-   */
+  // =========================================================
+  // 이벤트 위임
+  // =========================================================
   root.addEventListener("click", async (e) => {
     const card = e.target.closest(".support-article-card");
     if (!card) return;

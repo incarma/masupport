@@ -1,86 +1,56 @@
 # django_ma/support/constants.py
-
 """
-support 앱 SSOT 상수
+support.constants
 
-포함 내용:
-- 토픽 분류
-- 뉴스 소스 구분
-- 추천 모델 버전
-- 기본 수집 키워드
+레거시 호환 상수 래퍼
+--------------------
+6단계부터 업계정보 상수의 실제 SSOT는 board.constants_industry 로 통일합니다.
+
+이 파일은 기존 import 경로 호환을 위해 유지합니다.
 """
 
-# =============================================================================
-# 기사 토픽 분류
-# =============================================================================
-TOPIC_REAL = "실손보험"
-TOPIC_AUTO = "자동차보험"
-TOPIC_LIFE = "생명보험"
-TOPIC_NL = "손해보험"
-TOPIC_GA = "GA"
-TOPIC_REG = "보험규제"
-TOPIC_CONSUMER = "소비자 이슈"
-TOPIC_TREND = "업계동향"
+from board.constants_industry import (  # noqa: F401
+    DEFAULT_INDUSTRY_NEWS_QUERIES,
+    INDUSTRY_RECOMMEND_MODEL_VERSION,
+    SOURCE_CHOICES,
+    SOURCE_DAUM,
+    SOURCE_DIRECT,
+    SOURCE_NAVER,
+    TOPIC_AUTO,
+    TOPIC_CHOICES,
+    TOPIC_CONSUMER,
+    TOPIC_GA,
+    TOPIC_KEYWORDS,
+    TOPIC_LIFE,
+    TOPIC_NL,
+    TOPIC_REAL,
+    TOPIC_REG,
+    TOPIC_TREND,
+)
 
-TOPIC_CHOICES = [
-    (TOPIC_REAL, TOPIC_REAL),
-    (TOPIC_AUTO, TOPIC_AUTO),
-    (TOPIC_LIFE, TOPIC_LIFE),
-    (TOPIC_NL, TOPIC_NL),
-    (TOPIC_GA, TOPIC_GA),
-    (TOPIC_REG, TOPIC_REG),
-    (TOPIC_CONSUMER, TOPIC_CONSUMER),
-    (TOPIC_TREND, TOPIC_TREND),
+# -------------------------------------------------------------------------
+# 기존 support 명칭 호환
+# -------------------------------------------------------------------------
+SUPPORT_RECOMMEND_MODEL_VERSION = INDUSTRY_RECOMMEND_MODEL_VERSION
+DEFAULT_NAVER_QUERIES = DEFAULT_INDUSTRY_NEWS_QUERIES
+
+__all__ = [
+    "TOPIC_REAL",
+    "TOPIC_AUTO",
+    "TOPIC_LIFE",
+    "TOPIC_NL",
+    "TOPIC_GA",
+    "TOPIC_REG",
+    "TOPIC_CONSUMER",
+    "TOPIC_TREND",
+    "TOPIC_CHOICES",
+    "SOURCE_NAVER",
+    "SOURCE_DAUM",
+    "SOURCE_DIRECT",
+    "SOURCE_CHOICES",
+    "INDUSTRY_RECOMMEND_MODEL_VERSION",
+    "SUPPORT_RECOMMEND_MODEL_VERSION",
+    "DEFAULT_INDUSTRY_NEWS_QUERIES",
+    "DEFAULT_NAVER_QUERIES",
+    "TOPIC_KEYWORDS",
 ]
-
-# =============================================================================
-# 뉴스 소스 구분
-# =============================================================================
-SOURCE_NAVER = "naver"
-SOURCE_DAUM = "daum"
-SOURCE_DIRECT = "direct"
-
-SOURCE_CHOICES = [
-    (SOURCE_NAVER, "Naver"),
-    (SOURCE_DAUM, "Daum"),
-    (SOURCE_DIRECT, "Direct"),
-]
-
-# =============================================================================
-# 추천 모델 버전
-# =============================================================================
-SUPPORT_RECOMMEND_MODEL_VERSION = "rule_v1"
-
-# =============================================================================
-# 기본 네이버 뉴스 수집 키워드
-# - 최초 MVP 기준
-# - 호출량/품질을 보며 운영 중 조정 가능
-# =============================================================================
-DEFAULT_NAVER_QUERIES = [
-    "보험",
-    "실손보험",
-    "자동차보험",
-    "생명보험",
-    "손해보험",
-    "보험대리점",
-    "GA",
-    "보험규제",
-    "금융소비자보호",
-    "보험업계",
-]
-
-# =============================================================================
-# 토픽 추론용 키워드
-# - 제목/요약의 간단한 키워드 매칭으로 초기 분류
-# - 추후 AI 분류/요약으로 확장 가능
-# =============================================================================
-TOPIC_KEYWORDS = {
-    TOPIC_REAL: ["실손", "실비"],
-    TOPIC_AUTO: ["자동차보험", "자차", "대물", "대인"],
-    TOPIC_LIFE: ["생명보험", "종신", "변액", "CI보험"],
-    TOPIC_NL: ["손해보험", "화재보험", "상해보험"],
-    TOPIC_GA: ["GA", "법인보험대리점", "보험대리점", "설계사", "FA"],
-    TOPIC_REG: ["규제", "감독", "법", "제도", "당국", "금감원", "금융위"],
-    TOPIC_CONSUMER: ["민원", "피해", "분쟁", "소비자", "불완전판매"],
-    TOPIC_TREND: ["실적", "시장", "업계", "트렌드", "전망", "동향"],
-}

@@ -1,132 +1,22 @@
-# django_ma/support/tasks.py
-
+# Add File: django_ma/support/tasks.py
 from __future__ import annotations
 
-from celery import shared_task
-from django.contrib.auth import get_user_model
-from django.utils import timezone
+"""
+support.tasks
 
-from audit.constants import ACTION
-from audit.services import log_action
-from support.models import SupportArticle, SupportCollectJobLog
-from support.services.naver_news import default_queries, fetch_naver_news, parse_naver_item
+레거시 호환 래퍼
+----------------
+3단계부터 업계정보 기사 수집 task의 실제 SSOT는
+board.tasks.industry_info.collect_board_industry_news 로 이동합니다.
+
+기존 beat / 수동 호출 / import 경로 호환을 위해 이 파일은 유지합니다.
+"""
+
+from board.tasks.industry_info import collect_board_industry_news
 
 
-@shared_task(bind=True, autoretry_for=(Exception,), retry_backoff=True, retry_kwargs={"max_retries": 3})
-def collect_support_naver_news(self, query: str = "", pages: int = 2, actor_id: str = ""):
+def collect_support_naver_news(*args, **kwargs):
     """
-    네이버 뉴스 배치 수집 task
-
-    설계 원칙:
-    - 사용자 요청 시 외부 API를 직접 호출하지 않음
-    - 배치 수집 + DB 조회 구조 유지
-    - beat_schedule에서 1시간 주기 / 새벽 보정 배치를 구성하는 전제
+    기존 support task 이름 호환용 alias wrapper
     """
-
-    User = get_user_model()
-    actor = User.objects.filter(pk=actor_id).first() if actor_id else None
-    queries = [query] if query else default_queries()
-
-    total_inserted = 0
-    total_skipped = 0
-    total_errors = 0
-
-    for one_query in queries:
-        job = SupportCollectJobLog.objects.create(
-            source="naver",
-            query=one_query,
-            actor=actor,
-            requested_at=timezone.now(),
-            status=SupportCollectJobLog.STATUS_READY,
-        )
-
-        try:
-            fetched_count = 0
-            inserted_count = 0
-            skipped_count = 0
-
-            for page in range(pages):
-                start = page * 20 + 1
-                payload = fetch_naver_news(one_query, display=20, start=start, sort="date")
-                items = payload.get("items", [])
-                fetched_count += len(items)
-
-                for item in items:
-                    defaults = parse_naver_item(item, one_query)
-                    _, created = SupportArticle.objects.update_or_create(
-                        normalized_hash=defaults["normalized_hash"],
-                        defaults=defaults,
-                    )
-                    if created:
-                        inserted_count += 1
-                    else:
-                        skipped_count += 1
-
-            job.status = SupportCollectJobLog.STATUS_SUCCESS
-            job.fetched_count = fetched_count
-            job.inserted_count = inserted_count
-            job.skipped_count = skipped_count
-            job.finished_at = timezone.now()
-            job.save(
-                update_fields=[
-                    "status",
-                    "fetched_count",
-                    "inserted_count",
-                    "skipped_count",
-                    "finished_at",
-                    "updated_at",
-                ]
-            )
-
-            total_inserted += inserted_count
-            total_skipped += skipped_count
-
-            if actor:
-                log_action(
-                    None,
-                    ACTION.SUPPORT_COLLECT_RUN,
-                    object_type="SupportCollectJobLog",
-                    object_id=str(job.id),
-                    meta={
-                        "source": "naver",
-                        "query": one_query,
-                        "fetched_count": fetched_count,
-                        "inserted_count": inserted_count,
-                        "skipped_count": skipped_count,
-                    },
-                )
-
-        except Exception as exc:
-            total_errors += 1
-            job.status = SupportCollectJobLog.STATUS_FAIL
-            job.error_count = 1
-            job.finished_at = timezone.now()
-            job.message = str(exc)
-            job.save(
-                update_fields=[
-                    "status",
-                    "error_count",
-                    "finished_at",
-                    "message",
-                    "updated_at",
-                ]
-            )
-
-            if actor:
-                log_action(
-                    None,
-                    ACTION.SUPPORT_COLLECT_FAIL,
-                    object_type="SupportCollectJobLog",
-                    object_id=str(job.id),
-                    success=False,
-                    reason=str(exc),
-                    meta={"source": "naver", "query": one_query},
-                )
-            raise
-
-    return {
-        "queries": len(queries),
-        "inserted_count": total_inserted,
-        "skipped_count": total_skipped,
-        "error_count": total_errors,
-    }
+    return collect_board_industry_news(*args, **kwargs)

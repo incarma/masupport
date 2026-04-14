@@ -95,6 +95,24 @@ collateral_patterns = [
 
 
 # ---------------------------------------------------------------
+# Industry Info (업계정보) — 로그인 사용자 전체 허용
+# ---------------------------------------------------------------
+industry_patterns = [
+    path("industry-info/", views.industry_info, name="industry_info"),
+    path(
+        "api/industry/articles/<int:article_id>/preference/",
+        views.industry_save_preference,
+        name="api_industry_preference",
+    ),
+    path(
+        "api/industry/articles/<int:article_id>/click/",
+        views.industry_mark_click,
+        name="api_industry_click",
+    ),
+]
+
+
+# ---------------------------------------------------------------
 # URL 조합
 # ---------------------------------------------------------------
 urlpatterns = [
@@ -102,4 +120,5 @@ urlpatterns = [
     *support_patterns,
     *task_patterns,
     *collateral_patterns,
+    *industry_patterns,
 ]

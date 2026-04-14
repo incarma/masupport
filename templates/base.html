@@ -64,17 +64,6 @@
            id="navbarContent" style="width: fit-content;">
         <ul class="navbar-nav mb-2 mb-lg-0">
 
-          <!-- ✅ Support -->
-          {% if user.grade != 'inactive' %}
-            <li class="nav-item dropdown">
-              <a class="nav-link dropdown-toggle {% if '/support' in request.path %}active{% else %}inactive{% endif %}"
-                 href="#" id="dashMenu" data-bs-toggle="dropdown">영업지원</a>
-              <ul class="dropdown-menu" aria-labelledby="dashMenu">
-                <li><a class="dropdown-item" href="{% url 'support:industry_info' %}">업계정보</a></li>
-              </ul>
-            </li>
-          {% endif %}
-
           <!-- ✅ Dashboard (superuser/head only) -->
           {% if user.grade == 'superuser' or user.grade == 'head' %}
             <li class="nav-item dropdown">
@@ -95,8 +84,9 @@
             <!-- ✅ Board -->
             <li class="nav-item dropdown">
               <a class="nav-link dropdown-toggle {% if '/board' in request.path %}active{% else %}inactive{% endif %}"
-                href="#" id="boardMenu" data-bs-toggle="dropdown">업무요청</a>
+                href="#" id="boardMenu" data-bs-toggle="dropdown">업무지원</a>
               <ul class="dropdown-menu" aria-labelledby="boardMenu">
+                <li><a class="dropdown-item" href="{% url 'board:industry_info' %}">업계정보</a></li>
                 {% if user.grade == 'superuser' or user.grade == 'head' or user.grade == 'leader' %}
                   <li><a class="dropdown-item" href="{% url 'board:post_list' %}">요청게시판</a></li>
                   <li><a class="dropdown-item" href="{% url 'board:support_form' %}">업무요청서</a></li>
@@ -218,17 +208,6 @@
     <div class="offcanvas-body p-0">
       <div class="accordion accordion-flush" id="mobileMenuAccordion">
 
-        <!-- ✅ Support -->
-        {% if user.grade != 'inactive' %}
-          <li class="nav-item dropdown">
-            <a class="nav-link dropdown-toggle {% if '/support' in request.path %}active{% else %}inactive{% endif %}"
-                href="#" id="dashMenu" data-bs-toggle="dropdown">영업지원</a>
-            <ul class="dropdown-menu" aria-labelledby="dashMenu">
-              <li><a class="dropdown-item" href="{% url 'support:industry_info' %}">업계정보</a></li>
-            </ul>
-          </li>
-        {% endif %}
-
         {% if user.grade == 'superuser' or user.grade == 'head' %}
           <!-- 대시보드 -->
           <div class="accordion-item">
@@ -253,17 +232,18 @@
         {% endif %}
 
         {% if user.grade != 'inactive' %}      
-          <!-- 업무요청 -->
+          <!-- 업무지원 -->
           <div class="accordion-item">
             <h2 class="accordion-header" id="mBoardHead">
               <button class="accordion-button collapsed" type="button"
                       data-bs-toggle="collapse" data-bs-target="#mBoard"
                       aria-expanded="false" aria-controls="mBoard">
-                업무요청
+                업무지원
               </button>
             </h2>
             <div id="mBoard" class="accordion-collapse collapse" aria-labelledby="mBoardHead" data-bs-parent="#mobileMenuAccordion">
               <div class="accordion-body pt-0">
+                <a class="d-block py-2" href="{% url 'board:industry_info' %}">업계정보</a>
                 {% if user.grade == 'superuser' or user.grade == 'head' or  user.grade == 'leader' %}
                   <a class="d-block py-2" href="{% url 'board:post_list' %}">요청게시판</a>
                   <a class="d-block py-2" href="{% url 'board:support_form' %}">업무요청서</a>
