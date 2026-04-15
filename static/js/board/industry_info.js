@@ -1,10 +1,12 @@
 // django_ma/static/js/board/industry_info.js
 // =========================================================
 // Board Industry Info Page JS
-// - support 업계정보 UI를 board에서 동일 동작으로 제공
 // - dataset 기반 URL 템플릿 사용
 // - CSRF cookie 기반 fetch
 // - 이벤트 위임 기반 rating / bookmark / hide / click 처리
+// ✅ 동일 article_id 카드 전체 동기화
+//    - 관심없음: 같은 article_id 카드 모두 제거
+//    - 별점/북마크: 같은 article_id 카드 모두 UI 갱신
 // =========================================================
 
 (function () {
@@ -20,35 +22,24 @@
 
   // =========================================================
   // CSRF
-  // - 운영 환경에서 csrftoken이 여러 개 보이는 경우를 고려해 마지막 값을 우선 사용
   // =========================================================
   function getCSRFToken() {
     const raw = document.cookie || "";
     if (!raw) return "";
-
     const parts = raw.split(";").map((v) => v.trim()).filter(Boolean);
     const values = [];
-
     for (const part of parts) {
       if (!part.startsWith("csrftoken=")) continue;
       values.push(part.slice("csrftoken=".length));
     }
-
     if (!values.length) return "";
     return decodeURIComponent(values[values.length - 1]);
   }
 
-  // =========================================================
-  // URL Builder
-  // - 템플릿 URL의 /0/ 부분을 실제 article id로 치환
-  // =========================================================
   function buildUrl(template, articleId) {
     return template.replace("/0/", `/${articleId}/`);
   }
 
-  // =========================================================
-  // 공용 POST JSON helper
-  // =========================================================
   async function postJson(url, payload) {
     const resp = await fetch(url, {
       method: "POST",
@@ -60,19 +51,26 @@
       credentials: "same-origin",
       body: JSON.stringify(payload || {}),
     });
-
     return resp.json();
   }
 
   // =========================================================
-  // Busy 상태 토글
-  // - 카드 전체 중복 클릭 방지
+  // ✅ 동일 article_id 카드 전체 조회
+  // - 추천/최신 양쪽 섹션에 같은 기사가 있을 수 있으므로
+  //   querySelectorAll로 전체를 배열로 반환
+  // =========================================================
+  function getAllCardsByArticleId(articleId) {
+    return Array.from(
+      root.querySelectorAll(`.industry-article-card[data-article-id="${articleId}"]`)
+    );
+  }
+
+  // =========================================================
+  // Busy 상태 토글 (단일 카드)
   // =========================================================
   function setBusy(card, busy) {
     if (!card) return;
-
     card.classList.toggle("is-busy", !!busy);
-
     card.querySelectorAll("button").forEach((btn) => {
       btn.disabled = !!busy;
       btn.setAttribute("aria-busy", busy ? "true" : "false");
@@ -80,12 +78,55 @@
   }
 
   // =========================================================
+  // ✅ 별점 UI 갱신 — 동일 article_id 카드 전체 적용
+  // - .js-rate-btn 의 active 클래스를 서버 응답 기준으로 동기화
+  // =========================================================
+  function syncRatingUI(articleId, rating) {
+    getAllCardsByArticleId(articleId).forEach((card) => {
+      card.querySelectorAll(".js-rate-btn").forEach((btn) => {
+        const btnRating = Number(btn.dataset.rating);
+        btn.classList.toggle("active", btnRating === rating);
+      });
+    });
+  }
+
+  // =========================================================
+  // ✅ 북마크 UI 갱신 — 동일 article_id 카드 전체 적용
+  // - .js-bookmark-btn 의 active 클래스 동기화
+  // =========================================================
+  function syncBookmarkUI(articleId, isBookmarked) {
+    getAllCardsByArticleId(articleId).forEach((card) => {
+      const btn = card.querySelector(".js-bookmark-btn");
+      if (btn) btn.classList.toggle("active", isBookmarked);
+    });
+  }
+
+  // =========================================================
+  // ✅ 관심없음 — 동일 article_id 카드 전체 제거
+  // 북마크 페이지에서 북마크 해제 시에도 전체 제거
+  // =========================================================
+  function removeAllCardsByArticleId(articleId) {
+    getAllCardsByArticleId(articleId).forEach((card) => card.remove());
+
+    // 북마크 페이지: 남은 카드 없으면 빈 상태 UI 노출
+    if (root.dataset.bookmarkedOnly === "1") {
+      const remaining = root.querySelectorAll(".industry-article-card");
+      if (!remaining.length) {
+        const emptyEl = document.getElementById("industryEmptyState");
+        if (emptyEl) emptyEl.style.display = "";
+      }
+    }
+  }
+
+  // =========================================================
   // 선호도 저장 공통 처리
-  // - rating / bookmark / hide
   // =========================================================
   async function handlePreference(card, payload) {
     const articleId = card.dataset.articleId;
-    setBusy(card, true);
+
+    // ✅ 요청 중 동일 article_id 카드 전체 busy 처리
+    const allCards = getAllCardsByArticleId(articleId);
+    allCards.forEach((c) => setBusy(c, true));
 
     try {
       const json = await postJson(buildUrl(prefUrlTemplate, articleId), payload);
@@ -95,27 +136,42 @@
         return;
       }
 
-      if (payload.rating) {
+      // ── 별점 ──────────────────────────────────────────────
+      if (payload.rating !== undefined) {
         prefMap[articleId] = prefMap[articleId] || {};
         prefMap[articleId].rating = payload.rating;
+        syncRatingUI(articleId, payload.rating);
         alert(`평점 ${payload.rating}점이 저장되었습니다.`);
+
+      // ── 북마크 ────────────────────────────────────────────
       } else if (payload.is_bookmarked !== undefined) {
         prefMap[articleId] = prefMap[articleId] || {};
         prefMap[articleId].is_bookmarked = payload.is_bookmarked;
+        syncBookmarkUI(articleId, payload.is_bookmarked);
+
+        // 북마크 페이지에서 해제 → 전체 카드 제거
+        if (!payload.is_bookmarked && root.dataset.bookmarkedOnly === "1") {
+          removeAllCardsByArticleId(articleId);
+        }
         alert(payload.is_bookmarked ? "북마크했습니다." : "북마크를 해제했습니다.");
+
+      // ── 관심없음 ──────────────────────────────────────────
       } else if (payload.is_hidden !== undefined) {
         prefMap[articleId] = prefMap[articleId] || {};
         prefMap[articleId].is_hidden = payload.is_hidden;
 
         if (payload.is_hidden) {
-          card.remove();
+          // ✅ 추천/최신 양쪽 동일 article_id 카드 모두 제거
+          removeAllCardsByArticleId(articleId);
         }
         alert(payload.is_hidden ? "관심없음 처리되었습니다." : "숨김 해제되었습니다.");
       }
+
     } catch (err) {
       alert("저장 중 오류가 발생했습니다.");
     } finally {
-      setBusy(card, false);
+      // ✅ busy 해제: 카드가 이미 제거된 경우 querySelectorAll이 빈 배열 반환하므로 안전
+      getAllCardsByArticleId(articleId).forEach((c) => setBusy(c, false));
     }
   }
 
@@ -148,7 +204,7 @@
       try {
         await postJson(buildUrl(clickUrlTemplate, card.dataset.articleId), {});
       } catch (err) {
-        // 클릭 기록 실패는 사용자 이동을 막지 않습니다.
+        // 클릭 기록 실패는 사용자 이동을 막지 않음
       }
     }
   });

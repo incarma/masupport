@@ -1,10 +1,4 @@
 # django_ma/board/tasks/industry_info.py
-# =========================================================
-# Board Industry Info Celery Task
-# - 업계정보 기사 수집 배치 task
-# - 3단계부터 board가 task 소유
-# - DB는 기존 support 테이블/모델을 그대로 사용
-# =========================================================
 
 from __future__ import annotations
 
@@ -19,7 +13,13 @@ from board.industry_models import IndustryArticle, IndustryCollectJobLog
 from board.services.industry_news import default_queries, fetch_naver_news, parse_naver_item
 
 
-@shared_task(bind=True, autoretry_for=(Exception,), retry_backoff=True, retry_kwargs={"max_retries": 3})
+@shared_task(
+    bind=True,
+    name="board.tasks.industry_info.collect_board_industry_news",  # ✅ Scenario α 방지 SSOT
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_kwargs={"max_retries": 3},
+)
 def collect_board_industry_news(self, query: str = "", pages: int = 2, actor_id: str = ""):
     """
     네이버 뉴스 배치 수집 task
@@ -27,7 +27,6 @@ def collect_board_industry_news(self, query: str = "", pages: int = 2, actor_id:
     설계 원칙:
     - 사용자 요청 시 외부 API를 직접 호출하지 않음
     - 배치 수집 + DB 조회 구조 유지
-    - 현재 단계에서는 support 테이블에 적재
     """
     User = get_user_model()
     actor = User.objects.filter(pk=actor_id).first() if actor_id else None
@@ -80,7 +79,7 @@ def collect_board_industry_news(self, query: str = "", pages: int = 2, actor_id:
                     "inserted_count",
                     "skipped_count",
                     "finished_at",
-                    "updated_at",
+                    # ✅ updated_at 제외: auto_now=True 필드는 update_fields 명시 불필요
                 ]
             )
 
@@ -115,7 +114,7 @@ def collect_board_industry_news(self, query: str = "", pages: int = 2, actor_id:
                     "error_count",
                     "finished_at",
                     "message",
-                    "updated_at",
+                    # ✅ updated_at 제외
                 ]
             )
 

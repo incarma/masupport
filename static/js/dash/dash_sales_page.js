@@ -271,6 +271,30 @@
     return x.length === 1 ? "0" + x : x;
   }
 
+  // =========================================================
+  // Money display helpers
+  // - 차트 표시 전용
+  // - 원본 데이터/계산값은 유지하고, UI에서만 천원 단위 절사
+  //   예) 10,000,000 -> 10,000
+  // =========================================================
+  function toThousandWonFloor(value) {
+    if (value === null || typeof value === "undefined") return null;
+    const n = Number(value);
+    if (!Number.isFinite(n)) return null;
+    return Math.trunc(n / 1000);
+  }
+
+  function mapSeriesToThousandWon(arr) {
+    if (!Array.isArray(arr)) return [];
+    return arr.map((v) => toThousandWonFloor(v));
+  }
+
+  function formatThousandWon(value) {
+    const v = toThousandWonFloor(value);
+    if (v === null) return "-";
+    return v.toLocaleString();
+  }
+
   function inferYmFromLabels(rawLabels) {
     // rawLabels: ["YYYY-MM-DD", ...]
     if (!Array.isArray(rawLabels) || rawLabels.length === 0) return "";
@@ -446,9 +470,14 @@
       return;
     }
 
-    const dataThis = trimAfterLast ? trimAfterLastIncreaseToNull(rawThis) : rawThis;
-    const dataPrev = trimAfterLast ? trimAfterLastIncreaseToNull(fixedPrev) : fixedPrev;
-    const dataYA = trimAfterLast ? trimAfterLastIncreaseToNull(fixedYA) : fixedYA;
+    const dataThisRaw = trimAfterLast ? trimAfterLastIncreaseToNull(rawThis) : rawThis;
+    const dataPrevRaw = trimAfterLast ? trimAfterLastIncreaseToNull(fixedPrev) : fixedPrev;
+    const dataYARaw = trimAfterLast ? trimAfterLastIncreaseToNull(fixedYA) : fixedYA;
+
+    // ✅ 표시 전용: 실제 렌더 데이터 자체를 천원 단위로 절사
+    const dataThis = mapSeriesToThousandWon(dataThisRaw);
+    const dataPrev = mapSeriesToThousandWon(dataPrevRaw);
+    const dataYA = mapSeriesToThousandWon(dataYARaw);
 
     const anyThis = hasAnyIncrease(rawThis);
     const anyPrev = hasAnyIncrease(fixedPrev);
@@ -464,11 +493,18 @@
     const nlStep = safeJsonFromScriptTag("nl-l-y-step", null);
     const nlMax = safeJsonFromScriptTag("nl-l-y-max", null);
 
-    const yScale = { ticks: { callback: (v) => Number(v).toLocaleString() } };
+    const yScale = {
+      ticks: {
+        callback: (v) => Number(v ?? 0).toLocaleString()
+      }
+    };
     if (useNlLifeUnifiedYAxis && typeof nlStep === "number" && typeof nlMax === "number") {
       yScale.beginAtZero = true;
-      yScale.suggestedMax = nlMax;
-      yScale.ticks = { stepSize: nlStep, callback: (v) => Number(v).toLocaleString() };
+      yScale.suggestedMax = Math.trunc(nlMax / 1000);
+      yScale.ticks = {
+        stepSize: Math.max(1, Math.trunc(nlStep / 1000)),
+        callback: (v) => Number(v ?? 0).toLocaleString()
+      };
     }
 
     // =========================================================
@@ -551,11 +587,14 @@
     // (D) 예측 밴드 + 예측선
     if (forecastSets) {
       const { fMean, fLo, fHi } = forecastSets;
+      const fMeanK = mapSeriesToThousandWon(fMean);
+      const fLoK = mapSeriesToThousandWon(fLo);
+      const fHiK = mapSeriesToThousandWon(fHi);
 
       const hiIndex = datasets.length;
       datasets.push({
         label: (forecastBandLabel || "예측 상한"),
-        data: fHi,
+        data: fHiK,
         tension: 0.25,
         pointRadius: 0,
         borderWidth: 0,
@@ -567,7 +606,7 @@
       const loIndex = datasets.length;
       datasets.push({
         label: (forecastBandLabel || "예측 하한"),
-        data: fLo,
+        data: fLoK,
         tension: 0.25,
         pointRadius: 0,
         borderWidth: 0,
@@ -579,7 +618,7 @@
 
       datasets.push({
         label: forecastLabel || "예측",
-        data: fMean,
+        data: fMeanK,
         tension: 0.25,
         pointRadius: 1,
         borderWidth: 2,

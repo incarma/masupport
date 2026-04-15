@@ -6,7 +6,7 @@
 
 {% block content %}
 {# ✅ 캐시버스터/디버그용 버전(필요할 때 이 문자열만 바꾸면 됨) #}
-{% with STATIC_VER="20260118-01" %}
+{% with STATIC_VER="20260415-01" %}
 
 <div class="container-fluid mt-4" id="dash-sales"
      data-upload-url="{% url 'dash:dash_sales_upload' %}"
@@ -154,7 +154,10 @@
         <div class="col-12 col-lg-6">
           <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
             <div class="fw-bold">손생 장기매출</div>
-            <div class="text-muted small">기준 월도: <b>{{ filter_ym }}</b></div>
+            <div class="text-muted small">
+              기준 월도: <b>{{ filter_ym }}</b>
+              <span class="ms-1">(단위 : 천원)</span>
+            </div>
           </div>
           <div class="mt-3" style="height:260px;">
             <canvas id="dailyCumsumChart"></canvas>
@@ -165,7 +168,10 @@
         <div class="col-12 col-lg-6">
           <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
             <div class="fw-bold">자동차 매출</div>
-            <div class="text-muted small">기준 월도: <b>{{ filter_ym }}</b></div>
+            <div class="text-muted small">
+              기준 월도: <b>{{ filter_ym }}</b>
+              <span class="ms-1">(단위 : 천원)</span>
+            </div>
           </div>
           <div class="mt-3" style="height:260px;">
             <canvas id="carDailyCumsumChart"></canvas>
@@ -176,7 +182,10 @@
         <div class="col-12 col-lg-6">
           <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
             <div class="fw-bold">손보 장기매출</div>
-            <div class="text-muted small">기준 월도: <b>{{ filter_ym }}</b></div>
+            <div class="text-muted small">
+              기준 월도: <b>{{ filter_ym }}</b>
+              <span class="ms-1">(단위 : 천원)</span>
+            </div>
           </div>
           <div class="mt-3" style="height:260px;">
             <canvas id="nonlifeDailyCumsumChart"></canvas>
@@ -187,7 +196,10 @@
         <div class="col-12 col-lg-6">
           <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
             <div class="fw-bold">생보 장기매출</div>
-            <div class="text-muted small">기준 월도: <b>{{ filter_ym }}</b></div>
+            <div class="text-muted small">
+              기준 월도: <b>{{ filter_ym }}</b>
+              <span class="ms-1">(단위 : 천원)</span>
+            </div>
           </div>
           <div class="mt-3" style="height:260px;">
             <canvas id="lifeDailyCumsumChart"></canvas>

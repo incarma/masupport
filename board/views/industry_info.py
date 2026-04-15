@@ -1,10 +1,4 @@
 # django_ma/board/views/industry_info.py
-# =========================================================
-# Board Industry Info Views
-# - support 업계정보 기능을 board로 1차 브리지 이관
-# - DB/테이블은 기존 support 모델을 그대로 사용
-# - board는 URL / 템플릿 / JS 진입점만 우선 제공
-# =========================================================
 
 from __future__ import annotations
 
@@ -32,15 +26,12 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
     "industry_info",
+    "industry_bookmarks",
     "industry_save_preference",
     "industry_mark_click",
 ]
 
 
-# =========================================================
-# JSON Helpers
-# - board 내 다른 JSON 응답 패턴과 유사하게 통일
-# =========================================================
 def _json_ok(message: str = "ok", **data) -> JsonResponse:
     return JsonResponse({"ok": True, "message": message, "data": data})
 
@@ -50,17 +41,13 @@ def _json_err(message: str = "error", status: int = 400, **data) -> JsonResponse
 
 
 # =========================================================
-# Page View
+# Page View — 메인
 # =========================================================
 @login_required
 def industry_info(request: HttpRequest) -> HttpResponse:
     """
     board 업계정보 메인 페이지
-
-    설계 원칙:
     - 로그인 사용자 전체 허용
-    - support의 기존 추천 로직/데이터를 재사용
-    - board 템플릿으로만 진입점을 먼저 이동
     - 추천 실패 시 fallback 기사 목록으로 안전 복구
     """
     topic = (request.GET.get("topic") or "").strip()
@@ -85,7 +72,7 @@ def industry_info(request: HttpRequest) -> HttpResponse:
         logger.exception("industry_info recommendation failed; fallback to major articles")
         recommended_articles = get_major_articles(limit=6, topic=topic)
 
-    article_ids = [article.id for article in (latest_articles + recommended_articles)]
+    article_ids = [a.id for a in (latest_articles + recommended_articles)]
     pref_map = {
         pref.article_id: pref
         for pref in IndustryUserPreference.objects.filter(
@@ -100,28 +87,80 @@ def industry_info(request: HttpRequest) -> HttpResponse:
         "recommended_articles": recommended_articles,
         "latest_articles": latest_articles,
         "pref_map": pref_map,
+        "bookmarked_only": False,
+        "bookmark_count": IndustryUserPreference.objects.filter(
+            user=request.user,
+            is_bookmarked=True,
+        ).count(),
+    }
+    return render(request, "board/industry_info.html", context)
+
+
+# =========================================================
+# Page View — 북마크 목록
+# =========================================================
+@login_required
+def industry_bookmarks(request: HttpRequest) -> HttpResponse:
+    """
+    북마크한 기사 목록 페이지
+
+    설계 원칙:
+    - industry_info 와 동일 템플릿 재사용 (bookmarked_only=True 분기)
+    - 추천 섹션은 노출하지 않음
+    - 토픽 필터 유지 (북마크 내에서 필터 가능)
+    - 숨김(is_hidden) 기사는 제외
+    """
+    topic = (request.GET.get("topic") or "").strip()
+
+    # 북마크된 article_id 목록
+    bookmarked_ids = (
+        IndustryUserPreference.objects
+        .filter(user=request.user, is_bookmarked=True)
+        .values_list("article_id", flat=True)
+    )
+
+    latest_qs = (
+        IndustryArticle.objects
+        .filter(
+            id__in=bookmarked_ids,
+            is_active=True,
+            is_hidden=False,
+        )
+        .order_by("-published_at", "-id")
+    )
+
+    if topic:
+        latest_qs = latest_qs.filter(topic=topic)
+
+    latest_articles = list(latest_qs)
+
+    article_ids = [a.id for a in latest_articles]
+    pref_map = {
+        pref.article_id: pref
+        for pref in IndustryUserPreference.objects.filter(
+            user=request.user,
+            article_id__in=article_ids,
+        )
+    }
+
+    context = {
+        "topics": TOPIC_CHOICES,
+        "selected_topic": topic,
+        "recommended_articles": [],       # 북마크 페이지에서는 추천 섹션 미노출
+        "latest_articles": latest_articles,
+        "pref_map": pref_map,
+        "bookmarked_only": True,
+        "bookmark_count": len(bookmarked_ids),  # 이미 쿼리 결과 재사용
     }
     return render(request, "board/industry_info.html", context)
 
 
 # =========================================================
 # Preference API
-# - rating / bookmark / hide
 # =========================================================
 @login_required
 @require_POST
 def industry_save_preference(request: HttpRequest, article_id: int) -> JsonResponse:
-    """
-    board 업계정보 사용자 선호도 저장 API
-
-    저장 대상:
-    - rating
-    - is_bookmarked
-    - is_hidden
-
-    1단계에서는 support_user_preference 테이블에 그대로 저장한다.
-    """
-
     article = get_object_or_404(
         IndustryArticle,
         pk=article_id,
@@ -146,7 +185,6 @@ def industry_save_preference(request: HttpRequest, article_id: int) -> JsonRespo
             rating = int(rating)
         except (TypeError, ValueError):
             return _json_err("평점은 숫자여야 합니다.")
-
         if rating < 1 or rating > 5:
             return _json_err("평점은 1~5 사이여야 합니다.")
 
@@ -202,19 +240,10 @@ def industry_save_preference(request: HttpRequest, article_id: int) -> JsonRespo
 
 # =========================================================
 # Click API
-# - 원문보기 클릭 기록
 # =========================================================
 @login_required
 @require_POST
 def industry_mark_click(request: HttpRequest, article_id: int) -> JsonResponse:
-    """
-    board 업계정보 기사 클릭 기록 API
-
-    처리 내용:
-    - clicked_at
-    - is_read
-    - read_at
-    """
     article = get_object_or_404(
         IndustryArticle,
         pk=article_id,

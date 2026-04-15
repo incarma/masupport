@@ -99,6 +99,7 @@ collateral_patterns = [
 # ---------------------------------------------------------------
 industry_patterns = [
     path("industry-info/", views.industry_info, name="industry_info"),
+    path("industry-info/bookmarks/", views.industry_bookmarks, name="industry_bookmarks"),
     path(
         "api/industry/articles/<int:article_id>/preference/",
         views.industry_save_preference,

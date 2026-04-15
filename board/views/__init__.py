@@ -43,6 +43,7 @@ from .collateral import (     # noqa: F401
 # 업계정보 (support → board 1단계 브리지)
 from .industry_info import (  # noqa: F401
     industry_info,
+    industry_bookmarks,
     industry_save_preference,
     industry_mark_click,
 )
