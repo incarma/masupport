@@ -57,3 +57,79 @@
 #dash-sales .dash-top10-table .col-count {
   width: 72px;
 }
+
+#dash-sales .dash-top10-table .col-insurer {
+  width: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#dash-sales .dash-top10-table .col-product {
+  width: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 설계사 TOP10은 지점 컬럼을 조금 더 넓게 */
+#dash-sales .dash-advisor-top10-table .col-branch {
+  width: 150px;
+}
+
+#dash-sales .dash-advisor-top10-table .col-name {
+  width: 84px;
+}
+
+#dash-sales .dash-advisor-top10-table .col-emp {
+  width: 84px;
+}
+
+/* drill-down link */
+#dash-sales .dash-drilldown-link {
+  color: var(--inka-blue);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+#dash-sales .dash-drilldown-link:hover {
+  text-decoration: underline;
+}
+
+/* 보험상품 TOP10은 보험회사/상품명 폭 균형 */
+#dash-sales .dash-product-top10-table .col-insurer {
+  width: 120px;
+}
+
+#dash-sales .dash-product-top10-table .col-product {
+  width: auto;
+}
+
+/* 상품명 ellipsis + 클릭 UI */
+#dash-sales .dash-product-name {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: none;
+  padding: 0;
+
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  cursor: pointer;
+}
+
+#dash-sales .dash-product-name:hover {
+  text-decoration: underline;
+}
+
+/* 랭킹 탭 */
+#dash-sales .dash-rank-tabs .nav-link {
+  font-weight: 600;
+  color: #495057;
+}
+
+#dash-sales .dash-rank-tabs .nav-link.active {
+  color: var(--inka-blue);
+  font-weight: 700;
+}

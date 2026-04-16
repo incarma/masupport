@@ -51,6 +51,7 @@ def dash_sales(request):
     filter_life_nl = (request.GET.get("life_nl") or "").strip()
     filter_insurer = (request.GET.get("insurer") or "").strip()
     filter_q = (request.GET.get("q") or "").strip()
+    advisor_branch = (request.GET.get("advisor_branch") or "").strip()
     page = request.GET.get("page", "1")
 
     try:
@@ -226,6 +227,11 @@ def dash_sales(request):
             qs = qs.filter(life_nl="생보").exclude(pay_method__icontains="일시납")
         else:
             return []
+        
+        if advisor_branch:
+            qs = qs.filter(
+                Q(user__branch=advisor_branch) | Q(branch_snapshot=advisor_branch)
+            )
 
         rows = (
             qs.annotate(
@@ -273,6 +279,90 @@ def dash_sales(request):
                 "total_amount": int(row["total_amount"] or 0),
             })
         return result
+    
+    def _insurer_top10(qs, category: str):
+        if category == "long":
+            qs = qs.exclude(life_nl="자동차").exclude(pay_method__icontains="일시납")
+        elif category == "car":
+            qs = qs.filter(life_nl="자동차")
+        elif category == "long_nonlife":
+            qs = qs.filter(life_nl="손보").exclude(pay_method__icontains="일시납")
+        elif category == "long_life":
+            qs = qs.filter(life_nl="생보").exclude(pay_method__icontains="일시납")
+        else:
+            return []
+
+        rows = (
+            qs.annotate(
+                insurer_name=NullIf("insurer", Value("")),
+            )
+            .exclude(insurer_name__isnull=True)
+            .exclude(insurer_name__exact="")
+            .values("insurer_name")
+            .annotate(
+                total_count=Count("policy_no"),
+                total_amount=Coalesce(
+                    Sum("receipt_amount"),
+                    Value(0),
+                ),
+            )
+            .order_by("-total_amount", "insurer_name")[:10]
+        )
+
+        result = []
+        for idx, row in enumerate(rows, start=1):
+            result.append({
+                "rank": idx,
+                "insurer_name": row["insurer_name"],
+                "total_count": int(row["total_count"] or 0),
+                "total_amount": int(row["total_amount"] or 0),
+            })
+        return result
+    
+    def _product_top10(qs, category: str):
+        if category == "long":
+            qs = qs.exclude(life_nl="자동차").exclude(pay_method__icontains="일시납")
+        elif category == "car":
+            qs = qs.filter(life_nl="자동차")
+        elif category == "long_nonlife":
+            qs = qs.filter(life_nl="손보").exclude(pay_method__icontains="일시납")
+        elif category == "long_life":
+            qs = qs.filter(life_nl="생보").exclude(pay_method__icontains="일시납")
+        else:
+            return []
+
+        rows = (
+            qs.annotate(
+                insurer_name=NullIf("insurer", Value("")),
+                product_name_norm=Coalesce(
+                    NullIf("product_name", Value("")),
+                    Value("(상품명 없음)"),
+                    output_field=CharField(),
+                ),
+            )
+            .exclude(insurer_name__isnull=True)
+            .exclude(insurer_name__exact="")
+            .values("insurer_name", "product_name_norm")
+            .annotate(
+                total_count=Count("policy_no"),
+                total_amount=Coalesce(
+                    Sum("receipt_amount"),
+                    Value(0),
+                )
+            )
+            .order_by("-total_amount", "insurer_name", "product_name_norm")[:10]
+        )
+
+        result = []
+        for idx, row in enumerate(rows, start=1):
+            result.append({
+                "rank": idx,
+                "insurer_name": row["insurer_name"],
+                "product_name": row["product_name_norm"],
+                "total_count": int(row["total_count"] or 0),
+                "total_amount": int(row["total_amount"] or 0),
+            })
+        return result
 
     branch_top10_long = _branch_top10(qs_rank_scope, "long")
     branch_top10_car = _branch_top10(qs_rank_scope, "car")
@@ -283,6 +373,16 @@ def dash_sales(request):
     advisor_top10_car = _advisor_top10(qs_rank_scope, "car")
     advisor_top10_nonlife = _advisor_top10(qs_rank_scope, "long_nonlife")
     advisor_top10_life = _advisor_top10(qs_rank_scope, "long_life")
+
+    insurer_top10_long = _insurer_top10(qs_rank_scope, "long")
+    insurer_top10_car = _insurer_top10(qs_rank_scope, "car")
+    insurer_top10_nonlife = _insurer_top10(qs_rank_scope, "long_nonlife")
+    insurer_top10_life = _insurer_top10(qs_rank_scope, "long_life")
+
+    product_top10_long = _product_top10(qs_rank_scope, "long")
+    product_top10_car = _product_top10(qs_rank_scope, "car")
+    product_top10_nonlife = _product_top10(qs_rank_scope, "long_nonlife")
+    product_top10_life = _product_top10(qs_rank_scope, "long_life")
 
     # -----------------------------
     # 9) 그래프 데이터
@@ -455,6 +555,7 @@ def dash_sales(request):
         "filter_life_nl": filter_life_nl,
         "filter_insurer": filter_insurer,
         "filter_q": filter_q,
+        "advisor_branch": advisor_branch,
 
         "year_options": year_options,
         "month_options": month_options,
@@ -504,6 +605,16 @@ def dash_sales(request):
         "advisor_top10_car": advisor_top10_car,
         "advisor_top10_nonlife": advisor_top10_nonlife,
         "advisor_top10_life": advisor_top10_life,
+
+        "insurer_top10_long": insurer_top10_long,
+        "insurer_top10_car": insurer_top10_car,
+        "insurer_top10_nonlife": insurer_top10_nonlife,
+        "insurer_top10_life": insurer_top10_life,
+
+        "product_top10_long": product_top10_long,
+        "product_top10_car": product_top10_car,
+        "product_top10_nonlife": product_top10_nonlife,
+        "product_top10_life": product_top10_life,
     }
     return render(request, "dash/dash_sales.html", context)
 
