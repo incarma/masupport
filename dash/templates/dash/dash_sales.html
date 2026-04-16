@@ -4,9 +4,13 @@
 {% load humanize %}
 {% block title %}매출대시보드{% endblock %}
 
+{% block app_css %}
+<link rel="stylesheet" href="{% static 'css/apps/dash.css' %}?v=20260415-02">
+{% endblock %}
+
 {% block content %}
 {# ✅ 캐시버스터/디버그용 버전(필요할 때 이 문자열만 바꾸면 됨) #}
-{% with STATIC_VER="20260415-01" %}
+{% with STATIC_VER="20260415-02" %}
 
 <div class="container-fluid mt-4" id="dash-sales"
      data-upload-url="{% url 'dash:dash_sales_upload' %}"
@@ -208,6 +212,384 @@
         </div>
       </div>
 
+    </div>
+  </div>
+
+  <!-- =========================
+       Branch TOP10 Rank Cards
+  ========================== -->
+  <div class="row g-3 mb-3">
+   <div class="col-12 col-lg-6">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="fw-bold mb-3">손생 장기매출 (영업가족 TOP 10)</div>
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0 dash-top10-table">
+              <colgroup>
+                <col class="col-rank">
+                <col class="col-channel">
+                <col class="col-part">
+                <col class="col-branch">
+                <col class="col-count">
+                <col class="col-sales">
+              </colgroup>
+              <thead class="table-light">
+                <tr class="text-center">
+                  <th>순위</th>
+                  <th>부문</th>
+                  <th>부서</th>
+                  <th>영업가족</th>
+                  <th class="text-center">건수</th>
+                  <th class="text-end">매출액</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in branch_top10_long %}
+                  <tr>
+                    <td class="text-center">{{ row.rank }}</td>
+                    <td>{{ row.channel_name }}</td>
+                    <td>{{ row.part_name }}</td>
+                    <td>{{ row.branch_name }}</td>
+                    <td class="text-center">{{ row.total_count|intcomma }}</td>
+                    <td class="text-end">{{ row.total_amount|intcomma }}</td>
+                  </tr>
+                {% empty %}
+                  <tr>
+                   <td colspan="6" class="text-center text-muted py-3">집계 데이터가 없습니다.</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-lg-6">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="fw-bold mb-3">자동차 매출 (영업가족 TOP 10)</div>
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0 dash-top10-table">
+              <colgroup>
+                <col class="col-rank">
+                <col class="col-channel">
+                <col class="col-part">
+                <col class="col-branch">
+                <col class="col-count">
+                <col class="col-sales">
+              </colgroup>
+              <thead class="table-light">
+                <tr class="text-center">
+                  <th>순위</th>
+                  <th>부문</th>
+                  <th>부서</th>
+                  <th>영업가족</th>
+                  <th class="text-center">건수</th>
+                  <th class="text-end">매출액</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in branch_top10_car %}
+                  <tr>
+                    <td class="text-center">{{ row.rank }}</td>
+                    <td>{{ row.channel_name }}</td>
+                    <td>{{ row.part_name }}</td>
+                    <td>{{ row.branch_name }}</td>
+                    <td class="text-center">{{ row.total_count|intcomma }}</td>
+                    <td class="text-end">{{ row.total_amount|intcomma }}</td>
+                  </tr>
+                {% empty %}
+                  <tr>
+                    <td colspan="6" class="text-center text-muted py-3">집계 데이터가 없습니다.</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-lg-6">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="fw-bold mb-3">손보 장기매출 (영업가족 TOP 10)</div>
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0 dash-top10-table">
+              <colgroup>
+                <col class="col-rank">
+                <col class="col-channel">
+                <col class="col-part">
+                <col class="col-branch">
+                <col class="col-count">
+                <col class="col-sales">
+              </colgroup>
+              <thead class="table-light">
+                <tr class="text-center">
+                  <th>순위</th>
+                  <th>부문</th>
+                  <th>부서</th>
+                  <th>영업가족</th>
+                  <th class="text-center">건수</th>
+                  <th class="text-end">매출액</th>
+                </tr>
+              </thead>
+              <tbody>
+               {% for row in branch_top10_nonlife %}
+                  <tr>
+                    <td class="text-center">{{ row.rank }}</td>
+                    <td>{{ row.channel_name }}</td>
+                    <td>{{ row.part_name }}</td>
+                    <td>{{ row.branch_name }}</td>
+                    <td class="text-center">{{ row.total_count|intcomma }}</td>
+                    <td class="text-end">{{ row.total_amount|intcomma }}</td>
+                  </tr>
+                {% empty %}
+                  <tr>
+                    <td colspan="6" class="text-center text-muted py-3">집계 데이터가 없습니다.</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-lg-6">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="fw-bold mb-3">생보 장기매출 (영업가족 TOP 10)</div>
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0 dash-top10-table">
+              <colgroup>
+                <col class="col-rank">
+                <col class="col-channel">
+                <col class="col-part">
+                <col class="col-branch">
+                <col class="col-count">
+                <col class="col-sales">
+              </colgroup>
+              <thead class="table-light">
+                <tr class="text-center">
+                  <th>순위</th>
+                  <th>부문</th>
+                  <th>부서</th>
+                  <th>영업가족</th>
+                  <th class="text-center">건수</th>
+                  <th class="text-end">매출액</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in branch_top10_life %}
+                  <tr>
+                    <td class="text-center">{{ row.rank }}</td>
+                    <td>{{ row.channel_name }}</td>
+                    <td>{{ row.part_name }}</td>
+                    <td>{{ row.branch_name }}</td>
+                    <td class="text-center">{{ row.total_count|intcomma }}</td>
+                    <td class="text-end">{{ row.total_amount|intcomma }}</td>
+                  </tr>
+                {% empty %}
+                  <tr>
+                    <td colspan="6" class="text-center text-muted py-3">집계 데이터가 없습니다.</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================
+       Advisor TOP10 Rank Cards
+  ========================== -->
+  <div class="row g-3 mb-3">
+    <div class="col-12 col-lg-6">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="fw-bold mb-3">손생 장기매출 (설계사 TOP 10)</div>
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0 dash-top10-table">
+              <colgroup>
+                <col class="col-rank">
+                <col class="col-branch">
+                <col class="col-name">
+                <col class="col-emp">
+                <col class="col-count">
+                <col class="col-sales">
+              </colgroup>
+              <thead class="table-light">
+                <tr class="text-center">
+                  <th>순위</th>
+                  <th>영업가족</th>
+                  <th>사원명</th>
+                  <th>사번</th>
+                  <th>건수</th>
+                  <th class="text-end">매출액</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in advisor_top10_long %}
+                  <tr>
+                    <td class="text-center">{{ row.rank }}</td>
+                    <td>{{ row.branch_name }}</td>
+                    <td>{{ row.advisor_name }}</td>
+                    <td class="text-center">{{ row.advisor_emp_id }}</td>
+                    <td class="text-center">{{ row.total_count|intcomma }}</td>
+                    <td class="text-end">{{ row.total_amount|intcomma }}</td>
+                  </tr>
+                {% empty %}
+                  <tr>
+                    <td colspan="6" class="text-center text-muted py-3">집계 데이터가 없습니다.</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-lg-6">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="fw-bold mb-3">자동차 매출 (설계사 TOP 10)</div>
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0 dash-top10-table">
+              <colgroup>
+                <col class="col-rank">
+                <col class="col-branch">
+                <col class="col-name">
+                <col class="col-emp">
+                <col class="col-count">
+                <col class="col-sales">
+              </colgroup>
+              <thead class="table-light">
+                <tr class="text-center">
+                  <th>순위</th>
+                  <th>영업가족</th>
+                  <th>사원명</th>
+                  <th>사번</th>
+                  <th>건수</th>
+                  <th class="text-end">매출액</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in advisor_top10_car %}
+                  <tr>
+                    <td class="text-center">{{ row.rank }}</td>
+                    <td>{{ row.branch_name }}</td>
+                    <td>{{ row.advisor_name }}</td>
+                    <td class="text-center">{{ row.advisor_emp_id }}</td>
+                    <td class="text-center">{{ row.total_count|intcomma }}</td>
+                    <td class="text-end">{{ row.total_amount|intcomma }}</td>
+                  </tr>
+                {% empty %}
+                  <tr>
+                    <td colspan="6" class="text-center text-muted py-3">집계 데이터가 없습니다.</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-lg-6">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="fw-bold mb-3">손보 장기매출 (설계사 TOP 10)</div>
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0 dash-top10-table">
+              <colgroup>
+                <col class="col-rank">
+                <col class="col-branch">
+                <col class="col-name">
+                <col class="col-emp">
+                <col class="col-count">
+                <col class="col-sales">
+              </colgroup>
+              <thead class="table-light">
+                <tr class="text-center">
+                  <th>순위</th>
+                  <th>영업가족</th>
+                  <th>사원명</th>
+                  <th>사번</th>
+                  <th>건수</th>
+                  <th class="text-end">매출액</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in advisor_top10_nonlife %}
+                  <tr>
+                    <td class="text-center">{{ row.rank }}</td>
+                    <td>{{ row.branch_name }}</td>
+                    <td>{{ row.advisor_name }}</td>
+                    <td class="text-center">{{ row.advisor_emp_id }}</td>
+                    <td class="text-center">{{ row.total_count|intcomma }}</td>
+                    <td class="text-end">{{ row.total_amount|intcomma }}</td>
+                  </tr>
+                {% empty %}
+                  <tr>
+                    <td colspan="6" class="text-center text-muted py-3">집계 데이터가 없습니다.</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-lg-6">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="fw-bold mb-3">생보 장기매출 (설계사 TOP 10)</div>
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0 dash-top10-table">
+              <colgroup>
+                <col class="col-rank">
+                <col class="col-branch">
+                <col class="col-name">
+                <col class="col-emp">
+                <col class="col-count">
+                <col class="col-sales">
+              </colgroup>
+              <thead class="table-light">
+                <tr class="text-center">
+                  <th>순위</th>
+                  <th>영업가족</th>
+                  <th>사원명</th>
+                  <th>사번</th>
+                  <th>건수</th>
+                  <th class="text-end">매출액</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in advisor_top10_life %}
+                  <tr>
+                    <td class="text-center">{{ row.rank }}</td>
+                    <td>{{ row.branch_name }}</td>
+                    <td>{{ row.advisor_name }}</td>
+                    <td class="text-center">{{ row.advisor_emp_id }}</td>
+                    <td class="text-center">{{ row.total_count|intcomma }}</td>
+                    <td class="text-end">{{ row.total_amount|intcomma }}</td>
+                  </tr>
+                {% empty %}
+                  <tr>
+                    <td colspan="6" class="text-center text-muted py-3">집계 데이터가 없습니다.</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 

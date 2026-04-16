@@ -1,0 +1,59 @@
+/* django_ma/static/css/apps/dash.css
+==========================================================
+📊 dash.css — 대시보드 앱 전용 스타일
+- 스코프: #dash-sales 하위만 적용 (CSS 누수 방지)
+- 목적: TOP10 테이블 컬럼폭 제어 + 줄바꿈 방지
+========================================================== */
+
+/* =========================
+  TOP10 테이블
+========================= */
+
+#dash-sales .dash-top10-table {
+  width: 100%;
+  table-layout: fixed;
+}
+
+/* 공통 셀 */
+#dash-sales .dash-top10-table th,
+#dash-sales .dash-top10-table td {
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+/* 컬럼 폭 최소화 (핵심) */
+#dash-sales .dash-top10-table .col-rank {
+  width: 48px;
+}
+
+#dash-sales .dash-top10-table .col-channel {
+  width: 70px;
+}
+
+#dash-sales .dash-top10-table .col-part {
+  width: 90px;
+}
+
+#dash-sales .dash-top10-table .col-sales {
+  width: 120px;
+  text-align: right;
+}
+
+/* ⭐ 핵심: 영업가족 컬럼 */
+#dash-sales .dash-top10-table .col-branch {
+  width: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#dash-sales .dash-top10-table .col-name {
+  width: 90px;
+}
+
+#dash-sales .dash-top10-table .col-emp {
+  width: 100px;
+}
+
+#dash-sales .dash-top10-table .col-count {
+  width: 72px;
+}

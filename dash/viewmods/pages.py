@@ -6,7 +6,8 @@ from datetime import datetime
 
 from django.core.cache import cache
 from django.core.paginator import Paginator
-from django.db.models import Q
+from django.db.models import Q, Sum, Value, CharField, Count
+from django.db.models.functions import Coalesce, NullIf
 from django.shortcuts import render, redirect
 
 from accounts.decorators import grade_required
@@ -136,6 +137,152 @@ def dash_sales(request):
     if filter_insurer:
         qs_final = qs_final.filter(insurer=filter_insurer)
     qs_final = qs_final.select_related("user").order_by("-updated_at")
+
+    # -----------------------------
+    # 8-1) 차트 하단 branch TOP10 집계
+    # - 현재 선택 조직 스코프(권한 + part/branch) 기준
+    # - insurer 선택 시 동일하게 반영
+    # - q 검색어는 "조직 산하 branch 랭킹" 의미와 어긋날 수 있어 제외
+    # -----------------------------
+    qs_rank_scope = qs_base
+    if filter_part:
+        qs_rank_scope = qs_rank_scope.filter(
+            Q(user__part=filter_part) | Q(part_snapshot=filter_part)
+        )
+    if filter_branch:
+        qs_rank_scope = qs_rank_scope.filter(
+            Q(user__branch=filter_branch) | Q(branch_snapshot=filter_branch)
+        )
+    if filter_insurer:
+        qs_rank_scope = qs_rank_scope.filter(insurer=filter_insurer)
+
+    def _branch_top10(qs, category: str):
+        if category == "long":
+            qs = qs.exclude(life_nl="자동차").exclude(pay_method__icontains="일시납")
+        elif category == "car":
+            qs = qs.filter(life_nl="자동차")
+        elif category == "long_nonlife":
+            qs = qs.filter(life_nl="손보").exclude(pay_method__icontains="일시납")
+        elif category == "long_life":
+            qs = qs.filter(life_nl="생보").exclude(pay_method__icontains="일시납")
+        else:
+            return []
+
+        rows = (
+            qs.annotate(
+                channel_name=Coalesce(
+                    "user__channel",
+                    Value(""),
+                    output_field=CharField(),
+                ),
+                part_name=Coalesce(
+                    "user__part",
+                    "part_snapshot",
+                    output_field=CharField(),
+                ),
+                branch_name=Coalesce(
+                    "user__branch",
+                    "branch_snapshot",
+                    output_field=CharField(),
+                )
+            )
+            .exclude(channel_name__isnull=True)
+            .exclude(channel_name__exact="")
+            .exclude(part_name__isnull=True)
+            .exclude(part_name__exact="")
+            .exclude(branch_name__isnull=True)
+            .exclude(branch_name__exact="")
+            .values("channel_name", "part_name", "branch_name")
+            .annotate(
+                total_count=Count("policy_no"),
+                total_amount=Coalesce(
+                    Sum("receipt_amount"),
+                    Value(0),
+                )
+            )
+            .order_by("-total_amount", "channel_name", "part_name", "branch_name")[:10]
+        )
+
+        result = []
+        for idx, row in enumerate(rows, start=1):
+            result.append({
+                "rank": idx,
+                "channel_name": row["channel_name"],
+                "part_name": row["part_name"],
+                "branch_name": row["branch_name"],
+                "total_count": int(row["total_count"] or 0),
+                "total_amount": int(row["total_amount"] or 0),
+            })
+        return result
+    
+    def _advisor_top10(qs, category: str):
+        if category == "long":
+            qs = qs.exclude(life_nl="자동차").exclude(pay_method__icontains="일시납")
+        elif category == "car":
+            qs = qs.filter(life_nl="자동차")
+        elif category == "long_nonlife":
+            qs = qs.filter(life_nl="손보").exclude(pay_method__icontains="일시납")
+        elif category == "long_life":
+            qs = qs.filter(life_nl="생보").exclude(pay_method__icontains="일시납")
+        else:
+            return []
+
+        rows = (
+            qs.annotate(
+                advisor_name=Coalesce(
+                    NullIf("user__name", Value("")),
+                    NullIf("name_snapshot", Value("")),
+                    output_field=CharField(),
+                ),
+                advisor_emp_id=Coalesce(
+                    NullIf("user__id", Value("")),
+                    NullIf("emp_id_snapshot", Value("")),
+                    output_field=CharField(),
+                ),
+                branch_name=Coalesce(
+                    NullIf("user__branch", Value("")),
+                    NullIf("branch_snapshot", Value("")),
+                    output_field=CharField(),
+                ),
+            )
+            .exclude(advisor_name__isnull=True)
+            .exclude(advisor_name__exact="")
+            .exclude(advisor_emp_id__isnull=True)
+            .exclude(advisor_emp_id__exact="")
+            .exclude(branch_name__isnull=True)
+            .exclude(branch_name__exact="")
+            .values("branch_name", "advisor_name", "advisor_emp_id")
+            .annotate(
+                total_count=Count("policy_no"),
+                total_amount=Coalesce(
+                    Sum("receipt_amount"),
+                    Value(0),
+                )
+            )
+            .order_by("-total_amount", "branch_name", "advisor_name", "advisor_emp_id")[:10]
+        )
+
+        result = []
+        for idx, row in enumerate(rows, start=1):
+            result.append({
+                "rank": idx,
+                "branch_name": row["branch_name"],
+                "advisor_name": row["advisor_name"],
+                "advisor_emp_id": row["advisor_emp_id"],
+                "total_count": int(row["total_count"] or 0),
+                "total_amount": int(row["total_amount"] or 0),
+            })
+        return result
+
+    branch_top10_long = _branch_top10(qs_rank_scope, "long")
+    branch_top10_car = _branch_top10(qs_rank_scope, "car")
+    branch_top10_nonlife = _branch_top10(qs_rank_scope, "long_nonlife")
+    branch_top10_life = _branch_top10(qs_rank_scope, "long_life")
+
+    advisor_top10_long = _advisor_top10(qs_rank_scope, "long")
+    advisor_top10_car = _advisor_top10(qs_rank_scope, "car")
+    advisor_top10_nonlife = _advisor_top10(qs_rank_scope, "long_nonlife")
+    advisor_top10_life = _advisor_top10(qs_rank_scope, "long_life")
 
     # -----------------------------
     # 9) 그래프 데이터
@@ -347,6 +494,16 @@ def dash_sales(request):
         "py_car_chart_cumsum": py_car_chart_cumsum,
         "py_nonlife_chart_cumsum": py_nonlife_chart_cumsum,
         "py_life_chart_cumsum": py_life_chart_cumsum,
+
+        "branch_top10_long": branch_top10_long,
+        "branch_top10_car": branch_top10_car,
+        "branch_top10_nonlife": branch_top10_nonlife,
+        "branch_top10_life": branch_top10_life,
+
+        "advisor_top10_long": advisor_top10_long,
+        "advisor_top10_car": advisor_top10_car,
+        "advisor_top10_nonlife": advisor_top10_nonlife,
+        "advisor_top10_life": advisor_top10_life,
     }
     return render(request, "dash/dash_sales.html", context)
 
