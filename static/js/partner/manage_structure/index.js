@@ -37,10 +37,12 @@ function getStaticV() {
    Dynamic module loader
 --------------------------------------------------------- */
 async function loadPageModules() {
-  const v = getStaticV();
+  // ✅ ?v= 쿼리스트링 제거 — 버전마다 다른 모듈 인스턴스가 생성되어
+  //    모듈 스코프 변수(delegationBound 등)가 각각 초기화되는 문제 방지
+  //    캐시 무효화는 HTML <script> 태그의 ?v={% now 'U' %}로 충분함
   const [{ fetchData }, { initInputRowEvents }] = await Promise.all([
-    import(`./fetch.js${v}`),
-    import(`./input_rows.js${v}`),
+    import("./fetch.js"),
+    import("./input_rows.js"),
   ]);
   return { fetchData, initInputRowEvents };
 }

@@ -125,6 +125,24 @@ function getCSRFToken() {
 }
 
 /* =========================================================
+   Tooltip (Bootstrap 5) - DT redraw 대응
+   편제변경 fetch.js 동일 방식
+========================================================= */
+function initTooltipsInMainTable() {
+  if (!window.bootstrap?.Tooltip) return;
+  const scope = els.mainTable?.closest?.("#mainSheet") || els.root || document;
+  scope.querySelectorAll('[data-bs-toggle="tooltip"]').forEach((el) => {
+    const inst = window.bootstrap.Tooltip.getInstance(el);
+    if (inst) inst.dispose();
+    new window.bootstrap.Tooltip(el, {
+      trigger: "hover focus",
+      container: "body",
+      boundary: "viewport",
+    });
+  });
+}
+
+/* =========================================================
    Server calls (process_date)
 ========================================================= */
 async function updateProcessDate(id, value) {
@@ -156,6 +174,19 @@ async function updateProcessDate(id, value) {
 /* =========================================================
    Render helpers
 ========================================================= */
+/* ✅ 말줄임 + Bootstrap Tooltip — 편제변경 renderEllipsisCell 동일 방식
+   요청자/대상자/소속/비고 공통 사용 */
+function renderEllipsisCell(val) {
+  const raw = String(val ?? "").trim();
+  if (!raw) return "";
+  const esc = escapeAttr(raw);
+  return `<span class="dt-ellipsis"
+               data-bs-toggle="tooltip"
+               data-bs-placement="top"
+               data-bs-title="${esc}"
+               tabindex="0">${escapeHtml(raw)}</span>`;
+}
+
 function renderAfterCell(val) {
   const v = String(val ?? "").trim();
   if (!v) return "";
@@ -202,25 +233,37 @@ function renderProcessDateCell(_value, _type, row) {
    DataTables columns
 ========================================================= */
 const MAIN_COLUMNS = [
-  { data: "rq_display", defaultContent: "", width: "140px" },
-  { data: "tg_display", defaultContent: "", width: "140px" },
-  { data: "tg_affiliation", defaultContent: "-", width: "220px" },
-
-  { data: "before_ftable", defaultContent: "", width: "70px" },
-  { data: "before_frate", defaultContent: "", width: "70px" },
-
-  { data: "after_ftable", defaultContent: "", width: "70px", render: (v) => renderAfterCell(v) },
-  { data: "after_frate", defaultContent: "", width: "70px" },
-
-  { data: "before_ltable", defaultContent: "", width: "70px" },
-  { data: "before_lrate", defaultContent: "", width: "70px" },
-
-  { data: "after_ltable", defaultContent: "", width: "70px", render: (v) => renderAfterCell(v) },
-  { data: "after_lrate", defaultContent: "", width: "70px" },
-
-  { data: "memo", defaultContent: "", width: "150px" },
-  { data: "request_date", defaultContent: "", width: "120px" },
-
+  // 요청자 — 정렬 가능
+  { data: "rq_display", defaultContent: "", width: "88px",
+    render: (v) => renderEllipsisCell(v) },
+  // 대상자 — 정렬 가능
+  { data: "tg_display",     defaultContent: "", width: "88px",
+    render: (v) => renderEllipsisCell(v) },
+  // 소속 — 정렬 가능
+  { data: "tg_affiliation", defaultContent: "-", width: "120px",
+    render: (v) => renderEllipsisCell(v || "-") },
+  // 손보테이블(변경전) — 정렬 가능
+  { data: "before_ftable",  defaultContent: "", width: "70px" },
+  // 손보요율(변경전) — 정렬 가능
+  { data: "before_frate",   defaultContent: "", width: "70px" },
+  // 손보테이블(변경후) — 정렬 가능
+  { data: "after_ftable",   defaultContent: "", width: "70px", render: (v) => renderAfterCell(v) },
+  // 손보요율(변경후) — 정렬 가능
+  { data: "after_frate",    defaultContent: "", width: "70px" },
+  // 생보테이블(변경전) — 정렬 가능
+  { data: "before_ltable",  defaultContent: "", width: "70px" },
+  // 생보요율(변경전) — 정렬 가능
+  { data: "before_lrate",   defaultContent: "", width: "70px" },
+  // 생보테이블(변경후) — 정렬 가능
+  { data: "after_ltable",   defaultContent: "", width: "70px", render: (v) => renderAfterCell(v) },
+  // 생보요율(변경후) — 정렬 가능
+  { data: "after_lrate",    defaultContent: "", width: "70px" },
+  // 비고 — 정렬 가능
+  { data: "memo", defaultContent: "", width: "120px",
+    render: (v) => renderEllipsisCell(v) },
+  // 요청일자 — 정렬 가능 (YYYY-MM-DD 사전순 = 날짜순)
+  { data: "request_date", defaultContent: "", width: "82px" },
+  // 처리일자 — 정렬 불필요 (date input UI)
   {
     data: "process_date",
     width: "120px",
@@ -229,6 +272,7 @@ const MAIN_COLUMNS = [
     render: renderProcessDateCell,
     defaultContent: "",
   },
+  // 삭제 — 정렬 불필요
   {
     data: "id",
     width: "70px",
@@ -282,7 +326,8 @@ function ensureMainDT() {
     paging: true,
     searching: true,
     info: true,
-    ordering: false,
+    ordering: true,
+    order: [[12, "desc"]],   // ✅ 기본 정렬: 요청일자(13번째 컬럼, index 12) 내림차순
     pageLength: 10,
     lengthChange: true,
 
@@ -299,6 +344,10 @@ function ensureMainDT() {
       paginate: { previous: "이전", next: "다음" },
     },
     columns: MAIN_COLUMNS,
+    drawCallback: () => {
+      initTooltipsInMainTable();
+      requestAnimationFrame(() => adjustDT());
+    },
   });
 
   return mainDT;

@@ -370,6 +370,76 @@
   white-space: nowrap;
 }
 
+/* ----------------------------------------------------------
+ 5-3) RATE mainTable: 컬럼 폭 (colgroup class 기반)
+  - 요청자/대상자: '홍길동(1234567)' 기준 압축 + ellipsis + Bootstrap Tooltip
+  - 소속/비고: ellipsis + Bootstrap Tooltip (편제변경 .dt-ellipsis 동일 방식)
+  - 요청일자: 'YYYY-MM-DD' 기준 압축
+---------------------------------------------------------- */
+#manage-rate {
+  /* mainTable colgroup widths
+     요청자/대상자: 3자 이름+사번 기준 최소폭
+     요청일자: YYYY-MM-DD(10자) + 정렬아이콘 여유 */
+  --rm-rq:     88px;   /* 요청자 */
+  --rm-tg:     88px;   /* 대상자 */
+  --rm-aff:   120px;   /* 소속 */
+  --rm-bft:    90px;   /* 손보테이블(변경전) */
+  --rm-bfr:    55px;   /* 손보요율(변경전) */
+  --rm-aft:    90px;   /* 손보테이블(변경후) */
+  --rm-afr:    55px;   /* 손보요율(변경후) */
+  --rm-blt:    90px;   /* 생보테이블(변경전) */
+  --rm-blr:    55px;   /* 생보요율(변경전) */
+  --rm-alt:    90px;   /* 생보테이블(변경후) */
+  --rm-alr:    55px;   /* 생보요율(변경후) */
+  --rm-memo:  120px;   /* 비고 */
+  --rm-rdate:  82px;   /* 요청일자 (YYYY-MM-DD + 정렬아이콘) */
+  --rm-pdate:  90px;   /* 처리일자 */
+  --rm-del:    50px;   /* 삭제 */
+}
+
+/* colgroup 바인딩 */
+#manage-rate #mainTable col.rm-rq    { width: var(--rm-rq); }
+#manage-rate #mainTable col.rm-tg    { width: var(--rm-tg); }
+#manage-rate #mainTable col.rm-aff   { width: var(--rm-aff); }
+#manage-rate #mainTable col.rm-bft   { width: var(--rm-bft); }
+#manage-rate #mainTable col.rm-bfr   { width: var(--rm-bfr); }
+#manage-rate #mainTable col.rm-aft   { width: var(--rm-aft); }
+#manage-rate #mainTable col.rm-afr   { width: var(--rm-afr); }
+#manage-rate #mainTable col.rm-blt   { width: var(--rm-blt); }
+#manage-rate #mainTable col.rm-blr   { width: var(--rm-blr); }
+#manage-rate #mainTable col.rm-alt   { width: var(--rm-alt); }
+#manage-rate #mainTable col.rm-alr   { width: var(--rm-alr); }
+#manage-rate #mainTable col.rm-memo  { width: var(--rm-memo); }
+#manage-rate #mainTable col.rm-rdate { width: var(--rm-rdate); }
+#manage-rate #mainTable col.rm-pdate { width: var(--rm-pdate); }
+#manage-rate #mainTable col.rm-del   { width: var(--rm-del); }
+
+/* ✅ 요청자(1)/대상자(2)/소속(3)/비고(12): dt-ellipsis + Bootstrap Tooltip
+   - .dt-ellipsis: 셀 내부 span이 말줄임 처리
+   - 섹션 9의 nowrap!important가 이미 적용되므로 td 자체 overflow는 생략 */
+#manage-rate #mainTable :is(
+  td:nth-child(1),
+  td:nth-child(2),
+  td:nth-child(3),
+  td:nth-child(12)
+) {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+/* dt-ellipsis span이 부모 td 폭에 맞게 잘리도록 */
+#manage-rate #mainTable :is(
+  td:nth-child(1),
+  td:nth-child(2),
+  td:nth-child(3),
+  td:nth-child(12)
+) .dt-ellipsis {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 /* ==========================================================
  6) STRUCTURE: InputTable Column Widths (vars + colgroup)
@@ -532,9 +602,7 @@
 /* 데스크탑에서만 비고 wrap 허용 */
 @media (min-width: 769px) {
   #manage-structure #mainTable th:nth-child(var(--structure-memo-col)),
-  #manage-structure #mainTable td:nth-child(var(--structure-memo-col)),
-  #manage-rate #mainTable th:nth-child(var(--structure-memo-col)),
-  #manage-rate #mainTable td:nth-child(var(--structure-memo-col)) {
+  #manage-structure #mainTable td:nth-child(var(--structure-memo-col)) {
     white-space: normal;
     word-break: break-word;
     line-height: 1.4;
@@ -544,9 +612,7 @@
 /* 모바일/좁은 화면: 비고 줄바꿈 금지 + ellipsis */
 @media (max-width: 768px) {
   #manage-structure #mainTable th:nth-child(var(--structure-memo-col)),
-  #manage-structure #mainTable td:nth-child(var(--structure-memo-col)),
-  #manage-rate #mainTable th:nth-child(var(--structure-memo-col)),
-  #manage-rate #mainTable td:nth-child(var(--structure-memo-col)) {
+  #manage-structure #mainTable td:nth-child(var(--structure-memo-col)) {
     white-space: nowrap !important;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -566,7 +632,7 @@
 ) { white-space: nowrap !important; }
 
 /* RATE: 메모 컬럼 정책 */
-#manage-rate { --rate-memo-col: 13; }
+#manage-rate { --rate-memo-col: 12; }   /* 비고는 12번째 컬럼 */
 
 #manage-rate #mainTable th:nth-child(var(--rate-memo-col)),
 #manage-rate #mainTable td:nth-child(var(--rate-memo-col)) {
@@ -581,9 +647,11 @@
 }
 
 
-/* ==========================================================
- 9) DataTables wrapper 폭 고정(Structure/Rate)
-  - 테이블이 내용으로 커지지 못하게 방어(말줄임 전제)
+/* =========================================================
+ 9) DataTables 가로 스크롤 정책 (Structure / Rate)
+ - 테이블 폭: max-content 기준 (섹션 8 auto 정책과 통일)
+ - 컨테이너: overflow-x: auto 보장
+ - fixed 강제 제거 → 정렬 아이콘 포함 헤더 텍스트 정상 표시
 ========================================================== */
 #manage-structure #mainSheet .table-responsive,
 #manage-rate #mainSheet .table-responsive {
@@ -591,13 +659,22 @@
   -webkit-overflow-scrolling: touch;
 }
 
-/* 핵심: 테이블 고정 */
-#manage-structure #mainTable,
-#manage-rate #mainTable{
-  width: 100% !important;
-  table-layout: fixed !important;
+/* 래퍼: 가로 스크롤 허용 */
+#manage-structure #mainSheet .table-responsive,
+#manage-rate #mainSheet .table-responsive {
+  overflow-x: auto !important;
+  -webkit-overflow-scrolling: touch;
 }
 
+/* 테이블 폭: 내용 기준으로 늘어나되 최소 100% 유지 */
+#manage-structure #mainTable,
+#manage-rate #mainTable {
+  table-layout: auto !important;
+  width: max-content !important;
+  min-width: 100% !important;
+}
+
+/* 셀: 줄바꿈 없이 말줄임 */
 #manage-structure #mainTable :is(th, td),
 #manage-rate #mainTable :is(th, td) {
   white-space: nowrap !important;
@@ -606,16 +683,11 @@
   vertical-align: middle;
 }
 
-/* DataTables scroll wrappers 폭 고정 */
+/* DataTables가 생성하는 wrapper div들 — 폭 100% 보장 */
 #manage-structure #mainTable_wrapper,
-#manage-structure #mainTable_wrapper .dataTables_scroll,
-#manage-structure #mainTable_wrapper .dataTables_scrollHead,
-#manage-structure #mainTable_wrapper .dataTables_scrollBody,
-#manage-rate #mainTable_wrapper,
-#manage-rate #mainTable_wrapper .dataTables_scroll,
-#manage-rate #mainTable_wrapper .dataTables_scrollHead,
-#manage-rate #mainTable_wrapper .dataTables_scrollBody {
+#manage-rate #mainTable_wrapper {
   width: 100% !important;
+  overflow-x: auto !important;
 }
 
 /* ==========================================================

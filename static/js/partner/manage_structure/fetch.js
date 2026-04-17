@@ -69,9 +69,7 @@ function canDeleteRow() {
 function revealSections() {
   if (els.inputSection) els.inputSection.hidden = false;
   if (els.mainSheet) els.mainSheet.hidden = false;
-
-  // DT 폭 계산은 표시 다음 프레임에서
-  requestAnimationFrame(() => requestAnimationFrame(() => adjustDT()));
+  // ✅ rAF 예약은 fetchData가 직접 처리하므로 여기서는 hidden 해제만 수행
 }
 
 /* =========================================================
@@ -250,16 +248,27 @@ async function deleteStructureRow(id) {
    DataTables columns
 ========================================================= */
 const MAIN_COLUMNS = [
-  { data: null, defaultContent: "", render: (_v, _t, r) => renderEllipsisCell(fmtPerson(r.requester_name, r.requester_id)) },
-  { data: null, defaultContent: "", render: (_v, _t, r) => renderEllipsisCell(fmtPerson(r.target_name, r.target_id)) },
+  // 요청자 — 정렬 가능 (requester_name 기준, render 결과가 HTML이므로 type: "string" 명시)
+  { data: "requester_name", defaultContent: "", render: (_v, _t, r) => renderEllipsisCell(fmtPerson(r.requester_name, r.requester_id)) },
+  // 대상자 — 정렬 가능
+  { data: "target_name", defaultContent: "", render: (_v, _t, r) => renderEllipsisCell(fmtPerson(r.target_name, r.target_id)) },
+  // 소속(변경전) — 정렬 가능
   { data: "target_branch", defaultContent: "", render: (v) => renderEllipsisCell(v) },
+  // 소속(변경후) — 정렬 가능
   { data: "chg_branch", defaultContent: "", render: (v) => renderAfterEllipsis(v) },
+  // 직급(변경전) — 정렬 가능
   { data: "rank", defaultContent: "", render: (v) => renderEllipsisCell(v) },
+  // 직급(변경후) — 정렬 가능
   { data: "chg_rank", defaultContent: "", render: (v) => renderAfterEllipsis(v) },
+  // OR — 정렬 불필요
   { data: "or_flag", defaultContent: false, className: "or-cell", orderable: false, searchable: false, render: (v) => renderOrFlag(!!v) },
+  // 비고 — 정렬 가능
   { data: "memo", defaultContent: "", render: (v) => renderEllipsisCell(v) },
+  // 요청일자 — 정렬 가능 (날짜 문자열 YYYY-MM-DD 형식이면 사전순 = 날짜순)
   { data: "request_date", defaultContent: "", render: (v) => renderEllipsisCell(v) },
+  // 처리일자 — 정렬 불필요 (date input이므로 제외)
   { data: "process_date", orderable: false, searchable: false, render: renderProcessDateCell, defaultContent: "" },
+  // 삭제 — 정렬 불필요
   { data: "id", orderable: false, searchable: false, render: (_id, _t, r) => buildActionButtons(r), defaultContent: "" },
 ];
 
@@ -279,6 +288,15 @@ function adjustDT() {
   } catch (_) {}
 }
 
+function destroyIfExists() {
+  try {
+    if (els.mainTable && window.jQuery?.fn?.DataTable?.isDataTable?.(els.mainTable)) {
+      window.jQuery(els.mainTable).DataTable().clear().destroy();
+    }
+  } catch (_) {}
+  mainDT = null;
+}
+
 function bindResizeOnce() {
   if (resizeBound) return;
   resizeBound = true;
@@ -293,24 +311,20 @@ function bindResizeOnce() {
 function ensureMainDT() {
   if (!canUseDataTables()) return null;
 
-  const $ = window.jQuery;
+  // ✅ manage_rate/fetch.js 동일: 매 호출마다 destroy 후 재초기화
+  //    캐시된 mainDT 참조가 resetInputSection 후 깨지는 현상 방지
+  destroyIfExists();
 
-  if (!mainDT && $.fn.DataTable.isDataTable(els.mainTable)) {
-    try {
-      $(els.mainTable).DataTable().destroy(true);
-    } catch (_) {}
-  }
-  if (mainDT) return mainDT;
-
-  mainDT = $(els.mainTable).DataTable({
+  mainDT = window.jQuery(els.mainTable).DataTable({
     paging: true,
     searching: true,
     info: true,
-    ordering: false,
+    ordering: true,
+    order: [[8, "desc"]],   // ✅ 기본 정렬: 요청일자(9번째 컬럼, index 8) 내림차순
     pageLength: 10,
     lengthChange: true,
     autoWidth: false,
-    destroy: true,
+    destroy: false,
     scrollX: false,
     scrollCollapse: false,
     language: {
@@ -324,7 +338,7 @@ function ensureMainDT() {
     columns: MAIN_COLUMNS,
     drawCallback: () => {
       initTooltipsInMainTable();
-      adjustDT();
+      requestAnimationFrame(() => adjustDT());
     },
   });
 
@@ -406,7 +420,9 @@ function renderMain(rows) {
    Delegation (bind once) - ✅ root 범위로 제한
 ========================================================= */
 function bindDelegationOnce() {
-  if (delegationBound) return;
+  // ✅ window 전역 플래그 — 모듈이 중복 로드되어도 delegation 1회만 바인딩 보장
+  if (window.__structureDelegationBound) return;
+  window.__structureDelegationBound = true;
   delegationBound = true;
 
   const root = els.root || document;
@@ -440,7 +456,11 @@ function bindDelegationOnce() {
     if (!els.mainTable || !els.mainTable.contains(btn)) return;
 
     const id = toStr(btn.dataset.id || "");
-    if (!id) return;
+    if (!id) {
+      console.error("❌ [structure/delete] data-id 누락 — 삭제 중단");
+      alertBox("삭제 대상 ID를 찾을 수 없습니다. 페이지를 새로고침 후 다시 시도해 주세요.");
+      return;
+    }
     if (!confirm("해당 행을 삭제할까요?")) return;
 
     btn.disabled = true;
@@ -471,7 +491,8 @@ function bindDelegationOnce() {
 ========================================================= */
 function normalizeRow(row = {}) {
   return {
-    id: row.id || "",
+    // ✅ pk 키 후보를 모두 탐색 (서버 응답 키 변화 흡수)
+    id: String(row.id ?? row.pk ?? row.record_id ?? "").trim(),
 
     requester_name: row.requester_name || row.rq_name || "",
     requester_id: row.requester_id || row.rq_id || "",
@@ -501,6 +522,12 @@ export async function fetchData(ym, branch) {
 
   bindDelegationOnce();
   revealSections();
+
+  // ✅ hidden→visible 전환 후 브라우저 레이아웃 페인트 완료까지 대기
+  //    이 시점 이후에 dt.draw()가 실행되어야 columns.adjust()가 정상 계산됨
+  await new Promise((resolve) =>
+    requestAnimationFrame(() => requestAnimationFrame(resolve))
+  );
 
   const baseUrl = getFetchUrl();
   if (!baseUrl) {
