@@ -93,6 +93,7 @@
                 {% endif %}
                 <li><a class="dropdown-item" href="{% url 'board:states_form' %}">FA소명서</a></li>
                 {% if user.grade == 'superuser' or user.grade == 'head' or user.grade == 'leader' %}
+                  <li><a class="dropdown-item" href="https://dlekrud000-hub.github.io/incar_share/" target="_blank" rel="noopener noreferrer">공동계약확인서</a></li>
                   <li><a class="dropdown-item" href="{% url 'board:collateral' %}">근저당조회</a></li>
                 {% endif %}
                 {% if user.grade == 'superuser' %}
@@ -250,6 +251,7 @@
                 {% endif %}
                 <a class="d-block py-2" href="{% url 'board:states_form' %}">FA소명서</a>
                 {% if user.grade == 'superuser' or user.grade == 'head' or  user.grade == 'leader' %}
+                  <a class="d-block py-2" href="https://dlekrud000-hub.github.io/incar_share/" target="_blank" rel="noopener noreferrer">공동계약확인서</a>
                   <a class="d-block py-2" href="{% url 'board:collateral' %}">근저당조회</a>
                 {% endif %}
                 {% if user.grade == 'superuser' %}

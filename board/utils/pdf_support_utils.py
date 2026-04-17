@@ -381,12 +381,12 @@ def generate_request_support(request, *, task_only: bool = False):
         # -------------------------------------------
         head_user = find_branch_head_user(requester_branch)
         head_name = _safe_str(getattr(head_user, "name", "")) or "(미등록)"
+        _SP = "&#160;&#160;&#160;&#160;&#160;"
         confirm_admin = (
-            f"최상위관리자 확인 : {requester_branch or '-'} 본부장(사업단장) "
-            f"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{head_name}"
-            f"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(서명)"
+            f"최상위관리자 확인 : {escape(requester_branch or '-')} 본부장(사업단장) "
+            f"{_SP}{escape(head_name)}{_SP}(서명)"
         )
-        elements.append(Paragraph(_p(confirm_admin), styles["RightAlign"]))
+        elements.append(Paragraph(confirm_admin, styles["RightAlign"]))
         elements.append(Spacer(1, 20))
 
         # -------------------------------------------
@@ -395,11 +395,10 @@ def generate_request_support(request, *, task_only: bool = False):
         officer = find_part_officer(requester_part)
         officer_name = _safe_str(getattr(officer, "name", "")) or "(미등록)"
         confirm_officer = (
-            f"사업부장 자서확인 : {requester_part or '-'} 사업부장 "
-            f"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{officer_name}"
-            f"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(서명)"
+            f"사업부장 자서확인 : {escape(requester_part or '-')} 사업부장 "
+            f"{_SP}{escape(officer_name)}{_SP}(서명)"
         )
-        elements.append(Paragraph(_p(confirm_officer), styles["RightAlign"]))
+        elements.append(Paragraph(confirm_officer, styles["RightAlign"]))
         elements.append(Spacer(1, 20))
 
         # -------------------------------------------

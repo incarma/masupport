@@ -355,12 +355,12 @@ def generate_request_states(request, *, task_only: bool = False):
         # -------------------------------------------
         # ✍️ 작성자 서명란
         # -------------------------------------------
+        _SP = "&#160;&#160;&#160;&#160;&#160;"
         requester_sign = (
-            f"작성자 : {requester_branch} "
-            f"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{_safe_str(getattr(user, 'name', '')) or '-'}"
-            f"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(서명)"
+            f"작성자 : {escape(requester_branch)} "
+            f"{_SP}{escape(_safe_str(getattr(user, 'name', '')) or '-')}{_SP}(서명)"
         )
-        elements.append(Paragraph(_p(requester_sign), styles["RightAlign"]))
+        elements.append(Paragraph(requester_sign, styles["RightAlign"]))
         elements.append(Spacer(1, 10))
 
         # -------------------------------------------
@@ -369,11 +369,10 @@ def generate_request_states(request, *, task_only: bool = False):
         head_user = find_branch_head_user(requester_branch)
         head_name = _safe_str(getattr(head_user, "name", "")) or "(미등록)"
         confirm_text = (
-            f"최상위관리자 확인 : {requester_branch} 본부장(사업단장) "
-            f"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{head_name}"
-            f"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(서명)"
+            f"최상위관리자 확인 : {escape(requester_branch)} 본부장(사업단장) "
+            f"{_SP}{escape(head_name)}{_SP}(서명)"
         )
-        elements.append(Paragraph(_p(confirm_text), styles["RightAlign"]))
+        elements.append(Paragraph(confirm_text, styles["RightAlign"]))
         elements.append(Spacer(1, 20))
 
         # -------------------------------------------
