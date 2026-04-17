@@ -62,4 +62,10 @@ app.conf.beat_schedule = {
         "schedule": crontab(hour=2, minute=10),
         "args": (),
     },
+    # 매시간 20분: 집계 갱신 직후 예측도 최신화 (집계 :10 → 예측 :20 순서 보장)
+    "dash-forecast-hourly": {
+        "task": "dash.tasks.build_sales_forecasts_hourly",
+        "schedule": crontab(minute=20),
+        "args": (),
+    },
 }

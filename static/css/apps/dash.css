@@ -346,3 +346,28 @@
     padding-bottom: 4px;
   }
 }
+
+/* =========================================================
+   모바일 TOP10 테이블 가로 스크롤
+   - table-layout: fixed를 해제하여 table-responsive가
+     가로 스크롤을 자연스럽게 처리하도록 함
+   - white-space: nowrap은 유지 (줄바꿈 방지 + 스크롤 유도)
+========================================================= */
+@media (max-width: 767.98px) {
+  #dash-sales .dash-top10-table {
+    table-layout: auto;
+    min-width: 480px;
+  }
+
+  #dash-sales .dash-advisor-top10-table {
+    min-width: 480px;
+  }
+
+  #dash-sales .dash-insurer-top10-table {
+    min-width: 360px;
+  }
+
+  #dash-sales .dash-product-top10-table {
++    min-width: 480px;
+  }
+}
