@@ -9,6 +9,7 @@ from django.core.paginator import Paginator
 from django.db.models import Q, Sum, Value, CharField, Count
 from django.db.models.functions import Coalesce, NullIf
 from django.shortcuts import render, redirect
+from django.utils import timezone
 
 from accounts.decorators import grade_required
 from accounts.models import CustomUser
@@ -626,7 +627,15 @@ def dash_recruit(request):
 
 @grade_required("superuser", "head")
 def dash_retention(request):
-    return render(request, "dash/dash_retention.html")
+    now = timezone.localtime()
+    context = {
+        "initial_year": now.year,
+        "initial_month": now.month,
+        "initial_scope_type": "all",
+        "initial_scope_key": "",
+        "STATIC_VERSION": str(int(now.timestamp())),
+    }
+    return render(request, "dash/dash_retention.html", context)
 
 
 @grade_required("superuser")
