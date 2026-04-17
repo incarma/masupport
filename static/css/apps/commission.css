@@ -61,14 +61,20 @@
 /* ------------------------------
  1-2) 보증보험/기타채권 테이블 공통 정책
  ✅ colgroup(%) 기반 컬럼폭 고정
- - table-layout: fixed + width/min-width 100% 필수
- - nowrap + ellipsis 기본값
+ - 데스크톱: 기존 고정 폭 정책 유지
+ - 모바일: 테이블 자체 min-width를 보장해서 좌우 스크롤 유도
 ------------------------------ */
 #suretyTable,
 #otherTable{
   width:100%;
   min-width:100%;
   table-layout:fixed;
+}
+
+/* 상세 테이블 래퍼: 모바일에서도 가로 스크롤 확실히 허용 */
+#suretyTable,
+#otherTable{
+  margin-bottom: 0;
 }
 
 /* fixed 레이아웃에서 overflow-visible이면 폭이 깨질 수 있어 기본은 hidden+ellipsis */
@@ -119,6 +125,38 @@
 /* 비고(7열): hover/tooltip/모달 UX 위해 pointer 유지 */
 #otherTable th:nth-child(7),
 #otherTable td:nth-child(7){ cursor:pointer; }
+
+/* ------------------------------
+ 1-5) Deposit detail table mobile scroll
+ - 모바일에서는 테이블 자체 최소폭을 확보해야
+   .table-responsive에서 좌우 스크롤이 생김
+ - 텍스트 확인성이 목적이므로 카드 폭에 억지로 맞추지 않음
+------------------------------ */
+@media (max-width: 768px) {
+  #suretyTable {
+    width: max-content;
+    min-width: 760px;
+    table-layout: auto;
+  }
+
+  #otherTable {
+    width: max-content;
+    min-width: 920px;
+    table-layout: auto;
+  }
+
+  #suretyTable th, #suretyTable td,
+  #otherTable  th, #otherTable  td{
+    overflow: visible;
+    text-overflow: clip;
+  }
+
+  /* 모바일에서는 컬럼 내용 길이대로 보이도록 colgroup 강제폭 해제 */
+  #suretyColGroup col[data-col],
+  #otherColGroup col[data-col]{
+    width: auto !important;
+  }
+}
 
 /* ==========================================================
  2) Approval Home (approval_home.html)
