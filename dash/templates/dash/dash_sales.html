@@ -5,12 +5,12 @@
 {% block title %}매출대시보드{% endblock %}
 
 {% block app_css %}
-<link rel="stylesheet" href="{% static 'css/apps/dash.css' %}?v=20260415-02">
+<link rel="stylesheet" href="{% static 'css/apps/dash.css' %}?v=20260417-01">
 {% endblock %}
 
 {% block content %}
 {# ✅ 캐시버스터/디버그용 버전(필요할 때 이 문자열만 바꾸면 됨) #}
-{% with STATIC_VER="20260415-02" %}
+{% with STATIC_VER="20260417-01" %}
 
 <div class="container-fluid mt-4" id="dash-sales"
      data-upload-url="{% url 'dash:dash_sales_upload' %}"
@@ -163,6 +163,7 @@
               <span class="ms-1">(단위 : 천원)</span>
             </div>
           </div>
+          <div id="longChartSummary" class="dash-chart-summary mt-2"></div>
           <div class="mt-3" style="height:260px;">
             <canvas id="dailyCumsumChart"></canvas>
           </div>
@@ -177,6 +178,7 @@
               <span class="ms-1">(단위 : 천원)</span>
             </div>
           </div>
+          <div id="carChartSummary" class="dash-chart-summary mt-2"></div>
           <div class="mt-3" style="height:260px;">
             <canvas id="carDailyCumsumChart"></canvas>
           </div>
@@ -191,6 +193,7 @@
               <span class="ms-1">(단위 : 천원)</span>
             </div>
           </div>
+          <div id="nonlifeChartSummary" class="dash-chart-summary mt-2"></div>
           <div class="mt-3" style="height:260px;">
             <canvas id="nonlifeDailyCumsumChart"></canvas>
           </div>
@@ -205,6 +208,7 @@
               <span class="ms-1">(단위 : 천원)</span>
             </div>
           </div>
+          <div id="lifeChartSummary" class="dash-chart-summary mt-2"></div>
           <div class="mt-3" style="height:260px;">
             <canvas id="lifeDailyCumsumChart"></canvas>
           </div>
@@ -1237,10 +1241,12 @@
 <!-- =========================
      Scripts (✅ cache buster)
 ========================== -->
-<script src="{% static 'vendor/chartjs/chart.umd.min.js' %}?v={{ STATIC_VER }}"></script>
-<script src="{% static 'js/dash/dash_sales_page.js' %}?v={{ STATIC_VER }}"></script>
-<script type="module" src="{% static 'js/dash/sales_upload.js' %}?v={{ STATIC_VER }}"></script>
-<script src="{% static 'js/dash/product_modal.js' %}"></script>
-
 {% endwith %}
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'vendor/chartjs/chart.umd.min.js' %}?v=20260417-01"></script>
+<script src="{% static 'js/dash/dash_sales_page.js' %}?v=20260417-01"></script>
+<script type="module" src="{% static 'js/dash/sales_upload.js' %}?v=20260417-01"></script>
+<script src="{% static 'js/dash/product_modal.js' %}?v=20260417-01"></script>
 {% endblock %}

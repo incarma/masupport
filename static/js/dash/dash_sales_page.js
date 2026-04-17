@@ -295,6 +295,69 @@
     return v.toLocaleString();
   }
 
+  function formatSummaryDate(rawLabel) {
+    const s = String(rawLabel || "");
+    const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return s || "-";
+    return `${m[1]}-${m[2]}-${m[3]}`;
+  }
+
+  function getForecastServerKey(chartKey) {
+    const keyMap = {
+      long: "long",
+      car: "car",
+      nonlife: "long_nonlife",
+      life: "long_life",
+    };
+    return keyMap[chartKey] || chartKey;
+  }
+
+  function getLastActualAmount(rawSeries) {
+    if (!Array.isArray(rawSeries) || rawSeries.length === 0) return { idx: -1, value: null };
+    const idx = lastIncreaseIndex(rawSeries);
+    if (idx < 0) return { idx: -1, value: null };
+    return { idx, value: rawSeries[idx] };
+  }
+
+  function getForecastClosingAmount(forecastPayload, chartKey) {
+    if (!forecastPayload?.series) return null;
+    const serverKey = getForecastServerKey(chartKey);
+    const pred = forecastPayload.series?.[serverKey]?.pred;
+    if (!pred || !Array.isArray(pred.p50) || pred.p50.length === 0) return null;
+    return pred.p50[pred.p50.length - 1];
+  }
+
+  // =========================================================
+  // Summary 전용 포맷 (원 단위, 천원 절사 없음)
+  // =========================================================
+  function formatWon(value) {
+    if (value === null || typeof value === "undefined") return "-";
+    const n = Number(value);
+    if (!Number.isFinite(n)) return "-";
+    return n.toLocaleString() + "원";
+  }
+
+  function setChartSummary(summaryId, opts) {
+    const el = document.getElementById(summaryId);
+    if (!el) return;
+
+    const { rawLabels, rawSeries, forecastPayload, chartKey } = opts;
+    const lastActual = getLastActualAmount(rawSeries);
+    const forecastClosing = getForecastClosingAmount(forecastPayload, chartKey);
+
+    let actualText = "현재 매출액: -";
+    if (lastActual.idx >= 0 && Array.isArray(rawLabels) && rawLabels[lastActual.idx]) {
+      actualText = `현재 매출액 (${formatSummaryDate(rawLabels[lastActual.idx])}): ${formatWon(lastActual.value)}`;
+    }
+
+    const forecastText = `AI 예상마감: ${forecastClosing == null ? "-" : formatWon(forecastClosing)}`;
+
+    el.innerHTML = `
+      <div class="dash-chart-summary__item">${actualText}</div>
+      <div class="dash-chart-summary__item">${forecastText}</div>
+    `;
+  }
+
   function inferYmFromLabels(rawLabels) {
     // rawLabels: ["YYYY-MM-DD", ...]
     if (!Array.isArray(rawLabels) || rawLabels.length === 0) return "";
@@ -768,6 +831,13 @@
       trimAfterLast: true,
     });
 
+    setChartSummary("longChartSummary", {
+      rawLabels,
+      rawSeries: sLong,
+      forecastPayload,
+      chartKey: "long",
+    });
+
     renderCompareLineChart({
       canvasId: "carDailyCumsumChart",
       warnId: "carChartWarn",
@@ -785,6 +855,13 @@
       forecastBandLabel: "예측구간(자동차)",
       useNlLifeUnifiedYAxis: false,
       trimAfterLast: true,
+    });
+
+    setChartSummary("carChartSummary", {
+      rawLabels,
+      rawSeries: sCar,
+      forecastPayload,
+      chartKey: "car",
     });
 
     renderCompareLineChart({
@@ -806,6 +883,13 @@
       trimAfterLast: true,
     });
 
+    setChartSummary("nonlifeChartSummary", {
+      rawLabels,
+      rawSeries: sNl,
+      forecastPayload,
+      chartKey: "nonlife",
+    });
+
     renderCompareLineChart({
       canvasId: "lifeDailyCumsumChart",
       warnId: "lifeChartWarn",
@@ -823,6 +907,13 @@
       forecastBandLabel: "예측구간(생보)",
       useNlLifeUnifiedYAxis: true,
       trimAfterLast: true,
+    });
+
+    setChartSummary("lifeChartSummary", {
+      rawLabels,
+      rawSeries: sLife,
+      forecastPayload,
+      chartKey: "life",
     });
   }
 
