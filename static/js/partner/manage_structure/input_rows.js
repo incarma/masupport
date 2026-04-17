@@ -9,8 +9,8 @@
 // =======================================================
 
 import { els } from "./dom_refs.js";
-import { showLoading, hideLoading, alertBox, getCSRFToken } from "./utils.js";
-import { fetchData } from "./fetch.js";
+import { alertBox } from "./utils.js";
+import { saveRows } from "./save.js";
 
 const MAX_ROWS = 10;
 let bound = false;
@@ -91,8 +91,8 @@ function onResetRows() {
   resetInputSection();
 }
 
-async function onSaveRows() {
-  await saveRowsToServer();
+function onSaveRows() {
+  saveRows();
 }
 
 function onRemoveRowDelegated(e) {
@@ -225,115 +225,6 @@ function clearTargetInfo(row) {
   });
 }
 
-async function saveRowsToServer() {
-  const tbody = els.inputTable?.querySelector("tbody");
-  if (!tbody) return;
-
-  const rows = tbody.querySelectorAll(".input-row");
-  const validRows = collectValidRows(rows);
-
-  if (validRows.length === 0) {
-    alertBox("대상자 정보가 입력된 행이 없습니다.");
-    return;
-  }
-
-  const { ym, branch } = resolveYMAndBranch();
-  const user = window.currentUser || {};
-  const boot = window.ManageStructureBoot || {};
-
-  const saveUrl = toStr(boot.dataSaveUrl);
-  if (!saveUrl) {
-    alertBox("저장 URL이 설정되지 않았습니다. (ManageStructureBoot.dataSaveUrl 확인)");
-    return;
-  }
-
-  const payload = {
-    month: ym,
-    rows: validRows,
-    part: toStr(user.part) || "-",
-    branch: toStr(branch) || "-",
-  };
-
-  showLoading("저장 중입니다...");
-
-  try {
-    const res = await fetch(saveUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-CSRFToken": getCSRFToken ? getCSRFToken() : (window.csrfToken || ""),
-        "X-Requested-With": "XMLHttpRequest",
-      },
-      body: JSON.stringify(payload),
-    });
-
-    const data = await safeJson(res);
-
-    if (!res.ok || data?.status !== "success") {
-      hideLoading();
-      alertBox(data?.message || `저장 중 오류가 발생했습니다. (${res.status})`);
-      return;
-    }
-
-    hideLoading();
-    alertBox(data?.message || "저장 완료!");
-
-    resetInputSection();
-    await fetchData(ym, branch);
-  } catch (err) {
-    console.error("❌ 저장 실패:", err);
-    hideLoading();
-    alertBox("저장 중 오류가 발생했습니다.");
-  }
-}
-
-function collectValidRows(rows) {
-  const out = [];
-  const seen = new Set();
-
-  rows.forEach((row) => {
-    const tg_id = getVal(row, 'input[name="tg_id"], .tg_id');
-    const tg_name = getVal(row, 'input[name="tg_name"], .tg_name');
-
-    if (!tg_id || !tg_name) return;
-    if (seen.has(tg_id)) return;
-    seen.add(tg_id);
-
-    out.push({
-      target_id: tg_id,
-      target_name: tg_name,
-      tg_branch: getVal(row, 'input[name="tg_branch"], .tg_branch'),
-      tg_rank: getVal(row, 'input[name="tg_rank"], .tg_rank'),
-      chg_branch: getVal(row, 'input[name="chg_branch"]'),
-      chg_rank: getVal(row, 'input[name="chg_rank"]'),
-      memo: getVal(row, 'input[name="memo"]'),
-      or_flag: !!row.querySelector('input[name="or_flag"]')?.checked,
-    });
-  });
-
-  return out;
-}
-
-function resolveYMAndBranch() {
-  const user = window.currentUser || {};
-  const boot = window.ManageStructureBoot || {};
-
-  const ySel = els.yearSelect || document.getElementById("yearSelect");
-  const mSel = els.monthSelect || document.getElementById("monthSelect");
-
-  const year = toStr(ySel?.value) || toStr(boot.selectedYear) || toStr(boot.currentYear);
-  const month = toStr(mSel?.value) || toStr(boot.selectedMonth) || toStr(boot.currentMonth);
-
-  const ym = `${year}-${String(month || "").padStart(2, "0")}`;
-
-  const branch =
-    toStr(user.grade) === "superuser"
-      ? toStr(els.branchSelect?.value || document.getElementById("branchSelect")?.value || "-") || "-"
-      : toStr(user.branch) || "-";
-
-  return { ym, branch };
-}
-
 function toStr(v) {
   return String(v ?? "").trim();
 }
@@ -348,12 +239,4 @@ function fmtPerson(name, id) {
 function getVal(root, selector) {
   const el = root.querySelector(selector);
   return toStr(el?.value);
-}
-
-async function safeJson(res) {
-  try {
-    return await res.json();
-  } catch {
-    return null;
-  }
 }
