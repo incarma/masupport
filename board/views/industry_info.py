@@ -6,6 +6,7 @@ import json
 import logging
 
 from django.contrib.auth.decorators import login_required
+from django.core.paginator import Paginator
 from django.http import JsonResponse, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
@@ -32,6 +33,13 @@ __all__ = [
 ]
 
 
+# =========================================================
+# 상수
+# =========================================================
+INDUSTRY_PER_PAGE_CHOICES = [20, 50, 100, 150]
+INDUSTRY_PER_PAGE_DEFAULT = 20
+
+
 def _json_ok(message: str = "ok", **data) -> JsonResponse:
     return JsonResponse({"ok": True, "message": message, "data": data})
 
@@ -40,17 +48,22 @@ def _json_err(message: str = "error", status: int = 400, **data) -> JsonResponse
     return JsonResponse({"ok": False, "message": message, "data": data}, status=status)
 
 
+def _get_per_page(request: HttpRequest) -> int:
+    """per_page 파라미터 정규화 — 허용값 외는 기본값으로 fallback"""
+    try:
+        val = int(request.GET.get("per_page", INDUSTRY_PER_PAGE_DEFAULT))
+    except (TypeError, ValueError):
+        val = INDUSTRY_PER_PAGE_DEFAULT
+    return val if val in INDUSTRY_PER_PAGE_CHOICES else INDUSTRY_PER_PAGE_DEFAULT
+
+
 # =========================================================
 # Page View — 메인
 # =========================================================
 @login_required
 def industry_info(request: HttpRequest) -> HttpResponse:
-    """
-    board 업계정보 메인 페이지
-    - 로그인 사용자 전체 허용
-    - 추천 실패 시 fallback 기사 목록으로 안전 복구
-    """
     topic = (request.GET.get("topic") or "").strip()
+    per_page = _get_per_page(request)
 
     latest_qs = IndustryArticle.objects.filter(
         is_active=True,
@@ -60,7 +73,10 @@ def industry_info(request: HttpRequest) -> HttpResponse:
     if topic:
         latest_qs = latest_qs.filter(topic=topic)
 
-    latest_articles = list(latest_qs[:20])
+    # 페이지네이션
+    paginator = Paginator(latest_qs, per_page)
+    page_obj = paginator.get_page(request.GET.get("page"))
+    latest_articles = list(page_obj)
 
     try:
         recommended_articles = get_recommended_articles_for_user(
@@ -92,27 +108,22 @@ def industry_info(request: HttpRequest) -> HttpResponse:
             user=request.user,
             is_bookmarked=True,
         ).count(),
+        # 페이지네이션
+        "page_obj": page_obj,
+        "per_page": per_page,
+        "per_page_choices": INDUSTRY_PER_PAGE_CHOICES,
     }
     return render(request, "board/industry_info.html", context)
 
 
 # =========================================================
-# Page View — 북마크 목록
+# Page View — 북마크
 # =========================================================
 @login_required
 def industry_bookmarks(request: HttpRequest) -> HttpResponse:
-    """
-    북마크한 기사 목록 페이지
-
-    설계 원칙:
-    - industry_info 와 동일 템플릿 재사용 (bookmarked_only=True 분기)
-    - 추천 섹션은 노출하지 않음
-    - 토픽 필터 유지 (북마크 내에서 필터 가능)
-    - 숨김(is_hidden) 기사는 제외
-    """
     topic = (request.GET.get("topic") or "").strip()
+    per_page = _get_per_page(request)
 
-    # 북마크된 article_id 목록
     bookmarked_ids = (
         IndustryUserPreference.objects
         .filter(user=request.user, is_bookmarked=True)
@@ -132,7 +143,15 @@ def industry_bookmarks(request: HttpRequest) -> HttpResponse:
     if topic:
         latest_qs = latest_qs.filter(topic=topic)
 
-    latest_articles = list(latest_qs)
+    # 페이지네이션
+    paginator = Paginator(latest_qs, per_page)
+    page_obj = paginator.get_page(request.GET.get("page"))
+    latest_articles = list(page_obj)
+
+    bookmark_count = IndustryUserPreference.objects.filter(
+        user=request.user,
+        is_bookmarked=True,
+    ).count()
 
     article_ids = [a.id for a in latest_articles]
     pref_map = {
@@ -146,11 +165,15 @@ def industry_bookmarks(request: HttpRequest) -> HttpResponse:
     context = {
         "topics": TOPIC_CHOICES,
         "selected_topic": topic,
-        "recommended_articles": [],       # 북마크 페이지에서는 추천 섹션 미노출
+        "recommended_articles": [],
         "latest_articles": latest_articles,
         "pref_map": pref_map,
         "bookmarked_only": True,
-        "bookmark_count": len(bookmarked_ids),  # 이미 쿼리 결과 재사용
+        "bookmark_count": bookmark_count,
+        # 페이지네이션
+        "page_obj": page_obj,
+        "per_page": per_page,
+        "per_page_choices": INDUSTRY_PER_PAGE_CHOICES,
     }
     return render(request, "board/industry_info.html", context)
 

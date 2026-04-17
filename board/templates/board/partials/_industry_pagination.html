@@ -1,0 +1,43 @@
+<!-- django_ma/board/templates/board/partials/_industry_pagination.html -->
+<nav aria-label="페이지 이동">
+  <ul class="pagination pagination-sm justify-content-center mb-0">
+
+    <!-- 이전 -->
+    <li class="page-item {% if not page_obj.has_previous %}disabled{% endif %}">
+      {% if page_obj.has_previous %}
+        <a class="page-link"
+           href="?page={{ page_obj.previous_page_number }}{% if selected_topic %}&topic={{ selected_topic|urlencode }}{% endif %}&per_page={{ per_page }}"
+        >‹</a>
+      {% else %}
+        <span class="page-link">‹</span>
+      {% endif %}
+    </li>
+
+    <!-- 페이지 번호 (현재 기준 앞뒤 2페이지) -->
+    {% for num in page_obj.paginator.page_range %}
+      {% if num == page_obj.number %}
+        <li class="page-item active">
+          <span class="page-link">{{ num }}</span>
+        </li>
+      {% elif num >= page_obj.number|add:"-2" and num <= page_obj.number|add:"2" %}
+        <li class="page-item">
+          <a class="page-link"
+             href="?page={{ num }}{% if selected_topic %}&topic={{ selected_topic|urlencode }}{% endif %}&per_page={{ per_page }}"
+          >{{ num }}</a>
+        </li>
+      {% endif %}
+    {% endfor %}
+
+    <!-- 다음 -->
+    <li class="page-item {% if not page_obj.has_next %}disabled{% endif %}">
+      {% if page_obj.has_next %}
+        <a class="page-link"
+           href="?page={{ page_obj.next_page_number }}{% if selected_topic %}&topic={{ selected_topic|urlencode }}{% endif %}&per_page={{ per_page }}"
+        >›</a>
+      {% else %}
+        <span class="page-link">›</span>
+      {% endif %}
+    </li>
+
+  </ul>
+</nav>

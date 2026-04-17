@@ -5,7 +5,6 @@
 {% block title %}{% if bookmarked_only %}북마크 기사{% else %}업계정보{% endif %}{% endblock %}
 
 {% block content %}
-<!-- board 업계정보 페이지 루트 -->
 <div
   id="industryInfoRoot"
   class="industry-scope"
@@ -29,10 +28,10 @@
     </div>
   </div>
 
-  <!-- 탭 바: 전체 / 북마크 -->
+  <!-- 탭 바 -->
   <div class="industry-tab-bar mb-3">
-    <a href="{% url 'board:industry_info' %}{% if selected_topic %}?topic={{ selected_topic|urlencode }}{% endif %}" class="industry-tab-btn {% if not bookmarked_only %}active{% endif %}">전체 기사</a>
-    <a href="{% url 'board:industry_bookmarks' %}{% if selected_topic %}?topic={{ selected_topic|urlencode }}{% endif %}" class="industry-tab-btn {% if bookmarked_only %}active{% endif %}">★ 북마크{% if bookmark_count %} <span class="badge">{{ bookmark_count }}</span>{% endif %}</a>
+      <a href="{% url 'board:industry_info' %}{% if selected_topic %}?topic={{ selected_topic|urlencode }}{% endif %}" class="industry-tab-btn {% if not bookmarked_only %}active{% endif %}">전체 기사</a>
+      <a href="{% url 'board:industry_bookmarks' %}{% if selected_topic %}?topic={{ selected_topic|urlencode }}{% endif %}" class="industry-tab-btn {% if bookmarked_only %}active{% endif %}">★ 북마크{% if bookmark_count %} <span class="badge">{{ bookmark_count }}</span>{% endif %}</a>
   </div>
 
   <!-- 토픽 필터 -->
@@ -40,14 +39,22 @@
     <div class="card-body">
       <div class="d-flex flex-wrap gap-2">
         {% if bookmarked_only %}
-          <a href="{% url 'board:industry_bookmarks' %}" class="btn btn-sm {% if not selected_topic %}btn-primary{% else %}btn-outline-secondary{% endif %}">전체</a>
-          {% for value, label in topics %}  
-            <a href="{% url 'board:industry_bookmarks' %}?topic={{ value|urlencode }}" class="btn btn-sm {% if selected_topic == value %}btn-primary{% else %}btn-outline-secondary{% endif %}">{{ label }}</a>
+          <a href="{% url 'board:industry_bookmarks' %}"
+             class="btn btn-sm {% if not selected_topic %}btn-primary{% else %}btn-outline-secondary{% endif %}"
+          >전체</a>
+          {% for value, label in topics %}
+            <a href="{% url 'board:industry_bookmarks' %}?topic={{ value|urlencode }}"
+               class="btn btn-sm {% if selected_topic == value %}btn-primary{% else %}btn-outline-secondary{% endif %}"
+            >{{ label }}</a>
           {% endfor %}
         {% else %}
-          <a href="{% url 'board:industry_info' %}" class="btn btn-sm {% if not selected_topic %}btn-primary{% else %}btn-outline-secondary{% endif %}">전체</a>
+          <a href="{% url 'board:industry_info' %}"
+             class="btn btn-sm {% if not selected_topic %}btn-primary{% else %}btn-outline-secondary{% endif %}"
+          >전체</a>
           {% for value, label in topics %}
-            <a href="{% url 'board:industry_info' %}?topic={{ value|urlencode }}" class="btn btn-sm {% if selected_topic == value %}btn-primary{% else %}btn-outline-secondary{% endif %}">{{ label }}</a>
+            <a href="{% url 'board:industry_info' %}?topic={{ value|urlencode }}"
+               class="btn btn-sm {% if selected_topic == value %}btn-primary{% else %}btn-outline-secondary{% endif %}"
+            >{{ label }}</a>
           {% endfor %}
         {% endif %}
       </div>
@@ -59,11 +66,23 @@
     <div class="row g-4">
       <div class="col-12">
         <div class="card">
-          <div class="card-header">
-            <strong>북마크한 기사</strong>
-            {% if bookmark_count %}
-              <span class="text-muted fw-normal ms-2" style="font-size:0.875rem;">총 {{ bookmark_count }}건</span>
-            {% endif %}
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <div>
+              <strong>북마크한 기사</strong>
+              {% if bookmark_count %}
+                <span class="text-muted fw-normal ms-2" style="font-size:0.875rem;">총 {{ bookmark_count }}건</span>
+              {% endif %}
+            </div>
+            <!-- per_page 드랍다운 -->
+            <div class="industry-perpage-wrap">
+              <select class="form-select form-select-sm industry-perpage-select" style="width:auto;">
+                {% for choice in per_page_choices %}
+                  <option value="{{ choice }}" {% if per_page == choice %}selected{% endif %}>
+                    {{ choice }}개씩 보기
+                  </option>
+                {% endfor %}
+              </select>
+            </div>
           </div>
           <div class="card-body">
             {% if latest_articles %}
@@ -86,14 +105,21 @@
               </a>
             </div>
           </div>
+
+          <!-- 페이지네이션 -->
+          {% if page_obj.paginator.num_pages > 1 %}
+            <div class="card-footer">
+              {% include "board/partials/_industry_pagination.html" %}
+            </div>
+          {% endif %}
         </div>
       </div>
     </div>
 
   {% else %}
-    <!-- 전체 기사 레이아웃 (기존 구조 유지) -->
+    <!-- 전체 기사 레이아웃 -->
     <div class="row g-4">
-      <!-- 추천 기사 영역 -->
+      <!-- 추천 기사 -->
       <div class="col-lg-5">
         <div class="card">
           <div class="card-header">
@@ -115,11 +141,21 @@
         </div>
       </div>
 
-      <!-- 최신 기사 영역 -->
+      <!-- 최신 기사 -->
       <div class="col-lg-7">
         <div class="card">
-          <div class="card-header">
+          <div class="card-header d-flex justify-content-between align-items-center">
             <strong>최신 업계 뉴스</strong>
+            <!-- per_page 드랍다운 -->
+            <div class="industry-perpage-wrap">
+              <select class="form-select form-select-sm industry-perpage-select" style="width:auto;">
+                {% for choice in per_page_choices %}
+                  <option value="{{ choice }}" {% if per_page == choice %}selected{% endif %}>
+                    {{ choice }}개씩 보기
+                  </option>
+                {% endfor %}
+              </select>
+            </div>
           </div>
           <div class="card-body">
             {% if latest_articles %}
@@ -134,6 +170,13 @@
               </div>
             {% endif %}
           </div>
+
+          <!-- 페이지네이션 -->
+          {% if page_obj.paginator.num_pages > 1 %}
+            <div class="card-footer">
+              {% include "board/partials/_industry_pagination.html" %}
+            </div>
+          {% endif %}
         </div>
       </div>
     </div>

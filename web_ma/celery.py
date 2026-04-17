@@ -26,8 +26,8 @@ app.config_from_object("django.conf:settings", namespace="CELERY")
 
 # ✅ INSTALLED_APPS에서 tasks.py 자동 탐색
 app.autodiscover_tasks()
-# ⚠️ board/tasks/ 는 패키지(디렉터리) 구조이므로 autodiscover_tasks() 단독 탐색 불가
-# → 패키지 루트를 명시적으로 추가 탐색하여 collect_board_industry_news 등록 보장
+# ⚠️ board/tasks/ 는 패키지 구조이므로 autodiscover_tasks() 단독 탐색 불가
+# → 패키지 루트를 명시적으로 추가 탐색하여 board 태스크 등록 보장
 app.autodiscover_tasks(["board.tasks"])
 
 
@@ -42,11 +42,18 @@ def debug_task(self):
 app.conf.beat_schedule = {
     # ── board: 업계정보 기사 수집 ───────────────────────────────────────────
     # 6시간 주기: 00:05 / 06:05 / 12:05 / 18:05
-    # 등록명 SSOT: board/tasks/industry_info.py @shared_task(name=)
     "board-industry-news-collect": {
         "task": "board.tasks.industry_info.collect_board_industry_news",
         "schedule": crontab(hour="0,6,12,18", minute=5),
         "args": (),
+    },
+    # ── board: 업계정보 기사 정리 ───────────────────────────────────────────
+    # 매일 03:00: 14일 이전 기사 삭제 (북마크된 기사 보존)
+    # ✅ 14일 보존: 추천 알고리즘 탐색 범위(14일)와 일치
+    "board-industry-cleanup-daily": {
+        "task": "board.tasks.industry_info.cleanup_old_industry_articles",
+        "schedule": crontab(hour=3, minute=0),
+        "args": (14,),
     },
     # ── dash: 매출 집계 ─────────────────────────────────────────────────────
     # 매시간 10분: 집계 갱신(이번달/전월) → SalesDailyAgg 최신화
