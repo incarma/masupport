@@ -530,6 +530,7 @@ class CollectDropdownFeedback(models.Model):
     BRANCH_VALUE_CHOICES = [
         ("",               "선택"),
         ("입금예정",        "입금예정"),
+        ("익월상계",        "익월상계"),
         ("상위차감",        "상위차감"),
         ("연락두절(추심요청)", "연락두절(추심요청)"),
         ("기타",           "기타"),
@@ -539,6 +540,7 @@ class CollectDropdownFeedback(models.Model):
     HQ_VALUE_CHOICES = [
         ("",        "선택"),
         ("입금예정", "입금예정"),
+        ("익월상계", "익월상계"),
         ("상위차감", "상위차감"),
         ("보증청구", "보증청구"),
         ("기타",    "기타"),

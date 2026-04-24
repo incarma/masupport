@@ -152,12 +152,13 @@ const EXTRA_COLS = [
   { label: "환수예상",  money: true, sortKey: "refund_expected" },
 ];
 
-const BRANCH_FEEDBACK_OPTIONS = ["선택", "입금예정", "상위차감", "연락두절(추심요청)", "기타"];
-const HQ_FEEDBACK_OPTIONS     = ["선택", "입금예정", "상위차감", "보증청구", "기타"];
+const BRANCH_FEEDBACK_OPTIONS = ["선택", "입금예정", "익월상계", "상위차감", "연락두절(추심요청)", "기타"];
+const HQ_FEEDBACK_OPTIONS     = ["선택", "입금예정", "익월상계", "상위차감", "보증청구", "기타"];
 
 // 드랍다운 값 → CSS 클래스 매핑 (SSOT)
 const DROPDOWN_VALUE_CLASS = {
   "입금예정":         "val-green",
+  "익월상계":           "val-yellow",
   "상위차감":         "val-blue",
   "연락두절(추심요청)": "val-red",
   "보증청구":         "val-red",
@@ -961,14 +962,14 @@ function bindEvents() {
           sel.value = sel.dataset.currentValue || "";
           // 실패 시 색상도 원복
           const prevCls = getDropdownClass(sel.dataset.currentValue || "");
-          ["val-green", "val-blue", "val-red", "val-gray"].forEach(c => sel.classList.remove(c));
+          ["val-green", "val-blue", "val-red", "val-gray", "val-yellow"].forEach(c => sel.classList.remove(c));
           if (prevCls) sel.classList.add(prevCls);
           return;
         }
         // 저장 성공 → currentValue 갱신
         sel.dataset.currentValue = value;
         // 색상 클래스 갱신
-        ["val-green", "val-blue", "val-red", "val-gray"].forEach(c => sel.classList.remove(c));
+        ["val-green", "val-blue", "val-red", "val-gray", "val-yellow"].forEach(c => sel.classList.remove(c));
         const newCls = getDropdownClass(value);
         if (newCls) sel.classList.add(newCls);
       } catch (err) {
