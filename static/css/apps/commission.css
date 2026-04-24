@@ -358,12 +358,14 @@
 #collectTableBody td.collect-td-dropdown.val-blue   { color: #005BAC; font-weight: 600; }
 #collectTableBody td.collect-td-dropdown.val-red    { color: #dc3545; font-weight: 600; }
 #collectTableBody td.collect-td-dropdown.val-gray   { color: #6c757d; }
+#collectTableBody td.collect-td-dropdown.val-yellow { color: #b45309; font-weight: 600; }
 
 /* select 선택값 색상 (option 선택 후 select 자체 텍스트 색) */
 #collectTableBody .collect-dropdown-select.val-green { color: #198754; font-weight: 600; }
 #collectTableBody .collect-dropdown-select.val-blue  { color: #005BAC; font-weight: 600; }
 #collectTableBody .collect-dropdown-select.val-red   { color: #dc3545; font-weight: 600; }
 #collectTableBody .collect-dropdown-select.val-gray  { color: #6c757d; }
+#collectTableBody .collect-dropdown-select.val-yellow { color: #b45309; font-weight: 600; }
 
 /* 안내 문구 */
 .collect-notice {
