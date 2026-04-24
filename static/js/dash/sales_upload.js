@@ -19,6 +19,8 @@
     if (!ok) {
       resultBox.innerHTML = `<div class="alert alert-danger mb-0">${payload?.message || '업로드 실패'}</div>`;
       return;
+
+      
     }
     const s = payload.summary || {};
     resultBox.innerHTML = `

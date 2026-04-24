@@ -53,4 +53,5 @@ urlpatterns = [
     path("collect/api/feedback/create/",views.api_collect_feedback_create, name="api_collect_feedback_create"),
     path("collect/api/feedback/update/",views.api_collect_feedback_update, name="api_collect_feedback_update"),
     path("collect/api/feedback/delete/",views.api_collect_feedback_delete, name="api_collect_feedback_delete"),
+    path("collect/api/dropdown-feedback/save/", views.api_collect_dropdown_feedback_save, name="api_collect_dropdown_feedback_save"),
 ]

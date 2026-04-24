@@ -20,4 +20,7 @@ urlpatterns = [
 
     # (선택) 프론트가 /sales/forecast/ 를 쓰는 경우 대비 alias
     path("sales/forecast/", views.dash_forecast_api, name="dash_sales_forecast"),
+
+    path("api/retention/",        views.retention_api,          name="dash_retention_api"),
+    path("api/retention/upload/", views.upload_retention_excel,  name="dash_retention_upload"),
 ]

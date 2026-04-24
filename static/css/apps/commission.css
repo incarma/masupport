@@ -323,3 +323,63 @@
     color: #6c757d;
     font-style: italic;
 }
+
+/* ==========================================================
+ 3-2) 드랍다운 피드백 컬럼 (Step 확장)
+========================================================== */
+
+/* 드랍다운 헤더 */
+#collectTableHead th.collect-th-dropdown {
+  min-width: 120px;
+  max-width: 150px;
+}
+
+/* 드랍다운 셀 */
+#collectTableBody td.collect-td-dropdown {
+  min-width: 120px;
+  max-width: 150px;
+  white-space: nowrap;
+}
+
+/* 드랍다운 select 소형화 */
+.collect-dropdown-select {
+  font-size: 0.8rem;
+  padding: 2px 6px;
+  min-width: 110px;
+}
+
+/* ----------------------------------------------------------
+ 드랍다운 선택값 색상 — 읽기 전용(td 텍스트) + select(활성)
+ 모든 선택자는 #collectTableBody 스코프 내 한정
+---------------------------------------------------------- */
+
+/* 읽기 전용 텍스트 색상 */
+#collectTableBody td.collect-td-dropdown.val-green  { color: #198754; font-weight: 600; }
+#collectTableBody td.collect-td-dropdown.val-blue   { color: #005BAC; font-weight: 600; }
+#collectTableBody td.collect-td-dropdown.val-red    { color: #dc3545; font-weight: 600; }
+#collectTableBody td.collect-td-dropdown.val-gray   { color: #6c757d; }
+
+/* select 선택값 색상 (option 선택 후 select 자체 텍스트 색) */
+#collectTableBody .collect-dropdown-select.val-green { color: #198754; font-weight: 600; }
+#collectTableBody .collect-dropdown-select.val-blue  { color: #005BAC; font-weight: 600; }
+#collectTableBody .collect-dropdown-select.val-red   { color: #dc3545; font-weight: 600; }
+#collectTableBody .collect-dropdown-select.val-gray  { color: #6c757d; }
+
+/* 안내 문구 */
+.collect-notice {
+  background: #f8f9fa;
+  border-left: 3px solid #005BAC;
+  border-radius: 4px;
+  padding: 10px 14px;
+  font-size: 0.85rem;
+  color: #333;
+  margin-bottom: 12px;
+}
+.collect-notice-row {
+  line-height: 1.8;
+}
+.collect-notice-label {
+  font-weight: 700;
+  color: #005BAC;
+  margin-right: 6px;
+}

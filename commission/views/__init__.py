@@ -64,6 +64,7 @@ _COLLECT_API_NAMES = frozenset({
      "api_collect_feedback_create",
      "api_collect_feedback_update",
      "api_collect_feedback_delete",
+     "api_collect_dropdown_feedback_save",
  })
 
 # 2) upload (deposit)
@@ -176,4 +177,5 @@ __all__ = [
     "api_collect_feedback_create",
     "api_collect_feedback_update",
     "api_collect_feedback_delete",
+    "api_collect_dropdown_feedback_save",
 ]

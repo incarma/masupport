@@ -1,11 +1,10 @@
-<!-- django_ma/dash/templates/dash/dash_retention.html -->
 {% extends 'base.html' %}
 {% load static %}
 
-{% block title %}유지율대시보드{% endblock %}
+{% block title %}유지율 대시보드{% endblock %}
 
 {% block app_css %}
-  <link rel="stylesheet" href="{% static 'css/apps/dash.css' %}?v={% now 'U' %}">
+<link rel="stylesheet" href="{% static 'css/apps/dash.css' %}?v={% now 'U' %}">
 {% endblock %}
 
 {% block content_wrapper %}
@@ -20,277 +19,210 @@
     data-initial-month="{{ initial_month|default:'' }}"
     data-initial-scope-type="{{ initial_scope_type|default:'all' }}"
     data-initial-scope-key="{{ initial_scope_key|default:'' }}"
-    data-static-version="{{ STATIC_VERSION|default:'1' }}"
+    data-retention-api-url="{% url 'dash:dash_retention_api' %}"
+    data-upload-url="{% url 'dash:dash_retention_upload' %}"
   >
-    <section class="card shadow-sm dash-retention-hero">
+
+    <!-- ═══════════════════════════════════════════════════════
+         HERO: 필터 + 업로드
+    ═══════════════════════════════════════════════════════ -->
+    <section class="card shadow-sm dr-hero">
       <div class="card-body">
-        <div class="dash-retention-hero__top">
+
+        <div class="dr-hero__top">
           <div>
-            <h2 class="dash-page-title mb-1">유지율 대시보드</h2>
-            <p class="dash-page-subtitle mb-0">
-              월별 추이와 보험회사/상품/설계사 기준 유지율 현황을 한 화면에서 조회합니다.
-            </p>
+            <h2 class="dr-page-title mb-1">유지율 대시보드</h2>
+            <p class="dr-page-sub mb-0">회차별 유지율 현황 및 보험사·설계사 분석</p>
           </div>
-          <div class="dash-retention-hero__meta">
-            <span id="retentionAsOfText" class="badge text-bg-light">기준월 -</span>
+          <div class="dr-hero__meta">
+            <span id="drAsOfBadge" class="badge text-bg-light fs-6">기준월 -</span>
           </div>
         </div>
 
-        <div class="dash-retention-filter-grid mt-4">
-          <div class="dash-retention-filter-item">
-            <label for="retentionYearSelect" class="form-label">연도</label>
-            <select id="retentionYearSelect" class="form-select"></select>
+        <!-- 필터 그리드 -->
+        <div class="dr-filter-grid mt-4">
+          <div class="dr-filter-item">
+            <label class="form-label" for="drYearSel">연도</label>
+            <select id="drYearSel" class="form-select"></select>
           </div>
-
-          <div class="dash-retention-filter-item">
-            <label for="retentionMonthSelect" class="form-label">월</label>
-            <select id="retentionMonthSelect" class="form-select"></select>
+          <div class="dr-filter-item">
+            <label class="form-label" for="drMonthSel">월</label>
+            <select id="drMonthSel" class="form-select"></select>
           </div>
-
-          <div class="dash-retention-filter-item">
-            <label for="retentionScopeTypeSelect" class="form-label">조회단위</label>
-            <select id="retentionScopeTypeSelect" class="form-select">
-              <option value="all">전체</option>
-              <option value="part">부서</option>
-              <option value="branch">지점</option>
+          <div class="dr-filter-item">
+            <label class="form-label" for="drLifeNlSel">손생구분</label>
+            <select id="drLifeNlSel" class="form-select">
+              <option value="">전체</option>
+              <option value="생보">생보</option>
+              <option value="손보">손보</option>
             </select>
           </div>
-
-          <div class="dash-retention-filter-item">
-            <label for="retentionScopeKeyInput" class="form-label">조직값</label>
-            <input
-              id="retentionScopeKeyInput"
-              type="text"
-              class="form-control"
-              placeholder="예: MA사업4부 / 강남지점"
-            >
+          <div class="dr-filter-item">
+            <label class="form-label" for="drScopeTypeSel">조회단위</label>
+            <select id="drScopeTypeSel" class="form-select">
+              <option value="all">전체</option>
+              <option value="part">소속</option>
+              <option value="branch">파트너</option>
+            </select>
           </div>
-
-          <div class="dash-retention-filter-item dash-retention-filter-item--wide">
-            <label for="retentionKeywordInput" class="form-label">검색</label>
-            <input
-              id="retentionKeywordInput"
-              type="text"
-              class="form-control"
-              placeholder="보험회사, 상품명, 설계사명"
-            >
+          <div class="dr-filter-item">
+            <label class="form-label" for="drScopeKeyInp">조직값</label>
+            <input id="drScopeKeyInp" type="text" class="form-control" placeholder="소속부서명 또는 파트너명">
           </div>
-
-          <div class="dash-retention-filter-actions">
-            <button id="retentionSearchBtn" type="button" class="btn btn-primary">조회</button>
-            <button id="retentionResetBtn" type="button" class="btn btn-outline-secondary">초기화</button>
+          <div class="dr-filter-item dr-filter-item--wide">
+            <label class="form-label" for="drQInp">검색</label>
+            <input id="drQInp" type="text" class="form-control" placeholder="보험사, 상품명, 설계사명">
+          </div>
+          <div class="dr-filter-actions">
+            <button id="drSearchBtn" type="button" class="btn btn-primary">조회</button>
+            <button id="drResetBtn"  type="button" class="btn btn-outline-secondary">초기화</button>
           </div>
         </div>
+
+        <!-- 업로드 패널 (superuser만 노출: JS로 grade 체크) -->
+        <div id="drUploadPanel" class="dr-upload-panel mt-4" hidden>
+          <div class="dr-upload-grid">
+
+            <!-- 생보 업로드 -->
+            <div class="dr-upload-card dr-upload-card--life">
+              <div class="dr-upload-card__head">
+                <span class="dr-upload-card__title">생보 유지율 업로드</span>
+                <span id="drLifeUploadBadge" class="dr-upload-badge">-</span>
+              </div>
+              <div class="dr-upload-row">
+                <input type="month" id="drLifeYmInput" class="form-control form-control-sm dr-ym-input">
+                <label class="dr-drop-zone" id="drLifeDropZone" for="drLifeFileInput">
+                  <span id="drLifeDropLabel">📂 파일 선택 또는 드래그</span>
+                </label>
+                <input type="file" id="drLifeFileInput" class="d-none" accept=".xlsx,.xls">
+                <button type="button" id="drLifeUploadBtn" class="btn btn-sm btn-primary" disabled>업로드</button>
+              </div>
+              <div id="drLifeUploadMsg" class="dr-upload-msg"></div>
+            </div>
+
+            <!-- 손보 업로드 -->
+            <div class="dr-upload-card dr-upload-card--nonlife">
+              <div class="dr-upload-card__head">
+                <span class="dr-upload-card__title">손보 유지율 업로드</span>
+                <span id="drNonlifeUploadBadge" class="dr-upload-badge">-</span>
+              </div>
+              <div class="dr-upload-row">
+                <input type="month" id="drNonlifeYmInput" class="form-control form-control-sm dr-ym-input">
+                <label class="dr-drop-zone" id="drNonlifeDropZone" for="drNonlifeFileInput">
+                  <span id="drNonlifeDropLabel">📂 파일 선택 또는 드래그</span>
+                </label>
+                <input type="file" id="drNonlifeFileInput" class="d-none" accept=".xlsx,.xls">
+                <button type="button" id="drNonlifeUploadBtn" class="btn btn-sm btn-primary" disabled>업로드</button>
+              </div>
+              <div id="drNonlifeUploadMsg" class="dr-upload-msg"></div>
+            </div>
+
+          </div>
+
+          <!-- 최근 업로드 이력 -->
+          {% if upload_logs %}
+          <div class="dr-upload-logs mt-2">
+            <span class="dr-upload-logs__label">최근 업로드:</span>
+            {% for log in upload_logs %}
+            <span class="dr-upload-log-item">
+              {{ log.ym }} {{ log.life_nl }} ({{ log.row_count|default:0 }}건, {{ log.uploaded_at|date:"m/d H:i" }})
+            </span>
+            {% endfor %}
+          </div>
+          {% endif %}
+        </div>
+
       </div>
     </section>
 
-    <section class="dash-retention-kpi-grid mt-3">
-      <article class="card shadow-sm dash-retention-kpi">
-        <div class="card-body">
-          <div class="dash-retention-kpi__label">13회차 유지율</div>
-          <div class="dash-retention-kpi__value" id="kpi13m">-</div>
-          <div class="dash-retention-kpi__sub" id="kpi13mSub">전월 대비 -</div>
-        </div>
-      </article>
-
-      <article class="card shadow-sm dash-retention-kpi">
-        <div class="card-body">
-          <div class="dash-retention-kpi__label">25회차 유지율</div>
-          <div class="dash-retention-kpi__value" id="kpi25m">-</div>
-          <div class="dash-retention-kpi__sub" id="kpi25mSub">전월 대비 -</div>
-        </div>
-      </article>
-
-      <article class="card shadow-sm dash-retention-kpi">
-        <div class="card-body">
-          <div class="dash-retention-kpi__label">평균 유지율</div>
-          <div class="dash-retention-kpi__value" id="kpiAvg">-</div>
-          <div class="dash-retention-kpi__sub" id="kpiAvgSub">전체 평균 -</div>
-        </div>
-      </article>
-
-      <article class="card shadow-sm dash-retention-kpi">
-        <div class="card-body">
-          <div class="dash-retention-kpi__label">분석 대상 계약수</div>
-          <div class="dash-retention-kpi__value" id="kpiCount">-</div>
-          <div class="dash-retention-kpi__sub" id="kpiCountSub">조회 범위 기준</div>
-        </div>
-      </article>
+    <!-- ═══════════════════════════════════════════════════════
+         KPI 카드
+    ═══════════════════════════════════════════════════════ -->
+    <section id="drKpiGrid" class="dr-kpi-grid mt-3">
+      <!-- JS로 동적 생성 -->
     </section>
 
-    <section class="card shadow-sm dash-retention-main mt-3">
+    <!-- ═══════════════════════════════════════════════════════
+         메인 탭
+    ═══════════════════════════════════════════════════════ -->
+    <section class="card shadow-sm dr-main mt-3">
       <div class="card-body">
-        <ul class="nav nav-tabs dash-retention-tabs" id="retentionTabs" role="tablist">
+
+        <ul class="nav nav-tabs dr-tabs" id="drTabs" role="tablist">
           <li class="nav-item" role="presentation">
-            <button
-              class="nav-link active"
-              id="trend-tab"
-              data-bs-toggle="tab"
-              data-bs-target="#trend-pane"
-              type="button"
-              role="tab"
-              aria-controls="trend-pane"
-              aria-selected="true"
-            >
-              추이
-            </button>
+            <button class="nav-link active" id="dr-trend-tab"
+              data-bs-toggle="tab" data-bs-target="#dr-trend-pane"
+              type="button" role="tab">추이</button>
           </li>
           <li class="nav-item" role="presentation">
-            <button
-              class="nav-link"
-              id="company-tab"
-              data-bs-toggle="tab"
-              data-bs-target="#company-pane"
-              type="button"
-              role="tab"
-              aria-controls="company-pane"
-              aria-selected="false"
-            >
-              보험회사별
-            </button>
+            <button class="nav-link" id="dr-company-tab"
+              data-bs-toggle="tab" data-bs-target="#dr-company-pane"
+              type="button" role="tab">보험회사별</button>
           </li>
           <li class="nav-item" role="presentation">
-            <button
-              class="nav-link"
-              id="product-tab"
-              data-bs-toggle="tab"
-              data-bs-target="#product-pane"
-              type="button"
-              role="tab"
-              aria-controls="product-pane"
-              aria-selected="false"
-            >
-              상품별
-            </button>
-          </li>
-          <li class="nav-item" role="presentation">
-            <button
-              class="nav-link"
-              id="planner-tab"
-              data-bs-toggle="tab"
-              data-bs-target="#planner-pane"
-              type="button"
-              role="tab"
-              aria-controls="planner-pane"
-              aria-selected="false"
-            >
-              설계사별
-            </button>
+            <button class="nav-link" id="dr-planner-tab"
+              data-bs-toggle="tab" data-bs-target="#dr-planner-pane"
+              type="button" role="tab">설계사별</button>
           </li>
         </ul>
 
-        <div class="tab-content dash-retention-tab-content">
-          <div
-            class="tab-pane fade show active"
-            id="trend-pane"
-            role="tabpanel"
-            aria-labelledby="trend-tab"
-            tabindex="0"
-          >
-            <div class="dash-retention-chart-grid">
-              <section class="card dash-retention-panel">
+        <div class="tab-content dr-tab-content">
+
+          <!-- 추이 탭 -->
+          <div class="tab-pane fade show active" id="dr-trend-pane" role="tabpanel" tabindex="0">
+            <div class="dr-chart-grid">
+              <section class="card dr-panel">
                 <div class="card-header">월별 유지율 추이</div>
                 <div class="card-body">
-                  <div class="dash-retention-chart-box">
-                    <canvas id="retentionTrendChart"></canvas>
-                  </div>
+                  <div class="dr-chart-box"><canvas id="drTrendChart"></canvas></div>
                 </div>
               </section>
-
-              <section class="card dash-retention-panel">
+              <section class="card dr-panel">
                 <div class="card-header">회차별 유지율 비교</div>
                 <div class="card-body">
-                  <div class="dash-retention-chart-box">
-                    <canvas id="retentionBucketChart"></canvas>
-                  </div>
+                  <div class="dr-chart-box"><canvas id="drRoundChart"></canvas></div>
                 </div>
               </section>
             </div>
           </div>
 
-          <div
-            class="tab-pane fade"
-            id="company-pane"
-            role="tabpanel"
-            aria-labelledby="company-tab"
-            tabindex="0"
-          >
+          <!-- 보험회사별 탭 -->
+          <div class="tab-pane fade" id="dr-company-pane" role="tabpanel" tabindex="0">
             <div class="table-responsive">
-              <table class="table table-hover align-middle dash-retention-table" id="retentionCompanyTable">
-                <thead>
-                  <tr>
-                    <th>순위</th>
-                    <th>보험회사</th>
-                    <th>13회차</th>
-                    <th>25회차</th>
-                    <th>평균 유지율</th>
-                    <th>계약수</th>
-                  </tr>
-                </thead>
-                <tbody></tbody>
+              <table class="table table-hover align-middle dr-table" id="drCompanyTable">
+                <thead id="drCompanyThead"></thead>
+                <tbody id="drCompanyTbody"></tbody>
               </table>
             </div>
           </div>
 
-          <div
-            class="tab-pane fade"
-            id="product-pane"
-            role="tabpanel"
-            aria-labelledby="product-tab"
-            tabindex="0"
-          >
+          <!-- 설계사별 탭 -->
+          <div class="tab-pane fade" id="dr-planner-pane" role="tabpanel" tabindex="0">
             <div class="table-responsive">
-              <table class="table table-hover align-middle dash-retention-table" id="retentionProductTable">
-                <thead>
-                  <tr>
-                    <th>순위</th>
-                    <th>보험회사</th>
-                    <th>상품명</th>
-                    <th>13회차</th>
-                    <th>25회차</th>
-                    <th>계약수</th>
-                  </tr>
-                </thead>
-                <tbody></tbody>
+              <table class="table table-hover align-middle dr-table" id="drPlannerTable">
+                <thead id="drPlannerThead"></thead>
+                <tbody id="drPlannerTbody"></tbody>
               </table>
             </div>
           </div>
 
-          <div
-            class="tab-pane fade"
-            id="planner-pane"
-            role="tabpanel"
-            aria-labelledby="planner-tab"
-            tabindex="0"
-          >
-            <div class="table-responsive">
-              <table class="table table-hover align-middle dash-retention-table" id="retentionPlannerTable">
-                <thead>
-                  <tr>
-                    <th>순위</th>
-                    <th>설계사</th>
-                    <th>소속</th>
-                    <th>13회차</th>
-                    <th>25회차</th>
-                    <th>계약수</th>
-                  </tr>
-                </thead>
-                <tbody></tbody>
-              </table>
-            </div>
-          </div>
         </div>
       </div>
     </section>
 
-    <div id="retentionLoadingOverlay" class="loading-overlay" hidden>
+    <!-- 로딩 오버레이 -->
+    <div id="drOverlay" class="loading-overlay" hidden>
       <div class="spinner-border" role="status" aria-hidden="true"></div>
     </div>
+
+    <!-- 에러 배너 -->
+    <div id="drErrBanner" class="dr-err-banner" hidden></div>
+
   </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="{% static 'js/dash/dash_retention_page.js' %}?v={% now 'U' %}"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+<script src="{% static 'js/dash/dash_retention_page.js' %}?v={% now 'U' %}"></script>
 {% endblock %}

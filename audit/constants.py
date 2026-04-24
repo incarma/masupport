@@ -81,3 +81,5 @@ class ACTION:
     COLLECT_FEEDBACK_CREATE = "collect.feedback.create"
     COLLECT_FEEDBACK_UPDATE = "collect.feedback.update"
     COLLECT_FEEDBACK_DELETE = "collect.feedback.delete"
+
+    RETENTION_EXCEL_UPLOAD = "retention.record.upload"

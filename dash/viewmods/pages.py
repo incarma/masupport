@@ -628,12 +628,23 @@ def dash_recruit(request):
 @grade_required("superuser", "head")
 def dash_retention(request):
     now = timezone.localtime()
+    upload_logs = []
+    try:
+        from dash.models import RetentionUploadLog
+        upload_logs = list(
+            RetentionUploadLog.objects.order_by("-uploaded_at")[:4]
+            .values("ym", "life_nl", "file_name", "row_count", "uploaded_at")
+        )
+    except Exception:
+        # 마이그레이션 미실행 시 빈 목록으로 fallback
+        pass
     context = {
         "initial_year": now.year,
         "initial_month": now.month,
         "initial_scope_type": "all",
         "initial_scope_key": "",
         "STATIC_VERSION": str(int(now.timestamp())),
+        "upload_logs": upload_logs,
     }
     return render(request, "dash/dash_retention.html", context)
 

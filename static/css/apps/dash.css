@@ -371,3 +371,312 @@
 +    min-width: 480px;
   }
 }
+
+/* =========================================================
+   dash.css 하단에 추가 — Retention 전용 스타일
+   스코프: .dash-retention-page 이하 (누수 방지)
+   설계 레퍼런스: v1.html 색상/레이아웃 패턴 유지
+========================================================= */
+
+/* ── 페이지 래퍼 ──────────────────────────────────────── */
+.dash-retention-page .dash-page {
+  padding: 96px 20px 48px;
+}
+
+/* ── 루트 ─────────────────────────────────────────────── */
+.dash-retention-page .dash-retention-root {
+  max-width: 1400px;
+  margin: 0 auto;
+  position: relative;
+}
+
+/* ── 공통 카드 ────────────────────────────────────────── */
+.dash-retention-page .dr-hero,
+.dash-retention-page .dr-main,
+.dash-retention-page .dr-kpi,
+.dash-retention-page .dr-panel {
+  border: 1px solid #c5ced9;
+  border-radius: 10px;
+}
+
+/* ── 페이지 제목 ──────────────────────────────────────── */
+.dash-retention-page .dr-page-title {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #1a2332;
+  margin: 0;
+}
+.dash-retention-page .dr-page-sub {
+  color: #5c6b7e;
+  font-size: 0.88rem;
+}
+
+/* ── Hero 상단 ────────────────────────────────────────── */
+.dash-retention-page .dr-hero__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+.dash-retention-page .dr-hero__meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* ── 필터 그리드 ──────────────────────────────────────── */
+.dash-retention-page .dr-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 12px;
+  align-items: end;
+}
+.dash-retention-page .dr-filter-item--wide {
+  grid-column: span 2;
+}
+.dash-retention-page .dr-filter-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* ── 업로드 패널 ──────────────────────────────────────── */
+.dash-retention-page .dr-upload-panel {
+  border-top: 1px solid #e2e8f0;
+  padding-top: 16px;
+}
+.dash-retention-page .dr-upload-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.dash-retention-page .dr-upload-card {
+  border: 1px solid #c5ced9;
+  border-radius: 8px;
+  padding: 14px;
+  background: #fafbfc;
+}
+.dash-retention-page .dr-upload-card--life {
+  border-top: 4px solid #3d6fb8;
+}
+.dash-retention-page .dr-upload-card--nonlife {
+  border-top: 4px solid #d97744;
+}
+.dash-retention-page .dr-upload-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.dash-retention-page .dr-upload-card__title {
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: #1a2332;
+}
+.dash-retention-page .dr-upload-badge {
+  font-size: 0.75rem;
+  color: #5c6b7e;
+  background: #eef2f7;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.dash-retention-page .dr-upload-row {
+  display: grid;
+  grid-template-columns: 140px 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+.dash-retention-page .dr-ym-input {
+  font-size: 0.85rem;
+}
+.dash-retention-page .dr-drop-zone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  border: 1px dashed #c5ced9;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 0.78rem;
+  color: #5c6b7e;
+  padding: 6px 10px;
+  text-align: center;
+  transition: border-color 0.15s, background 0.15s;
+  user-select: none;
+}
+.dash-retention-page .dr-drop-zone:hover,
+.dash-retention-page .dr-drop-zone.dragover {
+  border-color: #3d6fb8;
+  background: #f0f5fc;
+}
+.dash-retention-page .dr-upload-card--nonlife .dr-drop-zone:hover,
+.dash-retention-page .dr-upload-card--nonlife .dr-drop-zone.dragover {
+  border-color: #d97744;
+  background: #fff5f0;
+}
+.dash-retention-page .dr-upload-msg {
+  margin-top: 6px;
+  font-size: 0.8rem;
+  color: #5c6b7e;
+  min-height: 1.2em;
+}
+.dash-retention-page .dr-upload-msg.is-ok  { color: #1a7340; font-weight: 600; }
+.dash-retention-page .dr-upload-msg.is-err { color: #c62828; font-weight: 600; }
+
+.dash-retention-page .dr-upload-logs {
+  font-size: 0.78rem;
+  color: #5c6b7e;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  align-items: center;
+}
+.dash-retention-page .dr-upload-logs__label {
+  font-weight: 700;
+  color: #1a2332;
+}
+.dash-retention-page .dr-upload-log-item {
+  background: #eef2f7;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+/* ── KPI 그리드 ───────────────────────────────────────── */
+.dash-retention-page .dr-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 14px;
+  min-height: 100px;
+}
+.dash-retention-page .dr-kpi {
+  border-radius: 10px !important;
+}
+.dash-retention-page .dr-kpi__label {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #5c6b7e;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.dash-retention-page .dr-kpi__value {
+  font-size: 1.9rem;
+  font-weight: 800;
+  color: #1a2332;
+  line-height: 1.1;
+  margin-top: 6px;
+  font-variant-numeric: tabular-nums;
+}
+.dash-retention-page .dr-kpi__value.is-low { color: #c62828; }
+.dash-retention-page .dr-kpi__sub {
+  font-size: 0.82rem;
+  color: #5c6b7e;
+  margin-top: 4px;
+  font-variant-numeric: tabular-nums;
+}
+.dash-retention-page .dr-kpi__sub.is-up { color: #1565c0; }
+.dash-retention-page .dr-kpi__sub.is-dn { color: #c62828; }
+.dash-retention-page .dr-kpi__count {
+  font-size: 0.78rem;
+  color: #8b95a5;
+  margin-top: 2px;
+}
+
+/* ── 탭 ──────────────────────────────────────────────── */
+.dash-retention-page .dr-tabs {
+  gap: 6px;
+  border-bottom: 0;
+  margin-bottom: 16px;
+}
+.dash-retention-page .dr-tabs .nav-link {
+  border: 1px solid #c5ced9;
+  border-radius: 999px;
+  color: #4b5563;
+  font-weight: 700;
+  font-size: 0.88rem;
+}
+.dash-retention-page .dr-tabs .nav-link.active {
+  color: #fff;
+  background: #1e4a7b;
+  border-color: #1e4a7b;
+}
+.dash-retention-page .dr-tab-content {
+  min-height: 360px;
+}
+
+/* ── 차트 그리드 ──────────────────────────────────────── */
+.dash-retention-page .dr-chart-grid {
+  display: grid;
+  grid-template-columns: 1.35fr 1fr;
+  gap: 16px;
+}
+.dash-retention-page .dr-panel .card-header {
+  background: #f8fafc;
+  border-bottom: 1px solid #e8edf4;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+.dash-retention-page .dr-chart-box {
+  position: relative;
+  min-height: 320px;
+}
+
+/* ── 테이블 ───────────────────────────────────────────── */
+.dash-retention-page .dr-table {
+  margin-bottom: 0;
+  font-size: 0.85rem;
+}
+.dash-retention-page .dr-table thead th {
+  background: #1e4a7b;
+  color: #fff;
+  font-weight: 700;
+  white-space: nowrap;
+  font-size: 0.8rem;
+  padding: 8px 10px;
+}
+.dash-retention-page .dr-table tbody td {
+  vertical-align: middle;
+  padding: 7px 10px;
+}
+.dash-retention-page .dr-table tbody tr:hover {
+  background: #f0f5fc;
+}
+.dash-retention-page .dr-val-low {
+  color: #c62828;
+  font-weight: 600;
+}
+
+/* ── 에러 배너 ────────────────────────────────────────── */
+.dash-retention-page .dr-err-banner {
+  margin-top: 12px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: #fdecea;
+  border: 1px solid #f5c6c2;
+  color: #c62828;
+  font-size: 0.85rem;
+}
+
+/* ── 반응형 ───────────────────────────────────────────── */
+@media (max-width: 1200px) {
+  .dash-retention-page .dr-filter-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .dash-retention-page .dr-filter-item--wide { grid-column: span 2; }
+  .dash-retention-page .dr-chart-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 900px) {
+  .dash-retention-page .dr-upload-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 768px) {
+  .dash-retention-page .dr-filter-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .dash-retention-page .dr-filter-item--wide { grid-column: span 2; }
+  .dash-retention-page .dr-filter-actions { flex-direction: column; }
+  .dash-retention-page .dr-upload-row {
+    grid-template-columns: 1fr;
+  }
+  .dash-retention-page .dr-kpi__value { font-size: 1.5rem; }
+  .dash-retention-page .dr-chart-box { min-height: 260px; }
+}

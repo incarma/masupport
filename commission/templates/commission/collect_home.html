@@ -56,7 +56,9 @@
          data-upload-url="{% url 'commission:upload_excel' %}"
          data-search-user-url="{{ accounts_search_url }}"
          data-default-ym="{{ default_ym }}"
-         data-current-user-id="{{ current_user_id }}">
+         data-current-user-id="{{ current_user_id }}"
+         data-api-dropdown-feedback-save-url="{% url 'commission:api_collect_dropdown_feedback_save' %}"
+         data-current-user-grade="{{ current_user_grade }}">
 
       <!-- =========================================================
         1) 헤더 영역
@@ -156,7 +158,25 @@
         3) 탭 + 테이블 영역
       ========================================================== -->
       <div class="card shadow-sm border-0 rounded-4 p-3">
-      
+
+        <!-- 안내 문구 -->
+        <div class="collect-notice mb-3">
+          <div class="collect-notice-row">
+            <span class="collect-notice-label">- 입금계좌</span>
+            <span>
+              수수료환수 : <strong>기업은행 027-115958-01-049</strong> (인카금융서비스)
+              &nbsp;&nbsp;／&nbsp;&nbsp;
+              고용산재·협회등록·시험응시·DB 등 : <strong>우리은행 1005-801-576102</strong> (인카금융서비스)
+            </span>
+          </div>
+          <div class="collect-notice-row">
+            - 고용산재 보험료, 협회등록비, 시험응시료, DB 공제비용 등은 가급적 <strong>상위차감</strong>으로 진행해주시면 감사하겠습니다.
+          </div>
+          <div class="collect-notice-row">
+            - 기한연장, 분할상환, 환수내역 등의 요청은 상단 <strong>[업무지원]</strong> 탭의 요청게시판을 이용 부탁드립니다.
+          </div>
+        </div>
+
         <!-- 탭 + 엑셀 다운로드 버튼 -->
         <div class="d-flex justify-content-between align-items-center mb-3">
           <ul class="nav nav-tabs mb-0" id="collectTabs" role="tablist">
@@ -192,13 +212,13 @@
             <!-- JS가 탭에 따라 교체 — id 변경 금지 -->
             <thead id="collectTableHead">
               <tr>
-                <th>부서</th>
-                <th>부문</th>
-                <th>영업가족</th>
-                <th>사원명</th>
-                <th>사번</th>
-                <th>재직상태</th>
+                <th>부서</th><th>부문</th><th>영업가족</th><th>사원명</th>
+                <th>사번</th><th>재직상태</th>
+                <th class="text-end">채권합계</th><th class="text-end">보증합계</th>
+                <th class="text-end">기타합계</th><th class="text-end">환수예상</th>
                 <th class="text-end">당월 최종지급액</th>
+                <th>영업가족 피드백</th>
+                <th>본사 피드백</th>
                 <th>최신 피드백</th>
               </tr>
             </thead>
