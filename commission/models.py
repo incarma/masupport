@@ -506,3 +506,67 @@ class CollectUploadLog(models.Model):
 
     def __str__(self) -> str:
         return f"{self.ym} / {self.file_name} / {self.row_count}건"
+    
+
+class CollectDropdownFeedback(models.Model):
+    """
+    환수관리 드랍다운 피드백 (영업가족/본사 구분).
+
+    [설계 원칙]
+    - feedback_type: 'branch'(영업가족, head/leader 작성)
+                     'hq'(본사, superuser 작성)
+    - 이력 누적: UniqueConstraint 없음 → 최신 1건을 서비스에서 Subquery로 조회
+    - emp_id: FK 없이 CharField (CollectRecord.emp_id 규약과 동일)
+    - author: PROTECT (작성자 삭제 시 이력 보존)
+    - ym: CollectRecord.ym 규약과 동일 (YYYYMM 6자리)
+    """
+
+    FEEDBACK_TYPE_CHOICES = [
+        ("branch", "영업가족 피드백"),
+        ("hq",     "본사 피드백"),
+    ]
+
+    # 영업가족 피드백 선택지
+    BRANCH_VALUE_CHOICES = [
+        ("",               "선택"),
+        ("입금예정",        "입금예정"),
+        ("상위차감",        "상위차감"),
+        ("연락두절(추심요청)", "연락두절(추심요청)"),
+        ("기타",           "기타"),
+    ]
+
+    # 본사 피드백 선택지
+    HQ_VALUE_CHOICES = [
+        ("",        "선택"),
+        ("입금예정", "입금예정"),
+        ("상위차감", "상위차감"),
+        ("보증청구", "보증청구"),
+        ("기타",    "기타"),
+    ]
+
+    emp_id        = models.CharField(max_length=30, db_index=True, verbose_name="대상자 사번")
+    ym            = models.CharField(max_length=6,  db_index=True, verbose_name="월도(YYYYMM)")
+    feedback_type = models.CharField(max_length=10, choices=FEEDBACK_TYPE_CHOICES, verbose_name="피드백 구분")
+    value         = models.CharField(max_length=30, blank=True, default="", verbose_name="피드백 값")
+    author        = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="collect_dropdown_feedbacks",
+        verbose_name="작성자",
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="작성일시")
+
+    class Meta:
+        db_table  = "collect_dropdown_feedback"
+        verbose_name        = "환수관리 드랍다운 피드백"
+        verbose_name_plural = "환수관리 드랍다운 피드백"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(
+                fields=["emp_id", "ym", "feedback_type"],
+                name="idx_collect_df_empid_ym_type",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"[{self.feedback_type}] {self.emp_id} / {self.ym} / {self.value}"

@@ -44,7 +44,10 @@ const URLS = {
   feedbackCreate: ds.apiFeedbackCreateUrl,
   feedbackUpdate: ds.apiFeedbackUpdateUrl,
   feedbackDelete: ds.apiFeedbackDeleteUrl,
+  dropdownFeedbackSave: ds.apiDropdownFeedbackSaveUrl,
 };
+
+const USER_GRADE = ds.currentUserGrade || "";
 
 // ============================================================
 // 2) 상태 관리
@@ -149,40 +152,72 @@ const EXTRA_COLS = [
   { label: "환수예상",  money: true, sortKey: "refund_expected" },
 ];
 
+const BRANCH_FEEDBACK_OPTIONS = ["선택", "입금예정", "상위차감", "연락두절(추심요청)", "기타"];
+const HQ_FEEDBACK_OPTIONS     = ["선택", "입금예정", "상위차감", "보증청구", "기타"];
+
+// 드랍다운 값 → CSS 클래스 매핑 (SSOT)
+const DROPDOWN_VALUE_CLASS = {
+  "입금예정":         "val-green",
+  "상위차감":         "val-blue",
+  "연락두절(추심요청)": "val-red",
+  "보증청구":         "val-red",
+  "기타":             "val-gray",
+};
+
+/** 드랍다운 값에 해당하는 CSS 클래스 반환 (없으면 "") */
+function getDropdownClass(value) {
+  return DROPDOWN_VALUE_CLASS[value] || "";
+}
+
+// 신규 피드백 컬럼 정의 (TAB_COLS에서 공유)
+const DROPDOWN_BRANCH_COL = { label: "영업가족 피드백", dropdownType: "branch" };
+const DROPDOWN_HQ_COL     = { label: "본사 피드백",     dropdownType: "hq" };
+const LATEST_FB_COL       = { label: "최신 피드백" };
+
 const TAB_COLS = {
   all: [
     ...COMMON_COLS,
     ...EXTRA_COLS,
     { label: "당월 최종지급액",     money: true, sortKey: "final_payment" },
-    { label: "최신 피드백" },
+    DROPDOWN_BRANCH_COL,
+    DROPDOWN_HQ_COL,
+    LATEST_FB_COL,
   ],
   new: [
     ...COMMON_COLS,
     ...EXTRA_COLS,
     { label: "전월 최종지급액",     money: true, sortKey: "prev_payment" },
     { label: "당월 최종지급액",     money: true, sortKey: "final_payment" },
-    { label: "최신 피드백" },
+    DROPDOWN_BRANCH_COL,
+    DROPDOWN_HQ_COL,
+    LATEST_FB_COL,
   ],
   long3: [
     ...COMMON_COLS,
     ...EXTRA_COLS,
     { label: "2개월전 최종지급액",  money: true, sortKey: "oldest_payment" },
     { label: "당월 최종지급액",     money: true, sortKey: "final_payment" },
-    { label: "최신 피드백" },
+    DROPDOWN_BRANCH_COL,
+    DROPDOWN_HQ_COL,
+    LATEST_FB_COL,
   ],
   long6: [
     ...COMMON_COLS,
     ...EXTRA_COLS,
     { label: "5개월전 최종지급액",  money: true, sortKey: "oldest_payment" },
     { label: "당월 최종지급액",     money: true, sortKey: "final_payment" },
-    { label: "최신 피드백" },
+    DROPDOWN_BRANCH_COL,
+    DROPDOWN_HQ_COL,
+    LATEST_FB_COL,
   ],
   long12: [
     ...COMMON_COLS,
     ...EXTRA_COLS,
     { label: "11개월전 최종지급액", money: true, sortKey: "oldest_payment" },
     { label: "당월 최종지급액",     money: true, sortKey: "final_payment" },
-    { label: "최신 피드백" },
+    DROPDOWN_BRANCH_COL,
+    DROPDOWN_HQ_COL,
+    LATEST_FB_COL,
   ],
 };
 
@@ -224,6 +259,9 @@ function renderTableHead(tab) {
   thead.innerHTML = `<tr>${
     cols.map(c => {
       const cls = `text-nowrap${c.money ? " text-end" : ""}`;
+      if (c.dropdownType) {
+        return `<th class="${cls} collect-th-dropdown">${esc(c.label)}</th>`;
+      }
       if (!c.sortKey) {
         return `<th class="${cls} collect-th-feedback">${esc(c.label)}</th>`;
       }
@@ -311,6 +349,8 @@ function getTabHeaders(tab) {
  */
 function rowToArray(row, tab) {
   return (TAB_COLS[tab] || TAB_COLS.all).map(c => {
+    if (c.dropdownType === "branch") return row.branch_feedback || "";
+    if (c.dropdownType === "hq")     return row.hq_feedback     || "";
     if (!c.sortKey) return row.latest_feedback || "";
     const v = row[c.sortKey];
     if (c.money) return typeof v === "number" ? v : (Number(v) || 0);
@@ -399,6 +439,43 @@ function moneyTd(val) {
   return `<td class="text-end text-nowrap${cls}">${fmtMoney(val)}</td>`;
 }
 
+// ============================================================
+// 7-A) 드랍다운 피드백 셀 렌더링
+// ============================================================
+function buildDropdownCell(row, dropdownType) {
+  const canEdit =
+    (dropdownType === "branch" && (USER_GRADE === "head" || USER_GRADE === "leader")) ||
+    (dropdownType === "hq"     && USER_GRADE === "superuser");
+
+  const currentValue = dropdownType === "branch"
+    ? (row.branch_feedback || "")
+    : (row.hq_feedback     || "");
+
+  const options = dropdownType === "branch" ? BRANCH_FEEDBACK_OPTIONS : HQ_FEEDBACK_OPTIONS;
+  const ym      = row.ym || state.ym;
+  const valCls = getDropdownClass(currentValue);
+
+  if (!canEdit) {
+    return `<td class="collect-td-dropdown text-nowrap${valCls ? " " + valCls : ""}">${esc(currentValue || "-")}</td>`;
+  }
+
+  const opts = options.map(opt => {
+    const val      = opt === "선택" ? "" : opt;
+    const selected = val === currentValue ? " selected" : "";
+    return `<option value="${esc(val)}"${selected}>${esc(opt)}</option>`;
+  }).join("");
+
+  return `<td class="collect-td-dropdown">
+    <select class="form-select form-select-sm collect-dropdown-select"
+            data-emp-id="${esc(row.emp_id)}"
+            data-ym="${esc(ym)}"
+            data-feedback-type="${esc(dropdownType)}"
+            data-current-value="${esc(currentValue)}">
+      ${opts}
+    </select>
+  </td>`;
+}
+
 function buildRowHtml(row, tab) {
   const commonCells = `
     <td class="text-nowrap">${esc(row.part    || "-")}</td>
@@ -427,6 +504,9 @@ function buildRowHtml(row, tab) {
     moneyCells = moneyTd(row.oldest_payment) + moneyTd(row.final_payment);
   }
 
+  const branchFbCell = buildDropdownCell(row, "branch");
+  const hqFbCell     = buildDropdownCell(row, "hq");
+
   const fbCell = row.latest_feedback
     ? `<td class="collect-td-feedback"><span class="collect-feedback-cell"
                data-emp-id="${esc(row.emp_id)}"
@@ -436,7 +516,7 @@ function buildRowHtml(row, tab) {
        </span></td>`
     : `<td class="collect-td-feedback text-muted small">-</td>`;
 
-  return `<tr>${commonCells}${moneyCells}${fbCell}</tr>`;
+  return `<tr>${commonCells}${moneyCells}${branchFbCell}${hqFbCell}${fbCell}</tr>`;
 }
 
 function renderCollectTable(rows, tab) {
@@ -853,6 +933,52 @@ function bindEvents() {
       const textarea = document.getElementById("feedbackContent");
       if (textarea) textarea.value = "";
       getOrCreateModal("feedbackManagerModal")?.show();
+    });
+
+    // ── 드랍다운 피드백 change 이벤트 ───────────────────────
+    tbody.addEventListener("change", async e => {
+      const sel = e.target?.closest?.(".collect-dropdown-select");
+      if (!sel) return;
+      if (sel.dataset.saving === "1") return;
+
+      sel.dataset.saving = "1";
+      sel.disabled = true;
+
+      const empId        = sel.dataset.empId       || "";
+      const ym           = sel.dataset.ym           || state.ym;
+      const feedbackType = sel.dataset.feedbackType || "";
+      const value        = sel.value;
+
+      try {
+        const data = await apiPost(URLS.dropdownFeedbackSave, {
+          emp_id:        empId,
+          ym:            ym,
+          feedback_type: feedbackType,
+          value:         value,
+        });
+        if (!data.ok) {
+          alert(data.message || "저장에 실패했습니다.");
+          sel.value = sel.dataset.currentValue || "";
+          // 실패 시 색상도 원복
+          const prevCls = getDropdownClass(sel.dataset.currentValue || "");
+          ["val-green", "val-blue", "val-red", "val-gray"].forEach(c => sel.classList.remove(c));
+          if (prevCls) sel.classList.add(prevCls);
+          return;
+        }
+        // 저장 성공 → currentValue 갱신
+        sel.dataset.currentValue = value;
+        // 색상 클래스 갱신
+        ["val-green", "val-blue", "val-red", "val-gray"].forEach(c => sel.classList.remove(c));
+        const newCls = getDropdownClass(value);
+        if (newCls) sel.classList.add(newCls);
+      } catch (err) {
+        console.error("[collect_home] dropdown feedback save 오류:", err);
+        alert("저장 중 오류가 발생했습니다.");
+        sel.value = sel.dataset.currentValue || "";
+      } finally {
+        sel.dataset.saving = "0";
+        sel.disabled = false;
+      }
     });
   }
 

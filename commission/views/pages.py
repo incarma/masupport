@@ -253,7 +253,7 @@ def support_home(request):
 # [Step 7] commission/views/pages.py — collect_home 뷰 추가
 # 파일 최하단에 아래 코드를 추가한다.
 ############################################################################## 
-@grade_required("superuser")
+@grade_required("superuser", "head", "leader")
 def collect_home(request):
     """
     환수관리(Collect Home) 페이지 뷰 — Step 7
@@ -289,5 +289,6 @@ def collect_home(request):
         "current_user_id":  str(request.user.id),
         "accounts_search_url": _accounts_search_url(),
         "last_upload_log":  last_upload_log,
+        "current_user_grade": str(request.user.grade),
     }
     return render(request, "commission/collect_home.html", ctx)

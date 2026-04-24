@@ -163,3 +163,141 @@ class SalesForecastDaily(models.Model):
         db_table = "dash_sales_forecast_daily"
         unique_together = [("forecast", "day")]
         indexes = [models.Index(fields=["forecast", "day"])]
+
+
+class RetentionRecord(models.Model):
+    """
+    유지율 원천 데이터 — 엑셀 1행 = 1행
+    PK(UniqueConstraint): policy_no  round_no
+    유지율 계산식: 유지율 = Σrecruit_amount[status∈{정상,유예}] / Σrecruit_amount × 100
+    """
+
+    LIFE_NL_CHOICES = [("생보", "생보"), ("손보", "손보")]
+
+    policy_no     = models.CharField("증권번호",       max_length=80,  db_index=True)
+    round_no      = models.PositiveSmallIntegerField("대상회차",    db_index=True)
+    insurer       = models.CharField("보험사",         max_length=60,  db_index=True)
+    product_name  = models.CharField("상품명",         max_length=255, blank=True, null=True)
+    life_nl       = models.CharField("손생구분",       max_length=10,  choices=LIFE_NL_CHOICES, db_index=True)
+
+    # 집계 기준 수치
+    recruit_amount = models.BigIntegerField("최초(모집)인정실적")
+
+    # 상태: 정상/유예 = 분자 포함, 해지/실효 = 분모만
+    STATUS_CHOICES = [("정상", "정상"), ("유예", "유예"), ("해지", "해지"), ("실효", "실효")]
+    status        = models.CharField("상태",           max_length=20,  choices=STATUS_CHOICES, db_index=True)
+
+    # 최종월도 (YYYYMM 형식 → 내부 저장은 YYYY-MM으로 정규화)
+    ym            = models.CharField("월도(YYYY-MM)",  max_length=7,   db_index=True)
+
+    # 설계사 정보
+    user          = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="retention_records", db_index=True, verbose_name="설계사",
+    )
+    emp_id_snapshot  = models.CharField("사원번호(스냅샷)", max_length=30,  blank=True, null=True, db_index=True)
+    name_snapshot    = models.CharField("성명(스냅샷)",    max_length=100, blank=True, null=True)
+    part_snapshot    = models.CharField("소속(스냅샷)",    max_length=60,  blank=True, null=True)
+    branch_snapshot  = models.CharField("파트너(스냅샷)", max_length=100, blank=True, null=True)
+
+    updated_at = models.DateTimeField("업데이트", auto_now=True)
+    created_at = models.DateTimeField("생성",     auto_now_add=True)
+
+    class Meta:
+        db_table = "dash_retention_record"
+        verbose_name = "유지율레코드"
+        verbose_name_plural = "유지율레코드"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["policy_no", "round_no"],
+                name="unique_retention_policy_round",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["ym", "round_no"]),
+            models.Index(fields=["ym", "life_nl", "round_no"]),
+            models.Index(fields=["ym", "insurer", "round_no"]),
+            models.Index(fields=["ym", "emp_id_snapshot"]),
+            models.Index(fields=["ym", "round_no", "status"]),
+        ]
+
+    def __str__(self):
+        return f"{self.policy_no} / R{self.round_no:02d} / {self.status}"
+
+
+class RetentionAgg(models.Model):
+    """
+    유지율 집계 캐시 — 업로드 직후 서비스 레이어에서 rebuild
+    scope_type: all / part / branch
+    scope_key : '*' / 소속명 / 파트너명
+    insurer   : '' = 전체, 보험사명 = 개별
+    round_no  : 2,3,4,7 등 대상회차
+    """
+    SCOPE_CHOICES = [("all","all"),("part","part"),("branch","branch")]
+
+    ym          = models.CharField(max_length=7,  db_index=True)
+    life_nl     = models.CharField(max_length=10, db_index=True)  # 생보/손보/전체('')
+    round_no    = models.PositiveSmallIntegerField(db_index=True)
+    scope_type  = models.CharField(max_length=10, choices=SCOPE_CHOICES, db_index=True)
+    scope_key   = models.CharField(max_length=100, db_index=True)
+    insurer     = models.CharField(max_length=60,  blank=True, default="")
+
+    total_amount  = models.BigIntegerField("모집합계", default=0)
+    paid_amount   = models.BigIntegerField("유지합계", default=0)
+    total_count   = models.PositiveIntegerField("대상건수", default=0)
+    paid_count    = models.PositiveIntegerField("유지건수", default=0)
+
+    # rate = paid_amount / total_amount × 100
+    rate = models.DecimalField("유지율(%)", max_digits=5, decimal_places=2, default=0)
+
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "dash_retention_agg"
+        verbose_name = "유지율집계"
+        verbose_name_plural = "유지율집계"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["ym","life_nl","round_no","scope_type","scope_key","insurer"],
+                name="unique_retention_agg",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["ym","scope_type","scope_key","round_no"]),
+            models.Index(fields=["ym","life_nl","scope_type","scope_key"]),
+        ]
+
+
+class RetentionUploadLog(models.Model):
+    """
+    생보/손보 각각 업로드 이력 — ymlife_nl 단위로 재업로드 시 update
+    """
+    LIFE_NL_CHOICES = [("생보","생보"),("손보","손보")]
+
+    ym          = models.CharField("월도",  max_length=7)
+    life_nl     = models.CharField("손생",  max_length=10, choices=LIFE_NL_CHOICES)
+    file_name   = models.CharField("파일명", max_length=255, blank=True, default="")
+    row_count   = models.PositiveIntegerField("행수",    default=0)
+    upserted    = models.PositiveIntegerField("upsert", default=0)
+    skipped     = models.PositiveIntegerField("스킵",    default=0)
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="retention_upload_logs", verbose_name="업로드계정",
+    )
+    uploaded_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "dash_retention_upload_log"
+        verbose_name = "유지율업로드이력"
+        verbose_name_plural = "유지율업로드이력"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["ym","life_nl"],
+                name="unique_retention_upload_log_ym_life_nl",
+            )
+        ]
+
+    def __str__(self):
+        return f"유지율업로드 {self.ym} {self.life_nl} ({self.row_count}건)"

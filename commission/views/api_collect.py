@@ -57,7 +57,7 @@ def _parse_json_body(request) -> tuple[dict, str | None]:
 # =============================================================================
 
 @login_required
-@grade_required("superuser")
+@grade_required("superuser", "head", "leader")
 @require_GET
 def api_collect_list(request):
     """
@@ -84,7 +84,7 @@ def api_collect_list(request):
         return _json_error("월도 형식이 올바르지 않습니다. (예: 202603)")
 
     try:
-        rows = svc.get_collect_list(ym, tab, part=part, bizmoon=bizmoon)
+        rows = svc.get_collect_list(ym, tab, part=part, bizmoon=bizmoon, user=request.user)
         return _json_ok("조회 완료", data={"rows": rows, "tab": tab, "ym": ym})
 
     except ValueError as exc:
@@ -100,7 +100,7 @@ def api_collect_list(request):
 # =============================================================================
 
 @login_required
-@grade_required("superuser")
+@grade_required("superuser", "head", "leader")
 @require_GET
 def api_collect_ym_list(request):
     """
@@ -125,7 +125,7 @@ def api_collect_ym_list(request):
 # =============================================================================
 
 @login_required
-@grade_required("superuser")
+@grade_required("superuser", "head", "leader")
 @require_GET
 def api_collect_feedback_list(request):
     """
@@ -154,7 +154,7 @@ def api_collect_feedback_list(request):
 # =============================================================================
 
 @login_required
-@grade_required("superuser")
+@grade_required("superuser", "head", "leader")
 @require_POST
 def api_collect_feedback_create(request):
     """
@@ -214,7 +214,7 @@ def api_collect_feedback_create(request):
 # =============================================================================
 
 @login_required
-@grade_required("superuser")
+@grade_required("superuser", "head", "leader")
 @require_POST
 def api_collect_feedback_update(request):
     """
@@ -279,7 +279,7 @@ def api_collect_feedback_update(request):
 # =============================================================================
 
 @login_required
-@grade_required("superuser")
+@grade_required("superuser", "head", "leader")
 @require_POST
 def api_collect_feedback_delete(request):
     """
@@ -330,3 +330,81 @@ def api_collect_feedback_delete(request):
             feedback_id, request.user.id,
         )
         return _json_error("피드백 삭제 중 오류가 발생했습니다.")
+    
+
+# =============================================================================
+# API: 드랍다운 피드백 저장
+# =============================================================================
+
+@login_required
+@grade_required("superuser", "head", "leader")
+@require_POST
+def api_collect_dropdown_feedback_save(request):
+    """
+    [POST] /commission/collect/api/dropdown-feedback/save/
+
+    Body (JSON):
+        {
+            "emp_id":        "사번",
+            "ym":            "202603",
+            "feedback_type": "branch" | "hq",
+            "value":         "입금예정" | "상위차감" | ...
+        }
+
+    권한:
+        - feedback_type="branch" → head, leader만 저장 가능
+        - feedback_type="hq"     → superuser만 저장 가능
+    """
+    body, err = _parse_json_body(request)
+    if err:
+        return _json_error(err)
+
+    emp_id        = str(body.get("emp_id",        "")).strip()
+    ym            = str(body.get("ym",            "")).strip()
+    feedback_type = str(body.get("feedback_type", "")).strip()
+    value         = str(body.get("value",         "")).strip()
+
+    if not emp_id:
+        return _json_error("대상자 사번을 입력해주세요.")
+    if not ym:
+        return _json_error("월도를 입력해주세요.")
+    if feedback_type not in ("branch", "hq"):
+        return _json_error("피드백 구분이 올바르지 않습니다.")
+
+    # 권한 검증 (서버 최종 판정)
+    grade = getattr(request.user, "grade", "")
+    if feedback_type == "hq" and grade != "superuser":
+        return _json_error("본사 피드백은 superuser만 저장할 수 있습니다.", status=403)
+    if feedback_type == "branch" and grade not in ("head", "leader"):
+        return _json_error("영업가족 피드백은 head 또는 leader만 저장할 수 있습니다.", status=403)
+
+    try:
+        fb = svc.save_dropdown_feedback(
+            author=request.user,
+            emp_id=emp_id,
+            ym=ym,
+            feedback_type=feedback_type,
+            value=value,
+        )
+        log_action(
+            request,
+            ACTION.COLLECT_FEEDBACK_CREATE,
+            meta={
+                "emp_id": emp_id,
+                "ym": ym,
+                "feedback_type": feedback_type,
+                "value": value,
+                "feedback_id": fb.id,
+            },
+            success=True,
+        )
+        return _json_ok("저장 완료", data={"feedback_id": fb.id, "value": fb.value})
+
+    except ValueError as exc:
+        return _json_error(str(exc))
+    except Exception:
+        logger.exception(
+            "[api_collect_dropdown_feedback_save] 예외 emp_id=%s ym=%s type=%s",
+            emp_id, ym, feedback_type,
+        )
+        return _json_error("저장 중 오류가 발생했습니다.")

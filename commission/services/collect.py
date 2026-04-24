@@ -23,7 +23,10 @@ from django.db import transaction
 from django.db.models import OuterRef, Subquery
 
 from accounts.models import CustomUser
-from commission.models import CollectFeedback, CollectRecord, DepositSummary
+from commission.upload_handlers import collect
+from partner.models import SubAdminTemp
+from commission.models import CollectFeedback, CollectRecord, DepositSummary, CollectDropdownFeedback
+
 
 logger = logging.getLogger(__name__)
 
@@ -123,11 +126,80 @@ def _latest_feedback_subquery() -> Subquery:
     )
 
 
-def _apply_scope(qs, part: str = "", bizmoon: str = ""):
+def _latest_branch_feedback_subquery() -> Subquery:
+    """영업가족 드랍다운 피드백 최신값 Subquery (emp_id + ym 기준)."""
+    return Subquery(
+        CollectDropdownFeedback.objects
+        .filter(emp_id=OuterRef("emp_id"), ym=OuterRef("ym"), feedback_type="branch")
+        .order_by("-created_at")
+        .values("value")[:1]
+    )
+
+
+def _latest_hq_feedback_subquery() -> Subquery:
+    """본사 드랍다운 피드백 최신값 Subquery (emp_id + ym 기준)."""
+    return Subquery(
+        CollectDropdownFeedback.objects
+        .filter(emp_id=OuterRef("emp_id"), ym=OuterRef("ym"), feedback_type="hq")
+        .order_by("-created_at")
+        .values("value")[:1]
+    )
+
+
+def _get_allowed_emp_ids_for_leader(user) -> list[str] | None:
     """
-    부서(part) / 부문(bizmoon) 필터를 CollectRecord QS에 적용한다.
-    빈 문자열이면 해당 필터를 건너뛴다 (전체 조회).
+    leader의 팀 스코프에 해당하는 emp_id 목록 반환.
+    - SubAdminTemp에서 level/team 확인 → 같은 팀의 CustomUser.id 목록
+    - 팀 미설정이면 None 반환 (본인 branch 전체로 fallback)
     """
+
+    sa = SubAdminTemp.objects.filter(user_id=user.id).first()
+    if not sa:
+        return None
+
+    level = (sa.level or "").strip()
+    field_map = {"A레벨": "team_a", "B레벨": "team_b", "C레벨": "team_c"}
+    team_field = field_map.get(level)
+    if not team_field:
+        return None
+
+    my_team_value = (getattr(sa, team_field, "") or "").strip()
+    if not my_team_value or my_team_value == "-":
+        return None
+
+    # 같은 branch + 같은 팀값의 SubAdminTemp user_id 목록
+    team_user_ids = list(
+        SubAdminTemp.objects.filter(
+            branch=(user.branch or "").strip(),
+            **{f"{team_field}__iexact": my_team_value},
+        ).values_list("user_id", flat=True)
+    )
+    return team_user_ids if team_user_ids else [str(user.id)]
+
+
+def _apply_scope(qs, user=None, part: str = "", bizmoon: str = ""):
+    """
+    부서(part) / 부문(bizmoon) 필터 + 권한 스코프 적용.
+    - superuser: part/bizmoon 필터만
+    - head: branch 고정
+    - leader: 팀 emp_id 목록으로 필터
+    """
+    if user is not None:
+        grade = getattr(user, "grade", "")
+        if grade == "head":
+            branch = (getattr(user, "branch", "") or "").strip()
+            if branch:
+                qs = qs.filter(branch=branch)
+        elif grade == "leader":
+            allowed_ids = _get_allowed_emp_ids_for_leader(user)
+            if allowed_ids is not None:
+                qs = qs.filter(emp_id__in=allowed_ids)
+            else:
+                # 팀 미설정: branch 전체
+                branch = (getattr(user, "branch", "") or "").strip()
+                if branch:
+                    qs = qs.filter(branch=branch)
+
     if part:
         qs = qs.filter(part=part)
     if bizmoon:
@@ -159,7 +231,9 @@ def _serialize_record(
         "bond_surety":     bond_surety,
         "other_total":     _dep["other_total"],  # DepositSummary.other_total (기타합계)
         "refund_expected": _dep["refund_expected"],  # DepositSummary.refund_expected (환수예상)
-        "latest_feedback": getattr(r, "latest_feedback_content", None) or "",
+        "branch_feedback":    getattr(r, "latest_branch_feedback", None) or "",
+        "hq_feedback":        getattr(r, "latest_hq_feedback", None) or "",
+        "latest_feedback":    getattr(r, "latest_feedback_content", None) or "",
     }
     if extra:
         row.update(extra)
@@ -208,17 +282,17 @@ def get_available_bizmoons() -> list[str]:
 # =============================================================================
 # 탭별 쿼리 함수
 # =============================================================================
-def get_collect_all(
-    ym: str,
-    part: str = "",
-    bizmoon: str = "",
-) -> list[dict]:
+def get_collect_all(ym: str, part: str = "", bizmoon: str = "", user=None) -> list[dict]:
     qs = (
         CollectRecord.objects
         .filter(ym=ym, final_payment__lt=0)
-        .annotate(latest_feedback_content=_latest_feedback_subquery())
+        .annotate(
+            latest_feedback_content=_latest_feedback_subquery(),
+            latest_branch_feedback=_latest_branch_feedback_subquery(),
+            latest_hq_feedback=_latest_hq_feedback_subquery(),
+        )
     )
-    qs = _apply_scope(qs, part=part, bizmoon=bizmoon)
+    qs = _apply_scope(qs, user=user, part=part, bizmoon=bizmoon)
     records = list(qs.order_by("part", "branch", "emp_id"))
     deposit_map = _build_deposit_map([r.emp_id for r in records])
     return [
@@ -227,11 +301,7 @@ def get_collect_all(
     ]
 
 
-def get_collect_new(
-    ym: str,
-    part: str = "",
-    bizmoon: str = "",
-) -> list[dict]:
+def get_collect_new(ym: str, part: str = "", bizmoon: str = "", user=None) -> list[dict]:
     prev_ym = offset_ym(ym, -1)
 
     curr_neg: set[str] = set(
@@ -254,9 +324,13 @@ def get_collect_new(
     curr_qs = (
         CollectRecord.objects
         .filter(ym=ym, emp_id__in=target_ids)
-        .annotate(latest_feedback_content=_latest_feedback_subquery())
+        .annotate(
+            latest_feedback_content=_latest_feedback_subquery(),
+            latest_branch_feedback=_latest_branch_feedback_subquery(),
+            latest_hq_feedback=_latest_hq_feedback_subquery(),
+        )
     )
-    curr_qs = _apply_scope(curr_qs, part=part, bizmoon=bizmoon)
+    curr_qs = _apply_scope(curr_qs, user=user, part=part, bizmoon=bizmoon)
 
     prev_map: dict[str, int] = dict(
         CollectRecord.objects
@@ -276,12 +350,7 @@ def get_collect_new(
     return rows
 
 
-def get_collect_long(
-    ym: str,
-    months: int,
-    part: str = "",
-    bizmoon: str = "",
-) -> list[dict]:
+def get_collect_long(ym: str, months: int, part: str = "", bizmoon: str = "", user=None) -> list[dict]:
     if months not in (3, 6, 12):
         raise ValueError(f"months는 3, 6, 12 중 하나여야 합니다. 입력값: {months}")
 
@@ -304,9 +373,13 @@ def get_collect_long(
     curr_qs = (
         CollectRecord.objects
         .filter(ym=ym, emp_id__in=target_ids)
-        .annotate(latest_feedback_content=_latest_feedback_subquery())
+        .annotate(
+            latest_feedback_content=_latest_feedback_subquery(),
+            latest_branch_feedback=_latest_branch_feedback_subquery(),
+            latest_hq_feedback=_latest_hq_feedback_subquery(),
+        )
     )
-    curr_qs = _apply_scope(curr_qs, part=part, bizmoon=bizmoon)
+    curr_qs = _apply_scope(curr_qs, user=user, part=part, bizmoon=bizmoon)
 
     oldest_map: dict[str, int] = dict(
         CollectRecord.objects
@@ -326,26 +399,21 @@ def get_collect_long(
     return rows
 
 
-def get_collect_list(
-    ym: str,
-    tab: str,
-    part: str = "",
-    bizmoon: str = "",
-) -> list[dict]:
+def get_collect_list(ym: str, tab: str, part: str = "", bizmoon: str = "", user=None) -> list[dict]:
     """
     탭 키(tab)에 따라 해당 서비스 함수를 호출하는 dispatcher.
     API 뷰에서 단일 진입점으로 사용한다.
     """
     if tab == "all":
-        return get_collect_all(ym, part=part, bizmoon=bizmoon)
+        return get_collect_all(ym, part=part, bizmoon=bizmoon, user=user)
     elif tab == "new":
-        return get_collect_new(ym, part=part, bizmoon=bizmoon)
+        return get_collect_new(ym, part=part, bizmoon=bizmoon, user=user)
     elif tab == "long3":
-        return get_collect_long(ym, months=3, part=part, bizmoon=bizmoon)
+        return get_collect_long(ym, months=3, part=part, bizmoon=bizmoon, user=user)
     elif tab == "long6":
-        return get_collect_long(ym, months=6, part=part, bizmoon=bizmoon)
+        return get_collect_long(ym, months=6, part=part, bizmoon=bizmoon, user=user)
     elif tab == "long12":
-        return get_collect_long(ym, months=12, part=part, bizmoon=bizmoon)
+        return get_collect_long(ym, months=12, part=part, bizmoon=bizmoon, user=user)
     else:
         raise ValueError(f"알 수 없는 탭입니다: {tab!r}")
 
@@ -503,3 +571,49 @@ def delete_feedback(
         "[collect] feedback deleted: id=%s, author=%s", feedback_id, author.id
     )
     return True
+
+
+# =============================================================================
+# 드랍다운 피드백 서비스
+# =============================================================================
+
+@transaction.atomic
+def save_dropdown_feedback(
+    author: CustomUser,
+    emp_id: str,
+    ym: str,
+    feedback_type: str,
+    value: str,
+) -> CollectDropdownFeedback:
+    """
+    드랍다운 피드백 저장 (이력 누적).
+
+    [검증]
+    - feedback_type: 'branch' | 'hq'
+    - value: 빈 문자열 허용 ('선택' 상태 기록)
+    - 권한 검증은 뷰에서 수행 후 호출
+    """
+    emp_id        = emp_id.strip()
+    ym            = ym.strip()
+    feedback_type = feedback_type.strip()
+    value         = value.strip()
+
+    if not emp_id:
+        raise ValueError("대상자 사번을 입력해주세요.")
+    if not ym or len(ym) != 6 or not ym.isdigit():
+        raise ValueError("월도 형식이 올바르지 않습니다. (YYYYMM)")
+    if feedback_type not in ("branch", "hq"):
+        raise ValueError("피드백 구분이 올바르지 않습니다.")
+
+    fb = CollectDropdownFeedback.objects.create(
+        emp_id=emp_id,
+        ym=ym,
+        feedback_type=feedback_type,
+        value=value,
+        author=author,
+    )
+    logger.info(
+        "[collect] dropdown feedback saved: id=%s type=%s emp_id=%s ym=%s value=%s",
+        fb.id, feedback_type, emp_id, ym, value,
+    )
+    return fb
