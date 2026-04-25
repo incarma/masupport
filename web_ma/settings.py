@@ -281,7 +281,7 @@ FORCE_PASSWORD_CHANGE_DENY_CHANNELS = _csv_set(config("FORCE_PASSWORD_CHANGE_DEN
 FORCE_PASSWORD_CHANGE_EXEMPT_GRADES = _csv_set(
     config(
         "FORCE_PASSWORD_CHANGE_EXEMPT_GRADES",
-        default="superuser,main_admin",
+        default="superuser,head",
     )
 )
 
@@ -445,6 +445,31 @@ LOGGING = {
         },
         # commission 쪽도 문제 추적 쉬우라고 기본 app 로그 연결(선택)
         "commission": {
+            "handlers": ["app_file", "error_file", "console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "partner": {
+            "handlers": ["app_file", "error_file", "console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "dash": {
+            "handlers": ["app_file", "error_file", "console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "audit": {
+            "handlers": ["app_file", "error_file", "console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "web_ma.celery": {
+            "handlers": ["app_file", "error_file", "console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "celery": {
             "handlers": ["app_file", "error_file", "console"],
             "level": "INFO",
             "propagate": False,

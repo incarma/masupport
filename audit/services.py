@@ -80,14 +80,15 @@ def log_action(
     중요 이벤트 기록.
     - obj를 넘기면 기본적으로 model명/PK를 object_type/object_id로 사용
     """
-    user = getattr(request, "user", None)
+    user = getattr(request, "user", None) if request is not None else None
     if obj is not None:
         object_type = object_type or obj.__class__.__name__
         # Django model이면 pk가 있을 가능성이 높음
         object_id = object_id or str(getattr(obj, "pk", "") or "")
 
-    request_id = getattr(request, "audit_request_id", "") or request.META.get("HTTP_X_REQUEST_ID", "") or ""
-    ip = get_client_ip(request)
+    meta_obj = getattr(request, "META", {}) if request is not None else {}
+    request_id = getattr(request, "audit_request_id", "") or meta_obj.get("HTTP_X_REQUEST_ID", "") or ""
+    ip = get_client_ip(request) if request is not None else ""
 
     return AuditLog.objects.create(
         action=action,

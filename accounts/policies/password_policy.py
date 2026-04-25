@@ -12,7 +12,7 @@ Phase 3 (Force Password Change) - Policy Engine (SSOT)
 정책 설계 원칙:
 - 전역 토글(FORCE_PASSWORD_CHANGE_ENABLED)로 즉시 롤백 가능
 - deny-first + 우선순위 고정(branch > part > channel)
-- grade 예외(superuser/main_admin 기본 제외)로 운영 사고 방지
+- grade 예외(superuser/head 기본 제외)로 운영 사고 방지
 - 현재는 settings 기반 스코프를 SSOT로 사용하되,
   향후 DB 기반 Scope 모델이 생기면 "optional"로 자동 확장 가능하도록 설계합니다.
 """

@@ -4,7 +4,7 @@
 // - data-action="delete-row"   + data-row-id="..."
 // - data-action="delete-group" + data-group-id="confirm_group_id(or group_key)"
 // - dataset URL 키 혼재 대비(여러 후보 OR)
-// - superuser/main_admin/sub_admin 브랜치 탐색 통합
+// - superuser/head/leader 브랜치 탐색 통합
 // - 삭제 후: 마지막 조회 캐시(__lastEfficiencyYM/__lastEfficiencyBranch) 우선 재조회
 // - ❗payload 키 통일:
 //    · row: { id }
@@ -14,6 +14,7 @@
 import { showLoading, hideLoading, alertBox, getCSRFToken } from "./utils.js";
 import { fetchData } from "./fetch.js";
 import { els } from "./dom_refs.js";
+import { readJsonOrThrow, isSuccessJson } from "../../common/manage/http.js";
 
 function str(v) {
   return String(v ?? "").trim();
@@ -106,10 +107,8 @@ async function postJson(url, body) {
     body: JSON.stringify(body || {}),
   });
 
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok || data.status !== "success") {
-    throw new Error(data.message || `요청 실패 (${res.status})`);
-  }
+  const data = await readJsonOrThrow(res, "요청 실패");
+  if (!isSuccessJson(data)) throw new Error(data.message || "요청 실패");
   return data;
 }
 
@@ -146,8 +145,8 @@ export function attachEfficiencyDeleteHandlers() {
       const rowId = str(btn.dataset.rowId);
       if (!rowId) return;
 
-      // sub_admin이면 disabled 처리되어야 하지만 혹시 몰라서 한번 더 방어
-      if (getUserGrade() === "sub_admin") return;
+      // leader이면 disabled 처리되어야 하지만 혹시 몰라서 한번 더 방어
+      if (getUserGrade() === "leader") return;
 
       if (!confirm("해당 행을 삭제할까요?")) return;
 
@@ -177,8 +176,8 @@ export function attachEfficiencyDeleteHandlers() {
       const gid = str(btn.dataset.groupId);
       if (!gid) return;
 
-      // sub_admin은 UI에서 버튼이 없어야 함. 그래도 방어
-      if (getUserGrade() === "sub_admin") return;
+      // leader은 UI에서 버튼이 없어야 함. 그래도 방어
+      if (getUserGrade() === "leader") return;
 
       if (!confirm("이 그룹 전체를 삭제할까요?\n(그룹 내 저장된 행/첨부도 함께 삭제됩니다)")) return;
 

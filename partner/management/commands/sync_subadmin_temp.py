@@ -7,7 +7,7 @@ class Command(BaseCommand):
     help = "SubAdminTemp 테이블을 CustomUser (sub_admin 등급 기준)과 동기화"
 
     def handle(self, *args, **options):
-        users = CustomUser.objects.filter(grade="sub_admin")
+        users = CustomUser.objects.filter(grade="leader")
         created, updated, deleted = 0, 0, 0
 
         # ✅ 1️⃣ 필요 사용자 추가/갱신
@@ -27,7 +27,7 @@ class Command(BaseCommand):
                 updated += 1
 
         # ✅ 2️⃣ sub_admin이 아닌 사용자는 정리
-        invalid_temps = SubAdminTemp.objects.exclude(user__grade="sub_admin")
+        invalid_temps = SubAdminTemp.objects.exclude(user__grade="leader")
         deleted = invalid_temps.count()
         invalid_temps.delete()
 

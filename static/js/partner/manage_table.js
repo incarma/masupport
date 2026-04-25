@@ -1,3 +1,6 @@
+import { getCSRFToken } from "../common/manage/csrf.js";
+import { readJsonOrThrow, isSuccessJson } from "../common/manage/http.js";
+
 /**
  * django_ma/static/js/partner/manage_table.js
  * ============================================================
@@ -9,7 +12,7 @@
  *   · CSS(table-layout:fixed + ellipsis)
  *   · JS(셀 title 자동 주입) + DataTables draw마다 재적용
  * - superuser: 검색 버튼으로 조회
- * - main_admin: 자동조회
+ * - head: 자동조회
  * - 안전장치: root 1회 초기화, $ is not defined 차단
  * ============================================================
  */
@@ -58,7 +61,7 @@ document.addEventListener("DOMContentLoaded", () => {
     return userGrade === "superuser";
   }
   function isMain() {
-    return userGrade === "main_admin";
+    return userGrade === "head";
   }
 
   function alertBox(msg) {
@@ -79,15 +82,6 @@ document.addEventListener("DOMContentLoaded", () => {
     return encodeURIComponent(v ?? "");
   }
 
-  function getCSRF() {
-    return (
-      window.csrfToken ||
-      document.querySelector("[name=csrfmiddlewaretoken]")?.value ||
-      document.cookie.match(/csrftoken=([^;]+)/)?.[1] ||
-      ""
-    );
-  }
-
   function urls() {
     const tableFetch = String(root.dataset.fetchUrl || "").trim();
     const tableSave = String(root.dataset.saveUrl || "").trim();
@@ -98,9 +92,9 @@ document.addEventListener("DOMContentLoaded", () => {
     return {
       tableFetch,
       tableSave,
-      rateList: "/partner/ajax/rate-userlist/",
-      rateExcel: "/partner/ajax/rate-userlist-excel/",
-      rateUpload: "/partner/ajax/rate-userlist-upload/",
+      rateList: String(root.dataset.rateListUrl || "/partner/ajax/rate-userlist/").trim(),
+      rateExcel: String(root.dataset.rateExcelUrl || "/partner/ajax/rate-userlist-excel/").trim(),
+      rateUpload: String(root.dataset.rateUploadUrl || "/partner/ajax/rate-userlist-upload/").trim(),
       rateTemplate,
     };
   }
@@ -121,16 +115,6 @@ document.addEventListener("DOMContentLoaded", () => {
       .replaceAll(">", "&gt;")
       .replaceAll('"', "&quot;")
       .replaceAll("'", "&#039;");
-  }
-
-  /* ---------------- JSON Safe Parse ---------------- */
-  async function safeJson(res) {
-    const text = await res.text();
-    try {
-      return JSON.parse(text);
-    } catch {
-      throw new Error(`서버 응답이 JSON이 아닙니다. (status=${res.status})`);
-    }
   }
 
   /* ==========================================================
@@ -179,7 +163,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   /* ==========================================================
-   * 4) Branch Resolve (Superuser UI vs main_admin fixed)
+   * 4) Branch Resolve (Superuser UI vs head fixed)
    * ========================================================== */
   function resolveBranchFromUI() {
     if (isSuper()) return String(els.branch?.value || "").trim();
@@ -195,7 +179,7 @@ document.addEventListener("DOMContentLoaded", () => {
   bindTopButtons();
   bindRateCellGuards();
 
-  // main_admin: 자동조회
+  // head: 자동조회
   if (isMain() && userBranch) {
     setTimeout(() => {
       const b = resolveBranchFromUI();
@@ -232,7 +216,7 @@ document.addEventListener("DOMContentLoaded", () => {
         .querySelectorAll("#mainTable .btnDeleteRow, #mainTable .btnMoveUp, #mainTable .btnMoveDown")
         .forEach((btn) => {
           const isDelete = btn.classList.contains("btnDeleteRow");
-          btn.disabled = !editMode || (isDelete && userGrade === "sub_admin");
+          btn.disabled = !editMode;
         });
     });
 
@@ -255,7 +239,7 @@ document.addEventListener("DOMContentLoaded", () => {
           <button class="btn btn-outline-secondary btn-sm btnMoveDown" ${!editMode ? "disabled" : ""}>▼</button>
         </td>
         <td>
-          <button class="btn btn-sm btn-danger btnDeleteRow" ${!editMode || userGrade === "sub_admin" ? "disabled" : ""}>삭제</button>
+          <button class="btn btn-sm btn-danger btnDeleteRow" ${!editMode ? "disabled" : ""}>삭제</button>
         </td>
       `;
       els.tableBody?.appendChild(tr);
@@ -279,14 +263,14 @@ document.addEventListener("DOMContentLoaded", () => {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "X-CSRFToken": getCSRF(),
+            "X-CSRFToken": getCSRFToken(),
             "X-Requested-With": "XMLHttpRequest",
           },
           body: JSON.stringify({ branch: b, rows }),
         });
 
-        const data = await safeJson(res);
-        if (data?.status === "success") {
+        const data = await readJsonOrThrow(res, "저장 실패");
+        if (isSuccessJson(data)) {
           alertBox(`저장 완료 (${rows.length}건)`);
           await fetchTables(b);
         } else {
@@ -319,7 +303,8 @@ document.addEventListener("DOMContentLoaded", () => {
     els.btnDownloadTemplate?.addEventListener("click", () => {
       const u = urls();
       if (!u.rateTemplate) return alertBox("양식 파일 경로가 설정되지 않았습니다.");
-      window.location.href = u.rateTemplate;
+      const b = resolveBranchFromUI();
+      window.location.href = b ? `${u.rateTemplate}?branch=${enc(b)}` : u.rateTemplate;
     });
 
     // 6-7) 엑셀 업로드
@@ -345,14 +330,14 @@ document.addEventListener("DOMContentLoaded", () => {
         const formData = new FormData();
         formData.append("excel_file", file);
         formData.append("branch", b);
-        formData.append("csrfmiddlewaretoken", getCSRF());
+        formData.append("csrfmiddlewaretoken", getCSRFToken());
 
         showLoading("업로드 중...");
         try {
           const res = await fetch(u.rateUpload, { method: "POST", body: formData });
-          const data = await safeJson(res);
+          const data = await readJsonOrThrow(res, "업로드 실패");
 
-          if (data?.status === "success") {
+          if (isSuccessJson(data)) {
             alertBox(data.message || "업로드 완료");
             await loadRateUserTable(b);
           } else {
@@ -406,7 +391,7 @@ document.addEventListener("DOMContentLoaded", () => {
           <button class="btn btn-outline-secondary btn-sm btnMoveDown" ${!editMode ? "disabled" : ""}>▼</button>
         </td>
         <td>
-          <button class="btn btn-sm btn-danger btnDeleteRow" ${!editMode || userGrade === "sub_admin" ? "disabled" : ""}>삭제</button>
+          <button class="btn btn-sm btn-danger btnDeleteRow" ${!editMode ? "disabled" : ""}>삭제</button>
         </td>
       `;
       els.tableBody.appendChild(tr);
@@ -558,7 +543,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const res = await fetch(`${u.tableFetch}?branch=${enc(branch)}`, {
         headers: { "X-Requested-With": "XMLHttpRequest" },
       });
-      const data = await safeJson(res);
+      const data = await readJsonOrThrow(res, "테이블 조회 실패");
 
       const rows = data?.status === "success" ? (data.rows || []) : [];
       renderMainTable(rows, branch);
@@ -584,7 +569,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const res = await fetch(`${u.rateList}?branch=${enc(branch)}`, {
         headers: { "X-Requested-With": "XMLHttpRequest" },
       });
-      payload = await safeJson(res);
+      payload = await readJsonOrThrow(res, "요율현황 조회 실패");
     } catch (err) {
       console.error("요율현황 로드 실패(fetch)", err);
       renderRateUserPlain([]);

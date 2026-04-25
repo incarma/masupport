@@ -12,6 +12,7 @@ import { fetchData } from "./fetch.js";
 
 import { getCSRFToken } from "../../common/manage/csrf.js";
 import { getDatasetUrl } from "../../common/manage/dataset.js";
+import { readJsonOrThrow, isSuccessJson } from "../../common/manage/http.js";
 
 const BOUND_KEY = "rateDeleteBound";
 
@@ -107,11 +108,8 @@ async function handleDeleteClick(e) {
       body: JSON.stringify({ id }),
     });
 
-    const data = await res.json().catch(() => ({}));
-
-    if (!res.ok || data.status !== "success") {
-      throw new Error(data.message || `삭제 실패 (HTTP ${res.status})`);
-    }
+    const data = await readJsonOrThrow(res, "삭제 실패");
+    if (!isSuccessJson(data)) throw new Error(data.message || "삭제 실패");
 
     alertBox("삭제가 완료되었습니다.");
 

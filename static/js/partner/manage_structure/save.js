@@ -10,20 +10,13 @@ import { els } from "./dom_refs.js";
 import { showLoading, hideLoading, alertBox, getCSRFToken, pad2 } from "./utils.js";
 import { fetchData } from "./fetch.js";
 import { resetInputSection } from "./input_rows.js";
+import { readJsonOrThrow, isSuccessJson } from "../../common/manage/http.js";
 
 /* =========================================================
    Small helpers
 ========================================================= */
 function toStr(v) {
   return String(v ?? "").trim();
-}
-
-function safeJsonParse(text) {
-  try {
-    return JSON.parse(text);
-  } catch {
-    return null;
-  }
 }
 
 /* =========================================================
@@ -170,14 +163,8 @@ export async function saveRows() {
       body: JSON.stringify({ rows: payloadRows, month, branch, part }),
     });
 
-    const text = await res.text();
-    if (!res.ok) throw new Error(`서버 응답 오류 (${res.status})`);
-
-    const result = safeJsonParse(text);
-    if (!result) throw new Error("서버 응답 파싱 실패 (JSON 아님)");
-
-    const ok = result.status === "success" || result.success === true;
-    if (!ok) {
+    const result = await readJsonOrThrow(res, "저장 실패");
+    if (!isSuccessJson(result)) {
       alertBox(result.message || "저장 중 오류가 발생했습니다.");
       return;
     }

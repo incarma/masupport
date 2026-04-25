@@ -114,5 +114,7 @@ def manage_charts(request):
     )
 
 
+@login_required
+@grade_required("superuser", "head", "leader", "basic")
 def join_form(request):
     return render(request, "partner/join_form.html")

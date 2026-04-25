@@ -157,12 +157,28 @@
   }
 
   async function readJson(res) {
+    const status = Number(res?.status || 0);
+    const contentType = String(res?.headers?.get?.("content-type") || "").toLowerCase();
     const text = await res.text();
-    if (!text) return { ok: res.ok, status: res.status, data: null, text: "" };
+    if (!contentType.includes("application/json")) {
+      return {
+        ok: false,
+        status,
+        data: null,
+        text,
+        message:
+          status === 401 || status === 403
+            ? "권한이 없거나 로그인이 만료되었습니다. 다시 로그인 후 시도해주세요."
+            : status >= 500
+              ? "서버 오류가 발생했습니다. 관리자에게 문의해주세요."
+              : `서버 응답이 JSON이 아닙니다. (${status || "unknown"})`,
+      };
+    }
+    if (!text) return { ok: res.ok, status, data: null, text: "" };
     try {
-      return { ok: res.ok, status: res.status, data: JSON.parse(text), text };
+      return { ok: res.ok, status, data: JSON.parse(text), text };
     } catch {
-      return { ok: false, status: res.status, data: null, text };
+      return { ok: false, status, data: null, text, message: "JSON 응답 파싱에 실패했습니다." };
     }
   }
 
@@ -174,8 +190,8 @@
     });
 
     const parsed = await readJson(res);
-    if (!res.ok) {
-      const msg = parsed.data?.message || parsed.data?.error || `HTTP ${parsed.status}`;
+    if (!res.ok || !parsed.data) {
+      const msg = parsed.message || parsed.data?.message || parsed.data?.error || `HTTP ${parsed.status}`;
       throw new Error(msg);
     }
     return U.pickListPayload(parsed.data);
@@ -206,7 +222,7 @@
     // 로그인 redirect/HTML 등 JSON이 아닌 케이스 방어
     if (!parsed.data) {
       console.error("Non-JSON response:", { status: parsed.status, text: parsed.text });
-      throw new Error(`서버 응답이 JSON이 아닙니다. (${parsed.status})`);
+      throw new Error(parsed.message || `서버 응답이 JSON이 아닙니다. (${parsed.status})`);
     }
 
     if (!res.ok) {
@@ -510,7 +526,11 @@
       const res = await fetch(url, { credentials: "same-origin" });
       if (!res.ok) throw new Error(`서버 응답 오류 (${res.status})`);
 
-      const data = await res.json().catch(() => ({}));
+      const parsed = await readJson(res);
+      if (!res.ok || !parsed.data) {
+        throw new Error(parsed.message || parsed.data?.message || `서버 응답 오류 (${parsed.status})`);
+      }
+      const data = parsed.data;
       const list = Array.isArray(data?.data) ? data.data : [];
 
       if (!list.length) {
@@ -683,9 +703,11 @@
         credentials: "same-origin",
       });
 
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-      const data = await res.json().catch(() => ({}));
+      const parsed = await readJson(res);
+      if (!res.ok || !parsed.data) {
+        throw new Error(parsed.message || parsed.data?.message || `HTTP ${parsed.status}`);
+      }
+      const data = parsed.data;
       const list = Array.isArray(data?.results) ? data.results : [];
 
       if (!list.length) {
@@ -765,11 +787,11 @@
         const userName = U.str(item.dataset.userName);
         if (!userId) return;
 
-        if (!confirm(`[${userName || userId}] 사용자를 중간관리자(sub_admin)로 추가할까요?`)) return;
+        if (!confirm(`[${userName || userId}] 사용자를 중간관리자(leader)로 추가할까요?`)) return;
 
         try {
           await promoteToSubAdmin(userId);
-          showToast("중간관리자로 추가되었습니다. (grade=sub_admin)", true);
+          showToast("중간관리자로 추가되었습니다. (grade=leader)", true);
 
           // close modal
           try {

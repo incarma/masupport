@@ -55,6 +55,11 @@ urlpatterns = [
     ),
     path("efficiency/confirm-groups/", views.efficiency_confirm_groups, name="efficiency_confirm_groups"),
     path("efficiency/confirm-upload/", views.efficiency_confirm_upload, name="efficiency_confirm_upload"),
+    path(
+        "efficiency/attachments/<int:att_id>/download/",
+        views.efficiency_confirm_attachment_download,
+        name="efficiency_confirm_attachment_download",
+    ),
 
     # Permission Management
     path("api/users-data/", views.ajax_users_data, name="ajax_users_data"),

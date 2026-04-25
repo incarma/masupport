@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
+import logging
 
 from celery import shared_task
 from django.contrib.auth import get_user_model
@@ -18,6 +19,17 @@ from audit.services import log_action
 
 from board.industry_models import IndustryArticle, IndustryCollectJobLog, IndustryUserPreference
 from board.services.industry_news import default_queries, fetch_naver_news, parse_naver_item
+
+
+logger = logging.getLogger(__name__)
+
+
+def _safe_positive_int(value, *, default: int, minimum: int = 1, maximum: int = 365) -> int:
+    try:
+        n = int(value)
+    except Exception:
+        n = default
+    return max(minimum, min(maximum, n))
 
 
 @shared_task(
@@ -37,7 +49,8 @@ def collect_board_industry_news(self, query: str = "", pages: int = 2, actor_id:
     """
     User = get_user_model()
     actor = User.objects.filter(pk=actor_id).first() if actor_id else None
-    queries = [query] if query else default_queries()
+    pages = _safe_positive_int(pages, default=2, minimum=1, maximum=10)
+    queries = [str(query).strip()] if str(query or "").strip() else default_queries()
 
     total_inserted = 0
     total_skipped = 0
@@ -159,7 +172,9 @@ def cleanup_old_industry_articles(days: int = 14):
     - IndustryUserPreference 는 CASCADE로 함께 정리
       (단, 북마크된 기사는 삭제 대상에서 제외되므로 북마크 선호도도 보존됨)
     """
+    days = _safe_positive_int(days, default=14, minimum=1, maximum=365)
     cutoff = timezone.now() - timedelta(days=days)
+    logger.info("[board.industry.cleanup] started days=%s cutoff=%s", days, cutoff.isoformat())
 
     # ✅ 북마크된 기사 ID — 삭제 대상에서 제외
     bookmarked_ids = set(
@@ -176,6 +191,12 @@ def cleanup_old_industry_articles(days: int = 14):
     )
 
     deleted_count, _ = qs.delete()
+    logger.info(
+        "[board.industry.cleanup] finished days=%s deleted=%s bookmarked_preserved=%s",
+        days,
+        deleted_count,
+        len(bookmarked_ids),
+    )
 
     return {
         "cutoff": cutoff.isoformat(),

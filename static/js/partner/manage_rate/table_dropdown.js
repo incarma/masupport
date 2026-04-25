@@ -7,6 +7,7 @@
 // ======================================================
 
 import { els } from "./dom_refs.js";
+import { readJsonOrThrow, isSuccessJson } from "../../common/manage/http.js";
 
 const cache = new Map();
 
@@ -17,17 +18,6 @@ export function clearTableCache(branch = "") {
   const b = String(branch || "").trim();
   if (b) cache.delete(b);
   else cache.clear();
-}
-
-/* ======================================================
-   Safe JSON
-====================================================== */
-async function safeJson(res) {
-  try {
-    return await res.json();
-  } catch {
-    return null; // HTML/404 etc.
-  }
 }
 
 /* ======================================================
@@ -55,9 +45,17 @@ export async function fetchBranchTables(branch) {
     credentials: "same-origin",
   });
 
-  const data = await safeJson(res);
-  if (!res.ok || !data || data.status !== "success") {
-    console.warn("[rate/table_dropdown] fetch failed:", res.status, data);
+  let data;
+  try {
+    data = await readJsonOrThrow(res, "테이블 정보 조회 실패");
+  } catch (err) {
+    console.warn("[rate/table_dropdown] fetch failed:", err?.message || err);
+    cache.set(b, []);
+    return [];
+  }
+
+  if (!isSuccessJson(data)) {
+    console.warn("[rate/table_dropdown] fetch failed:", data);
     cache.set(b, []);
     return [];
   }

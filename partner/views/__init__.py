@@ -37,6 +37,7 @@ from .structure import (
 
 from .efficiency import (
     efficiency_confirm_template_download,
+    efficiency_confirm_attachment_download,
     efficiency_fetch,
     efficiency_save,
     efficiency_delete_row,

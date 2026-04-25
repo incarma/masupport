@@ -46,7 +46,7 @@
   >
 
     <!-- 권한 경고 -->
-    {% if user.grade not in 'superuser head leader' %}
+    {% if user.grade != 'superuser' and user.grade != 'head' and user.grade != 'leader' %}
       <div class="alert alert-danger">접근 권한이 없습니다.</div>
     {% endif %}
 
@@ -102,7 +102,7 @@
     </div>
 
     <!-- superuser/head 안내 -->
-    {% if user.grade in 'superuser head' %}
+    {% if user.grade == 'superuser' or user.grade == 'head' %}
       <div class="alert alert-info py-2 mb-3">
         요율변경 기능 사용 전 반드시
         <a href="{% url 'partner:manage_grades' %}" class="fw-bold text-decoration-underline text-primary">중간관리자별 권한</a>

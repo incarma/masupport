@@ -10,6 +10,7 @@
 
 import { els } from "./dom_refs.js";
 import { showLoading, hideLoading, alertBox, getCSRFToken, pad2 } from "./utils.js";
+import { readJsonOrThrow, isSuccessJson } from "../../common/manage/http.js";
 
 /* =========================================================
    State
@@ -70,19 +71,6 @@ function revealSections() {
   if (els.inputSection) els.inputSection.hidden = false;
   if (els.mainSheet) els.mainSheet.hidden = false;
   // ✅ rAF 예약은 fetchData가 직접 처리하므로 여기서는 hidden 해제만 수행
-}
-
-/* =========================================================
-   Safe JSON (HTML 응답 대비)
-========================================================= */
-async function safeReadJson(res) {
-  const text = await res.text().catch(() => "");
-  if (!text) return {};
-  try {
-    return JSON.parse(text);
-  } catch {
-    return { status: "error", message: "서버 응답이 JSON이 아닙니다.", _raw: text.slice(0, 300) };
-  }
 }
 
 /* =========================================================
@@ -216,10 +204,8 @@ async function updateProcessDate(id, value) {
     body: JSON.stringify({ id, process_date: value || "", kind: "structure" }),
   });
 
-  const data = await safeReadJson(res);
-  if (!res.ok || data.status !== "success") {
-    throw new Error(data.message || `처리일자 저장 실패 (${res.status})`);
-  }
+  const data = await readJsonOrThrow(res, "처리일자 저장 실패");
+  if (!isSuccessJson(data)) throw new Error(data.message || "처리일자 저장 실패");
   return data;
 }
 
@@ -237,10 +223,8 @@ async function deleteStructureRow(id) {
     body: JSON.stringify({ id }),
   });
 
-  const data = await safeReadJson(res);
-  if (!res.ok || data.status !== "success") {
-    throw new Error(data.message || `삭제 실패 (${res.status})`);
-  }
+  const data = await readJsonOrThrow(res, "삭제 실패");
+  if (!isSuccessJson(data)) throw new Error(data.message || "삭제 실패");
   return data;
 }
 
@@ -546,10 +530,10 @@ export async function fetchData(ym, branch) {
       headers: { "X-Requested-With": "XMLHttpRequest" },
     });
 
-    const data = await safeReadJson(res);
+    const data = await readJsonOrThrow(res, "조회 실패");
     const rawRows = Array.isArray(data?.rows) ? data.rows : [];
 
-    if (!res.ok || data.status !== "success") {
+    if (!isSuccessJson(data)) {
       console.warn("⚠️ [structure/fetch] server error", { status: res.status, data });
       renderMain([]);
       return;

@@ -11,6 +11,7 @@ import { fetchData } from "./fetch.js";
 import { pad2, alertBox } from "./utils.js";
 import { initInputRowEvents } from "./input_rows.js";
 import { attachDeleteHandlers } from "./delete.js";
+import { readJsonOrThrow, isSuccessJson } from "../../common/manage/http.js";
 
 /* =========================================================
    constants / guards
@@ -309,9 +310,8 @@ function initTableCheckModal() {
         credentials: "same-origin",
       });
 
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(`서버 응답 오류 (${res.status})`);
-      if (data.status !== "success") throw new Error(data.message || "조회 실패");
+      const data = await readJsonOrThrow(res, "테이블 조회 실패");
+      if (!isSuccessJson(data)) throw new Error(data.message || "조회 실패");
 
       const rows = Array.isArray(data.rows) ? data.rows : [];
       const html = rows.length
