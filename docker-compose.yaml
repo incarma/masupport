@@ -41,6 +41,16 @@ services:
       --capture-output
     expose:
       - "8000"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; req=urllib.request.Request('http://127.0.0.1:8000/', headers={'Host':'ma-support.kr'}); urllib.request.urlopen(req, timeout=5).read()\""
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
     env_file:
       - ./docker/.env.prod
     environment:
@@ -103,7 +113,14 @@ services:
       - "80:80"
       - "443:443"
     depends_on:
-      - web
+      web:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/nginx-healthz | grep -q ok"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
     volumes:
       - ./ops/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
       - ./ops/maintenance/maintenance.html:/usr/share/nginx/html/maintenance.html:ro

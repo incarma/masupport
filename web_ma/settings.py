@@ -117,13 +117,13 @@ IS_PROD = APP_ENV in ("prod", "production") and not DEBUG
 # =============================================================================
 ALLOWED_HOSTS = config(
     "ALLOWED_HOSTS",
-    default="localhost,127.0.0.1,local.ma-support.kr,ma-support.kr",
+    default="localhost,127.0.0.1,local.ma-support.kr,ma-support.kr,www.ma-support.kr",
     cast=lambda v: [s.strip() for s in v.split(",") if s.strip()],
 )
 
 CSRF_TRUSTED_ORIGINS = config(
     "CSRF_TRUSTED_ORIGINS",
-    default="https://local.ma-support.kr,https://ma-support.kr",
+    default="https://local.ma-support.kr,https://ma-support.kr,https://www.ma-support.kr",
     cast=lambda v: [s.strip() for s in v.split(",") if s.strip()],
 )
 

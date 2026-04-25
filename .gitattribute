@@ -1,0 +1,18 @@
+* text=auto
+
+# Python / Django
+*.py text eol=lf
+
+# JS / CSS / HTML
+*.js text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+
+# Shell / YAML
+*.sh text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# Windows script만 CRLF
+*.ps1 text eol=crlf
+*.bat text eol=crlf
