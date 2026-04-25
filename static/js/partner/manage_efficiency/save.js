@@ -13,6 +13,7 @@ import { els } from "./dom_refs.js";
 import { showLoading, hideLoading, alertBox, getCSRFToken, selectedYM } from "./utils.js";
 import { fetchData } from "./fetch.js";
 import { resetInputSection } from "./input_rows.js";
+import { readJsonOrThrow, isSuccessJson } from "../../common/manage/http.js";
 
 function str(v) {
   return String(v ?? "").trim();
@@ -190,17 +191,8 @@ export async function saveRows() {
       }),
     });
 
-    const text = await res.text();
-    if (!res.ok) throw new Error(`서버 응답 오류 (${res.status})`);
-
-    let result = {};
-    try {
-      result = JSON.parse(text || "{}");
-    } catch {
-      throw new Error("서버 응답 파싱 실패");
-    }
-
-    if (result.status !== "success") {
+    const result = await readJsonOrThrow(res, "저장 실패");
+    if (!isSuccessJson(result)) {
       throw new Error(result.message || "저장 중 오류");
     }
 

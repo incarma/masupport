@@ -4,21 +4,24 @@
 # ------------------------------------------------------------
 
 import traceback
+import logging
 
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
-from django.http import JsonResponse
 from django.views.decorators.http import require_GET, require_POST
 
 from accounts.decorators import grade_required
+from audit.constants import ACTION
+from audit.services import log_action
 from partner.models import TableSetting
 
 from .responses import json_err, json_ok, parse_json_body
 
+logger = logging.getLogger(__name__)
 
 @require_GET
 @login_required
-@grade_required("superuser", "head", "leader")
+@grade_required("superuser", "head")
 def ajax_table_fetch(request):
     branch = (request.GET.get("branch") or "").strip()
     user = request.user
@@ -47,7 +50,7 @@ def ajax_table_fetch(request):
         ]
         return json_ok({"rows": data})
     except Exception as e:
-        traceback.print_exc()
+        logger.exception("[partner.table_fetch] failed branch=%s user=%s", branch, getattr(user, "id", ""))
         return json_err(f"조회 중 오류 발생: {str(e)}", status=500)
 
 
@@ -59,11 +62,16 @@ def ajax_table_save(request):
         data = parse_json_body(request)
         branch = (data.get("branch") or "").strip()
         rows = data.get("rows", [])
+        user = request.user
 
         if not branch or not isinstance(rows, list):
             return json_err("요청 데이터가 잘못되었습니다.", status=400)
+        
+        if user.grade != "superuser" and branch != (getattr(user, "branch", "") or "").strip():
+            return json_err("다른 지점 테이블은 저장할 수 없습니다.", status=403)
 
         with transaction.atomic():
+            list(TableSetting.objects.select_for_update().filter(branch=branch).values_list("id", flat=True))
             TableSetting.objects.filter(branch=branch).delete()
 
             objs = []
@@ -77,7 +85,19 @@ def ajax_table_save(request):
 
             TableSetting.objects.bulk_create(objs)
 
+            try:
+                log_action(
+                    request,
+                    getattr(ACTION, "PARTNER_TABLE_SAVE", "partner.table.save"),
+                    object_type="TableSetting",
+                    object_id=branch,
+                    meta={"branch": branch, "saved_count": len(objs)},
+                    success=True,
+                )
+            except Exception:
+                logger.exception("[partner.table_save] audit log failed")
+
         return json_ok({"saved_count": len(objs)})
     except Exception as e:
-        traceback.print_exc()
+        logger.exception("[partner.table_save] failed branch=%s user=%s", branch if "branch" in locals() else "", getattr(request.user, "id", ""))
         return json_err(str(e), status=500)

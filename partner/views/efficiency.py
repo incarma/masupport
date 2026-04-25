@@ -5,10 +5,19 @@
 # - save: confirm_group 연결 + title 업데이트
 # - delete_row/delete_group
 # - confirm_upload/groups API
+# - 운영 안정성:
+#   - .file.url 직접 노출 금지
+#   - 다운로드 view + 권한검증 + FileResponse
+#   - logger.exception 기반 서버 로그
+#   - AuditLog 보강
+#   - 파일 삭제는 transaction.on_commit 이후 수행
 # ------------------------------------------------------------
 
-import traceback
+from __future__ import annotations
+
+import logging
 from typing import Any, Dict, List, Optional
+from urllib.parse import quote
 
 from django.contrib.auth.decorators import login_required
 from django.contrib.staticfiles import finders
@@ -16,20 +25,21 @@ from django.core.files.storage import default_storage
 from django.db import transaction
 from django.db.models import Count, Sum
 from django.http import FileResponse, Http404
+from django.shortcuts import get_object_or_404
+from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
 
 from accounts.decorators import grade_required
 from accounts.models import CustomUser
+from audit.constants import ACTION
+from audit.services import log_action
 from partner.models import (
     EfficiencyChange,
     EfficiencyConfirmAttachment,
     EfficiencyConfirmGroup,
     PartnerChangeLog,
 )
-
-from audit.services import log_action
-from audit.constants import ACTION
 
 from .responses import json_err, json_ok, parse_json_body
 from .utils import (
@@ -42,34 +52,61 @@ from .utils import (
     resolve_part_for_write,
 )
 
-# ------------------------------------------------------------
-# ✅ confirm_group_id 생성(업로드 성공 시점)
-# 형식: YYYYMMDDHHMM_사번_순번(2자리)
-# ------------------------------------------------------------
+logger = logging.getLogger(__name__)
+
+ACTION_CONFIRM_UPLOAD = getattr(
+    ACTION,
+    "PARTNER_EFFICIENCY_CONFIRM_UPLOAD",
+    "partner.efficiency.confirm.upload",
+)
+ACTION_CONFIRM_DOWNLOAD = getattr(
+    ACTION,
+    "PARTNER_EFFICIENCY_CONFIRM_DOWNLOAD",
+    "partner.efficiency.confirm.download",
+)
+
+
+def _audit_safe(request, action: str, *, obj=None, object_type: str = "", object_id: str = "", meta=None, success=True, reason="") -> None:
+    try:
+        log_action(
+            request,
+            action,
+            obj=obj,
+            object_type=object_type,
+            object_id=object_id,
+            meta=meta or {},
+            success=success,
+            reason=reason,
+        )
+    except Exception:
+        logger.exception("[partner.efficiency] audit log failed action=%s", action)
+
+
 def _generate_confirm_group_id(*, uploader_id: str) -> str:
     now = timezone.localtime(timezone.now())
-    prefix = now.strftime("%Y%m%d%H%M")  # 분 단위
+    prefix = now.strftime("%Y%m%d%H%M")
     base = f"{prefix}_{uploader_id}_"
 
-    same_minute_qs = EfficiencyConfirmGroup.objects.select_for_update().filter(confirm_group_id__startswith=base)
+    same_minute_qs = EfficiencyConfirmGroup.objects.select_for_update().filter(
+        confirm_group_id__startswith=base
+    )
     cnt = same_minute_qs.count()
-    seq = min(cnt + 1, 99)  # 현실적으로 99 초과는 거의 없다고 가정
+    seq = min(cnt + 1, 99)
     return f"{base}{seq:02d}"
 
 
-# ------------------------------------------------------------
-# ✅ 지점효율 확인서 양식 다운로드
-# ------------------------------------------------------------
 @login_required
 def efficiency_confirm_template_download(request):
     rel_path = "excel/양식_지점효율확인서.xlsx"
     abs_path = finders.find(rel_path)
     if not abs_path:
         raise Http404("양식 파일을 찾을 수 없습니다.")
+
     try:
         f = open(abs_path, "rb")
     except OSError:
         raise Http404("양식 파일을 열 수 없습니다.")
+
     return FileResponse(
         f,
         as_attachment=True,
@@ -78,39 +115,20 @@ def efficiency_confirm_template_download(request):
     )
 
 
-# ------------------------------------------------------------
-# 그룹 payload 빌더
-# ------------------------------------------------------------
 def _build_efficiency_groups_payload(*, month: str, branch: str, user: CustomUser) -> List[Dict[str, Any]]:
-    """
-    ✅ Accordion 렌더링용 그룹 구조
-    - group_key: confirm_group_id(문자열)
-    - group_pk: DB PK(숫자)
-    - ✅ 권한별 조회범위 적용:
-      superuser: 선택 branch 전체
-      head: 자기 branch 전체
-      leader(A/B/C): 자기 팀 범위(uploader 기준)
-    """
-    gqs = EfficiencyConfirmGroup.objects.filter(month=month)
+    gqs = EfficiencyConfirmGroup.objects.filter(month=month).prefetch_related("attachments")
 
-    # ✅ branch scope
     if user.grade == "superuser":
         if branch:
             gqs = gqs.filter(branch__iexact=branch)
         else:
-            # superuser가 branch 없이 호출하면 빈 리스트로 (프론트 정책과 동일)
             return []
     else:
         gqs = gqs.filter(branch__iexact=branch)
 
-    # ✅ leader: 팀 범위(uploader 기준)
     if user.grade == "leader":
-        allowed_ids = get_level_team_filter_user_ids(user)  # 같은 branch + 같은 level team의 user_id들
-        if allowed_ids:
-            gqs = gqs.filter(uploader_id__in=allowed_ids)
-        else:
-            # 레벨/팀 미설정이면 누수 방지: 본인 업로드만
-            gqs = gqs.filter(uploader_id=user.id)
+        allowed_ids = get_level_team_filter_user_ids(user)
+        gqs = gqs.filter(uploader_id__in=allowed_ids) if allowed_ids else gqs.filter(uploader_id=user.id)
 
     gqs = gqs.annotate(
         row_count=Count("efficiency_rows", distinct=True),
@@ -118,15 +136,20 @@ def _build_efficiency_groups_payload(*, month: str, branch: str, user: CustomUse
     ).order_by("-id")
 
     groups: List[Dict[str, Any]] = []
+
     for g in gqs:
         atts = []
         for a in g.attachments.all().order_by("-id"):
             atts.append(
                 {
                     "id": a.id,
-                    "file_name": a.original_name or (a.file.name.split("/")[-1] if a.file else ""),
+                    "file_name": a.original_name or (a.file.name.rsplit("/", 1)[-1] if a.file else ""),
                     "created_at": a.created_at.strftime("%Y-%m-%d %H:%M") if a.created_at else "",
-                    "file": a.file.url if getattr(a, "file", None) and hasattr(a.file, "url") else "",
+                    "file": (
+                        reverse("partner:efficiency_confirm_attachment_download", kwargs={"att_id": a.id})
+                        if a.file
+                        else ""
+                    ),
                 }
             )
 
@@ -148,18 +171,87 @@ def _build_efficiency_groups_payload(*, month: str, branch: str, user: CustomUse
                 "attachments": atts,
             }
         )
+
     return groups
+
+
+@require_GET
+@login_required
+@grade_required("superuser", "head", "leader", forbidden_template=None)
+def efficiency_confirm_attachment_download(request, att_id: int):
+    att = get_object_or_404(
+        EfficiencyConfirmAttachment.objects.select_related("group"),
+        id=att_id,
+    )
+
+    group = att.group
+    user = request.user
+    user_grade = getattr(user, "grade", "")
+    group_branch = (getattr(group, "branch", "") or "").strip()
+    user_branch = (getattr(user, "branch", "") or "").strip()
+
+    if user_grade != "superuser" and group_branch != user_branch:
+        _audit_safe(
+            request,
+            ACTION_CONFIRM_DOWNLOAD,
+            obj=att,
+            meta={
+                "attachment_id": att.id,
+                "confirm_group_id": getattr(group, "confirm_group_id", ""),
+                "branch": group_branch,
+            },
+            success=False,
+            reason="branch_scope_denied",
+        )
+        return json_err("첨부파일 다운로드 권한이 없습니다.", status=403)
+
+    if not att.file:
+        return json_err("파일이 없습니다.", status=404)
+
+    try:
+        filename = att.original_name or att.file.name.rsplit("/", 1)[-1]
+        file_handle = att.file.open("rb")
+        response = FileResponse(file_handle, as_attachment=True)
+        response["Content-Disposition"] = (
+            f"attachment; filename=download; filename*=UTF-8''{quote(filename)}"
+        )
+
+        _audit_safe(
+            request,
+            ACTION_CONFIRM_DOWNLOAD,
+            obj=att,
+            meta={
+                "attachment_id": att.id,
+                "confirm_group_id": getattr(group, "confirm_group_id", ""),
+                "branch": group_branch,
+                "file_name": filename,
+            },
+            success=True,
+        )
+
+        return response
+
+    except Exception:
+        logger.exception(
+            "[partner.efficiency_attachment_download] failed att_id=%s user=%s",
+            att_id,
+            getattr(request.user, "id", ""),
+        )
+        _audit_safe(
+            request,
+            ACTION_CONFIRM_DOWNLOAD,
+            obj=att,
+            meta={"attachment_id": att.id},
+            success=False,
+            reason="download_error",
+        )
+        return json_err("첨부파일 다운로드 중 오류가 발생했습니다.", status=500)
 
 
 @require_GET
 @login_required
 @grade_required("superuser", "head", "leader")
 def efficiency_fetch(request):
-    """
-    ✅ rows 응답 유지
-    ✅ grouped=1이면 groups(Accordion) 같이 내려줌
-    ✅ group_key(confirm_group_id) + group_pk 제공(프론트 매칭)
-    """
     try:
         user = request.user
         month = normalize_month(request.GET.get("month") or "")
@@ -178,14 +270,9 @@ def efficiency_fetch(request):
         else:
             qs = qs.filter(branch__iexact=branch)
 
-        # ✅ leader: 팀 범위(requester 기준)
         if user.grade == "leader":
             allowed_ids = get_level_team_filter_user_ids(user)
-            if allowed_ids:
-                qs = qs.filter(requester_id__in=allowed_ids)
-            else:
-                # 레벨/팀 미설정이면 누수 방지: 본인 작성만
-                qs = qs.filter(requester_id=user.id)
+            qs = qs.filter(requester_id__in=allowed_ids) if allowed_ids else qs.filter(requester_id=user.id)
 
         rows = []
         for ec in qs:
@@ -228,7 +315,7 @@ def efficiency_fetch(request):
         return json_ok(payload)
 
     except Exception as e:
-        traceback.print_exc()
+        logger.exception("[partner.efficiency_fetch] failed user=%s", getattr(request.user, "id", ""))
         return json_err(str(e), status=500, extra={"rows": [], "groups": []})
 
 
@@ -237,12 +324,6 @@ def efficiency_fetch(request):
 @grade_required("superuser", "head", "leader")
 @transaction.atomic
 def efficiency_save(request):
-    """
-    ✅ Efficiency 저장
-    - payload.confirm_group_id 필수
-    - EfficiencyChange.confirm_group 연결
-    - 저장 시 group.title을 "YYYY-MM-DD / 지점 팀A 팀B 팀C" 로 업데이트
-    """
     try:
         payload = parse_json_body(request)
         items = payload.get("rows", [])
@@ -257,7 +338,7 @@ def efficiency_save(request):
         part = resolve_part_for_write(user, payload.get("part") or "")
         branch = resolve_branch_for_write(user, payload.get("branch") or "")
 
-        if getattr(user, "grade", "") == "superuser" and not (branch or "").strip():
+        if user.grade == "superuser" and not (branch or "").strip():
             return json_err("superuser는 branch가 필요합니다.", status=400)
 
         confirm_group_id = (payload.get("confirm_group_id") or "").strip()
@@ -285,7 +366,6 @@ def efficiency_save(request):
             if group_branch != req_branch:
                 return json_err("그룹 지점과 저장 지점이 다릅니다.", status=400)
 
-        # ✅ 그룹 title 업데이트
         save_date = timezone.localdate(timezone.now()).strftime("%Y-%m-%d")
         aff = build_requester_affiliation_chain(user)
         new_title = f"{save_date} / {aff}"
@@ -315,12 +395,6 @@ def efficiency_save(request):
                 skipped += 1
                 continue
 
-            ded_id = str(row.get("ded_id") or "").strip()
-            ded_name = (row.get("ded_name") or "").strip()
-            pay_id = str(row.get("pay_id") or "").strip()
-            pay_name = (row.get("pay_name") or "").strip()
-            memo = (row.get("memo") or content[:200]).strip()
-
             objs.append(
                 EfficiencyChange(
                     requester=user,
@@ -329,14 +403,14 @@ def efficiency_save(request):
                     month=month,
                     category=category,
                     amount=amount,
-                    ded_id=ded_id,
-                    ded_name=ded_name,
-                    pay_id=pay_id,
-                    pay_name=pay_name,
+                    ded_id=str(row.get("ded_id") or "").strip(),
+                    ded_name=(row.get("ded_name") or "").strip(),
+                    pay_id=str(row.get("pay_id") or "").strip(),
+                    pay_name=(row.get("pay_name") or "").strip(),
                     content=content,
-                    memo=memo,
+                    memo=(row.get("memo") or content[:200]).strip(),
                     confirm_group=group,
-                    confirm_attachment=latest_att,  # 필요 없으면 모델/프론트에서 제거 가능
+                    confirm_attachment=latest_att,
                 )
             )
 
@@ -354,6 +428,21 @@ def efficiency_save(request):
             ),
         )
 
+        _audit_safe(
+            request,
+            ACTION.PARTNER_EFFICIENCY_SAVE,
+            obj=group,
+            meta={
+                "month": month,
+                "part": part,
+                "branch": branch,
+                "confirm_group_id": group.confirm_group_id,
+                "saved_count": len(objs),
+                "skipped": skipped,
+            },
+            success=True,
+        )
+
         return json_ok(
             {
                 "saved_count": len(objs),
@@ -364,7 +453,15 @@ def efficiency_save(request):
         )
 
     except Exception as e:
-        traceback.print_exc()
+        logger.exception("[partner.efficiency_save] failed user=%s", getattr(request.user, "id", ""))
+        _audit_safe(
+            request,
+            ACTION.PARTNER_EFFICIENCY_SAVE,
+            object_type="EfficiencyChange",
+            meta={"error": str(e)},
+            success=False,
+            reason="save_error",
+        )
         return json_err(str(e), status=400)
 
 
@@ -373,7 +470,6 @@ def efficiency_save(request):
 @grade_required("superuser", "head")
 @transaction.atomic
 def efficiency_delete_row(request):
-    """✅ 그룹 내부 행(단건) 삭제"""
     try:
         payload = parse_json_body(request)
         row_id = payload.get("id")
@@ -385,9 +481,8 @@ def efficiency_delete_row(request):
             return json_err("삭제 대상이 없습니다.", status=404)
 
         user = request.user
-        if user.grade != "superuser":
-            if (obj.branch or "") != (getattr(user, "branch", "") or ""):
-                return json_err("권한이 없습니다.", status=403)
+        if user.grade != "superuser" and (obj.branch or "") != (getattr(user, "branch", "") or ""):
+            return json_err("권한이 없습니다.", status=403)
 
         obj.delete()
 
@@ -396,10 +491,20 @@ def efficiency_delete_row(request):
             action="delete_row",
             detail=f"efficiency row delete id={row_id}",
         )
+
+        _audit_safe(
+            request,
+            ACTION.PARTNER_EFFICIENCY_DELETE,
+            object_type="EfficiencyChange",
+            object_id=str(row_id),
+            meta={"row_id": row_id, "branch": obj.branch},
+            success=True,
+        )
+
         return json_ok()
 
     except Exception as e:
-        traceback.print_exc()
+        logger.exception("[partner.efficiency_delete_row] failed user=%s", getattr(request.user, "id", ""))
         return json_err(str(e), status=400)
 
 
@@ -408,10 +513,6 @@ def efficiency_delete_row(request):
 @grade_required("superuser", "head")
 @transaction.atomic
 def efficiency_delete_group(request):
-    """
-    ✅ 그룹 삭제(실제 파일 포함)
-    - group_id: confirm_group_id(문자열) 또는 group pk(숫자) 허용
-    """
     payload = parse_json_body(request)
     group_id = str(payload.get("group_id") or "").strip()
     if not group_id:
@@ -430,25 +531,60 @@ def efficiency_delete_group(request):
         if rec_branch and my_branch and rec_branch != my_branch:
             return json_err("다른 지점 그룹은 삭제할 수 없습니다.", status=403)
 
+    confirm_group_id = group.confirm_group_id
+    branch = group.branch
+    files_to_delete = [att.file.name for att in group.attachments.all() if att.file]
+
     try:
         EfficiencyChange.objects.filter(confirm_group=group).delete()
-
-        for att in group.attachments.all():
-            if att.file:
-                att.file.delete(save=False)
-            att.delete()
-
+        group.attachments.all().delete()
         group.delete()
+
+        def _delete_files_after_commit():
+            for file_name in files_to_delete:
+                try:
+                    default_storage.delete(file_name)
+                except Exception:
+                    logger.exception("[partner.efficiency_delete_group] file delete failed file=%s", file_name)
+
+        transaction.on_commit(_delete_files_after_commit)
 
         PartnerChangeLog.objects.create(
             user=request.user,
             action="delete_group",
-            detail=f"efficiency group delete confirm_group_id={group.confirm_group_id}",
+            detail=f"efficiency group delete confirm_group_id={confirm_group_id}",
         )
+
+        _audit_safe(
+            request,
+            ACTION.PARTNER_EFFICIENCY_DELETE,
+            object_type="EfficiencyConfirmGroup",
+            object_id=str(confirm_group_id),
+            meta={
+                "confirm_group_id": confirm_group_id,
+                "branch": branch,
+                "file_count": len(files_to_delete),
+            },
+            success=True,
+        )
+
         return json_ok()
 
     except Exception as e:
-        traceback.print_exc()
+        logger.exception(
+            "[partner.efficiency_delete_group] failed group_id=%s user=%s",
+            group_id,
+            getattr(request.user, "id", ""),
+        )
+        _audit_safe(
+            request,
+            ACTION.PARTNER_EFFICIENCY_DELETE,
+            object_type="EfficiencyConfirmGroup",
+            object_id=str(group_id),
+            meta={"error": str(e)},
+            success=False,
+            reason="delete_group_error",
+        )
         return json_err(f"삭제 중 오류: {e}", status=500)
 
 
@@ -457,11 +593,6 @@ def efficiency_delete_group(request):
 @grade_required("superuser", "head", "leader")
 @transaction.atomic
 def efficiency_confirm_upload(request):
-    """
-    ✅ 확인서 업로드
-    - confirm_group_id가 없으면 업로드 시점에 그룹 생성
-    - 있으면 동일 그룹에 첨부 누적
-    """
     f = request.FILES.get("file")
     if not f:
         return json_err("파일이 없습니다.", status=400)
@@ -488,49 +619,49 @@ def efficiency_confirm_upload(request):
     group: Optional[EfficiencyConfirmGroup] = None
     group_created = False
 
-    if incoming_group_id:
-        group = EfficiencyConfirmGroup.objects.select_for_update().filter(confirm_group_id=incoming_group_id).first()
-        if not group:
-            return json_err("confirm_group_id에 해당하는 그룹을 찾을 수 없습니다.", status=404)
+    try:
+        if incoming_group_id:
+            group = EfficiencyConfirmGroup.objects.select_for_update().filter(
+                confirm_group_id=incoming_group_id
+            ).first()
+            if not group:
+                return json_err("confirm_group_id에 해당하는 그룹을 찾을 수 없습니다.", status=404)
 
-        if (group.month or "") != payload_month:
-            return json_err("그룹 월도와 업로드 월도가 다릅니다.", status=400)
+            if (group.month or "") != payload_month:
+                return json_err("그룹 월도와 업로드 월도가 다릅니다.", status=400)
 
-        if user.grade != "superuser":
-            if (group.branch or "") != branch:
-                return json_err("그룹 지점과 업로드 지점이 다릅니다.", status=400)
+            if user.grade != "superuser":
+                if (group.branch or "") != branch:
+                    return json_err("그룹 지점과 업로드 지점이 다릅니다.", status=400)
+            else:
+                if branch and (group.branch or "") != branch:
+                    return json_err("그룹 지점과 업로드 지점이 다릅니다.", status=400)
         else:
-            if branch and (group.branch or "") != branch:
-                return json_err("그룹 지점과 업로드 지점이 다릅니다.", status=400)
+            new_group_id = _generate_confirm_group_id(uploader_id=str(getattr(user, "id", "") or ""))
+            group = EfficiencyConfirmGroup.objects.create(
+                confirm_group_id=new_group_id,
+                uploader=user,
+                part=part,
+                branch=branch,
+                month=payload_month,
+                title="",
+                note="",
+            )
+            group_created = True
 
-    else:
-        new_group_id = _generate_confirm_group_id(uploader_id=str(getattr(user, "id", "") or ""))
-        group = EfficiencyConfirmGroup.objects.create(
-            confirm_group_id=new_group_id,
+        att = EfficiencyConfirmAttachment.objects.create(
+            group=group,
             uploader=user,
             part=part,
             branch=branch,
             month=payload_month,
-            title="",
-            note="",
+            file=f,
+            original_name=f.name or "",
         )
-        group_created = True
 
-    att = EfficiencyConfirmAttachment.objects.create(
-        group=group,
-        uploader=user,
-        part=part,
-        branch=branch,
-        month=payload_month,
-        file=f,
-        original_name=f.name or "",
-    )
-
-    # ✅ AuditLog: Efficiency Confirm 업로드(감사 핵심)
-    try:
-        log_action(
+        _audit_safe(
             request,
-            ACTION.EFFICIENCY_CONFIRM_UPLOAD,
+            ACTION_CONFIRM_UPLOAD,
             obj=att,
             meta={
                 "month": payload_month,
@@ -539,38 +670,47 @@ def efficiency_confirm_upload(request):
                 "confirm_group_id": getattr(group, "confirm_group_id", ""),
                 "group_created": bool(group_created),
                 "attachment_id": getattr(att, "id", None),
-                "file_name": (att.original_name or ""),
+                "file_name": att.original_name or "",
                 "size": getattr(getattr(att, "file", None), "size", None),
             },
             success=True,
         )
-    except Exception:
-        pass
 
-    PartnerChangeLog.objects.create(
-        user=user,
-        action="confirm_upload",
-        detail=(
-            f"[efficiency] confirm_group_id={group.confirm_group_id} attachment_id={att.id} "
-            f"month={payload_month} branch={branch}"
-        ),
-    )
+        PartnerChangeLog.objects.create(
+            user=user,
+            action="confirm_upload",
+            detail=(
+                f"[efficiency] confirm_group_id={group.confirm_group_id} attachment_id={att.id} "
+                f"month={payload_month} branch={branch}"
+            ),
+        )
 
-    return json_ok(
-        {
-            "confirm_group_id": group.confirm_group_id,
-            "attachment_id": att.id,
-            "file_name": att.original_name or (att.file.name.split("/")[-1] if att.file else ""),
-            "group_created_at": group.created_at.strftime("%Y-%m-%d %H:%M") if group.created_at else "",
-        }
-    )
+        return json_ok(
+            {
+                "confirm_group_id": group.confirm_group_id,
+                "attachment_id": att.id,
+                "file_name": att.original_name or (att.file.name.rsplit("/", 1)[-1] if att.file else ""),
+                "group_created_at": group.created_at.strftime("%Y-%m-%d %H:%M") if group.created_at else "",
+            }
+        )
+
+    except Exception as e:
+        logger.exception("[partner.efficiency_confirm_upload] failed user=%s", getattr(user, "id", ""))
+        _audit_safe(
+            request,
+            ACTION_CONFIRM_UPLOAD,
+            object_type="EfficiencyConfirmAttachment",
+            meta={"month": payload_month, "branch": branch, "error": str(e)},
+            success=False,
+            reason="upload_error",
+        )
+        return json_err(f"확인서 업로드 중 오류: {e}", status=500)
 
 
 @require_GET
 @login_required
 @grade_required("superuser", "head", "leader")
 def efficiency_confirm_groups(request):
-    """✅ Accordion 전용 그룹 목록 API"""
     try:
         user = request.user
         month = normalize_month(request.GET.get("month") or "")
@@ -585,6 +725,7 @@ def efficiency_confirm_groups(request):
 
         groups = _build_efficiency_groups_payload(month=month, branch=branch, user=user)
         return json_ok({"groups": groups})
+
     except Exception as e:
-        traceback.print_exc()
+        logger.exception("[partner.efficiency_confirm_groups] failed user=%s", getattr(request.user, "id", ""))
         return json_err(str(e), status=500, extra={"groups": []})

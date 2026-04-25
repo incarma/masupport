@@ -49,6 +49,13 @@ class ACTION:
     PARTNER_EFFICIENCY_DELETE = "partner.efficiency.delete"
     PARTNER_PROCESS_DATE_UPDATE = "partner.process_date.update"
     PARTNER_PROCESS_DATE_DELETE = "partner.process_date.delete"
+    PARTNER_TABLE_SAVE = "partner.table.save"
+    PARTNER_RATE_UPLOAD = "partner.rate.upload"
+    PARTNER_EFFICIENCY_CONFIRM_UPLOAD = "partner.efficiency.confirm.upload"
+    PARTNER_EFFICIENCY_CONFIRM_DOWNLOAD = "partner.efficiency.confirm.download"
+    PARTNER_LEADER_ADD = "partner.leader.add"
+    PARTNER_LEADER_DELETE = "partner.leader.delete"
+    PARTNER_GRADES_UPLOAD = "partner.grades.upload"
 
     # Commission
     COMMISSION_UPLOAD_DEPOSIT = "commission.upload.deposit"

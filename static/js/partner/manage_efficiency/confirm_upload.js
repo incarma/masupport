@@ -7,6 +7,7 @@
 
 import { els } from "./dom_refs.js";
 import { showLoading, hideLoading, alertBox, getCSRFToken, selectedYM } from "./utils.js";
+import { readJsonOrThrow, isSuccessJson } from "../../common/manage/http.js";
 
 function str(v) {
   return String(v ?? "").trim();
@@ -76,17 +77,8 @@ export function initConfirmUploadHandlers() {
         body: fd,
       });
 
-      const text = await res.text();
-      let data = {};
-      try {
-        data = JSON.parse(text || "{}");
-      } catch {
-        throw new Error("서버 응답 파싱 실패");
-      }
-
-      if (!res.ok || data.status !== "success") {
-        throw new Error(data.message || `업로드 실패 (${res.status})`);
-      }
+      const data = await readJsonOrThrow(res, "업로드 실패");
+      if (!isSuccessJson(data)) throw new Error(data.message || "업로드 실패");
 
       const gid = str(data.confirm_group_id);
       const fileName = str(data.file_name);

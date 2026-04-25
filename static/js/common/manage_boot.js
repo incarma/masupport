@@ -318,12 +318,12 @@ export function initManageBoot(contextName) {
     const autoLoad =
       typeof boot.autoLoad === "boolean"
         ? boot.autoLoad
-        : ["main_admin", "sub_admin"].includes(grade);
+        : ["head", "leader"].includes(grade);
 
     initYearMonthSelects({ root, boot });
 
-    // ✅ payload는 main_admin/sub_admin만 자동 준비
-    if (!autoLoad || !["main_admin", "sub_admin"].includes(grade)) {
+    // ✅ payload는 head/leader만 자동 준비
+    if (!autoLoad || !["head", "leader"].includes(grade)) {
       console.log("🟡 [ManageBoot] autoLoad payload skip:", { ctxName, grade, autoLoad });
       console.groupEnd();
       return;

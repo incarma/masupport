@@ -8,9 +8,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib.auth import views as auth_views
 from django.urls import include, path, re_path
-from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect
-from django.views.static import serve
 
 from accounts import views as accounts_views
 from accounts.custom_admin import custom_admin_site
@@ -71,19 +69,8 @@ urlpatterns = [
     path("accounts/", include(("accounts.urls", "accounts"), namespace="accounts")),
 ]
 
-# -------------------------------------------------------------------------
-# Media serving
-# - 운영에서도 접근이 필요하고, 인증 필요라면 login_required(serve) 유지
-# - (주의) serve는 개발용에 가까움. 운영은 Nginx/S3/Cloudflare 권장
-# -------------------------------------------------------------------------
-urlpatterns += [
-    re_path(
-        r"^media/(?P<path>.*)$",
-        login_required(serve),
-        {"document_root": settings.MEDIA_ROOT},
-    ),
-]
 
 # DEBUG일 때는 Django가 MEDIA_URL도 보조 서빙
+# 운영에서는 객체 단위 권한 검증이 가능한 앱별 다운로드 view만 사용한다.
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

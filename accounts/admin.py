@@ -350,7 +350,7 @@ class CustomUserAdmin(UserAdmin):
         - must_change_password=True로 강제 비밀번호 변경 유도
         """
         req_grade = (getattr(request.user, "grade", "") or "").strip()
-        if not (request.user.is_superuser or req_grade in {"superuser", "main_admin"}):
+        if not (request.user.is_superuser or req_grade in {"superuser", "head"}):
             self.message_user(request, "이 작업은 superuser 또는 main_admin만 수행할 수 있습니다.", level=messages.ERROR)
             return
 
@@ -413,7 +413,7 @@ class CustomUserAdmin(UserAdmin):
     def get_actions(self, request):
         actions = super().get_actions(request)
         req_grade = (getattr(request.user, "grade", "") or "").strip()
-        if not (request.user.is_superuser or req_grade in {"superuser", "main_admin"}):
+        if not (request.user.is_superuser or req_grade in {"superuser", "head"}):
             actions.pop("reset_password_and_unlock_accounts", None)
         return actions
 

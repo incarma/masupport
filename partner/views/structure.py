@@ -96,6 +96,26 @@ def _build_leader_scope_q(user) -> Q:
     return Q(requester_id=user.id) | team_q
 
 
+def _can_use_target(user, target: CustomUser, branch: str) -> bool:
+    grade = getattr(user, "grade", "")
+    target_branch = _safe_str(getattr(target, "branch", ""))
+
+    if grade == "superuser":
+        return True
+
+    if target_branch != _safe_str(branch):
+        return False
+
+    if grade == "head":
+        return target_branch == _safe_str(getattr(user, "branch", ""))
+
+    if grade == "leader":
+        allowed_ids = set(str(x) for x in get_level_team_filter_user_ids(user))
+        return str(target.id) == str(user.id) or str(target.id) in allowed_ids
+
+    return False
+
+
 # ------------------------------------------------------------
 # Core APIs (legacy endpoints)
 # ------------------------------------------------------------
@@ -125,6 +145,8 @@ def ajax_save(request):
             target = CustomUser.objects.filter(id=target_id).first()
             if not target:
                 continue
+            if not _can_use_target(user, target, branch):
+                return json_err("권한 범위 밖의 대상자가 포함되어 있습니다.", status=403)
 
             StructureChange.objects.create(
                 requester=user,

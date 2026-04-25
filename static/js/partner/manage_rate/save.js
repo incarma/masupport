@@ -13,6 +13,7 @@ import { fetchData } from "./fetch.js";
 import { resetInputSection } from "./input_rows.js";
 
 import { getCSRFToken } from "../../common/manage/csrf.js";
+import { readJsonOrThrow, isSuccessJson } from "../../common/manage/http.js";
 
 /* ======================================================
    URL helpers (legacy keys supported)
@@ -45,14 +46,6 @@ function getRoot() {
 
 function getSaveUrl(root) {
   return pickUrl(root, ["saveUrl", "dataSaveUrl", "dataDataSaveUrl"], "");
-}
-
-function safeJsonParse(text) {
-  try {
-    return JSON.parse(text);
-  } catch {
-    return null;
-  }
 }
 
 /* ======================================================
@@ -185,14 +178,8 @@ export async function saveRows() {
       body: JSON.stringify(body),
     });
 
-    const text = await res.text();
-    if (!res.ok) throw new Error(`서버 응답 오류 (${res.status})`);
-
-    const result = safeJsonParse(text);
-    if (!result) throw new Error("서버 응답 파싱 실패(JSON 아님)");
-
-    const ok = result.status === "success" || result.success === true || result.ok === true;
-    if (!ok) {
+    const result = await readJsonOrThrow(res, "저장 실패");
+    if (!isSuccessJson(result) && result.ok !== true) {
       alertBox(result.message || "저장 중 오류가 발생했습니다.");
       return;
     }

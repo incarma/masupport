@@ -3,13 +3,14 @@
 // ✅ Efficiency fetch + render (Accordion groups + rows) FINAL
 // - grouped=1 응답(groups + rows 플랫) 지원
 // - group_key(문자열) / group_pk(숫자) 모두 매칭
-// - sub_admin: 그룹삭제 버튼 숨김 + 행삭제 disabled (UI 레벨)
-// - superuser/main_admin: 각 행 처리일자(date) 수정 가능(즉시 저장)
+// - leader: 그룹삭제 버튼 숨김 + 행삭제 disabled (UI 레벨)
+// - superuser/head: 각 행 처리일자(date) 수정 가능(즉시 저장)
 // - ❗삭제 로직은 delete.js로 완전 분리(중복/충돌 방지)
 // =========================================================
 
 import { els } from "./dom_refs.js";
 import { showLoading, hideLoading, alertBox, getCSRFToken } from "./utils.js";
+import { readJsonOrThrow, isSuccessJson } from "../../common/manage/http.js";
 
 const DEBUG = false;
 const log = (...a) => DEBUG && console.log("[efficiency/fetch]", ...a);
@@ -70,10 +71,10 @@ function getUserGrade() {
 }
 function canAdminEdit() {
   const g = getUserGrade();
-  return g === "superuser" || g === "main_admin";
+  return g === "superuser" || g === "head";
 }
 function isSubAdmin() {
-  return getUserGrade() === "sub_admin";
+  return getUserGrade() === "leader";
 }
 
 /**
@@ -356,10 +357,8 @@ function bindHandlersOnce() {
         body: JSON.stringify({ id: rowId, process_date, kind: "efficiency" }),
       });
 
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || data.status !== "success") {
-        throw new Error(data.message || `저장 실패(${res.status})`);
-      }
+      const data = await readJsonOrThrow(res, "처리일자 저장 실패");
+      if (!isSuccessJson(data)) throw new Error(data.message || "처리일자 저장 실패");
 
       input.dataset.prevValue = process_date;
     } catch (err) {
@@ -627,9 +626,8 @@ export async function fetchData(ym, branch) {
       headers: { "X-Requested-With": "XMLHttpRequest" },
     });
 
-    const payload = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(`서버 응답 오류 (${res.status})`);
-    if (payload.status !== "success") throw new Error(payload.message || "조회 실패");
+    const payload = await readJsonOrThrow(res, "조회 실패");
+    if (!isSuccessJson(payload)) throw new Error(payload.message || "조회 실패");
 
     const groups = payload.groups || [];
     const rows = payload.rows || [];

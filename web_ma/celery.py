@@ -14,6 +14,7 @@ Celery config for web_ma project.
 
 from __future__ import annotations
 
+import logging
 import os
 
 from celery import Celery
@@ -29,6 +30,19 @@ app.autodiscover_tasks()
 # ⚠️ board/tasks/ 는 패키지 구조이므로 autodiscover_tasks() 단독 탐색 불가
 # → 패키지 루트를 명시적으로 추가 탐색하여 board 태스크 등록 보장
 app.autodiscover_tasks(["board.tasks"])
+
+logger = logging.getLogger(__name__)
+
+
+def _safe_args(value, *, default=()):
+    if value is None:
+        return default
+    if isinstance(value, tuple):
+        return value
+    if isinstance(value, list):
+        return tuple(value)
+    logger.warning("[celery] invalid beat args ignored: %r", value)
+    return default
 
 
 @app.task(bind=True)
@@ -53,12 +67,12 @@ app.conf.beat_schedule = {
     "board-industry-cleanup-daily": {
         "task": "board.tasks.industry_info.cleanup_old_industry_articles",
         "schedule": crontab(hour=3, minute=0),
-        "args": (14,),
+        "args": _safe_args((14,)),
     },
     # ── dash: 매출 집계 ─────────────────────────────────────────────────────
     # 매시간 10분: 집계 갱신(이번달/전월) → SalesDailyAgg 최신화
     "dash-agg-hourly": {
-        "task": "dash.tasks.build_sales_aggs_hourly",
+         "task": "dash.tasks.build_sales_aggs_hourly",
         "schedule": crontab(minute=10),
         "args": (),
     },

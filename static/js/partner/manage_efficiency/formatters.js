@@ -10,8 +10,8 @@ export function formatRequesterBranch(user) {
   const part = user.part || "";
 
   if (grade === "superuser") return part || "-";
-  if (grade === "main_admin") return branch || "-";
-  if (grade === "sub_admin") {
+  if (grade === "head") return branch || "-";
+  if (grade === "leader") {
     if (level === "A") return [teamA].filter(Boolean).join(" + ");
     if (level === "B") return [teamA, teamB].filter(Boolean).join(" + ");
     if (level === "C") return [teamA, teamB, teamC].filter(Boolean).join(" + ");

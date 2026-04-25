@@ -25,11 +25,14 @@
        data-branch="{{ user.branch }}"
        data-fetch-url="{% url 'partner:ajax_table_fetch' %}"
        data-save-url="{% url 'partner:ajax_table_save' %}"
-       data-rate-template-url="{% static 'excel/양식_테이블관리.xlsx' %}"
+       data-rate-list-url="{% url 'partner:ajax_rate_userlist' %}"
+       data-rate-excel-url="{% url 'partner:ajax_rate_userlist_excel' %}"
+       data-rate-upload-url="{% url 'partner:ajax_rate_userlist_upload' %}"
+       data-rate-template-url="{% url 'partner:ajax_rate_userlist_template_excel' %}"
   >
 
     <!-- 권한 가드 -->
-    {% if user.grade != 'superuser' and user.grade != 'main_admin' %}
+    {% if user.grade != 'superuser' and user.grade != 'head' %}
       <div class="alert alert-danger text-center mt-4">접근 권한이 없습니다.</div>
     {% endif %}
 

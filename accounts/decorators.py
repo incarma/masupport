@@ -13,12 +13,9 @@ from django.shortcuts import render
 # Grade-based Permission Decorators
 # =============================================================================
 
-# 별칭: 호출부에서는 head/leader처럼 쓰되,
-# 실제 시스템 grade 값(main_admin/sub_admin 등)을 함께 허용
-GRADE_ALIAS_MAP = {
-    "head": {"head", "main_admin"},
-    "leader": {"leader", "sub_admin"},
-}
+# main_admin/sub_admin은 legacy grade로 전환 완료 대상.
+# 신규 권한 판정은 head/leader만 사용한다.
+GRADE_ALIAS_MAP = {}
 
 
 def _expand_allowed_grades(allowed: Iterable[str]) -> Set[str]:
@@ -33,10 +30,10 @@ def grade_required(*allowed_grades: str, forbidden_template: str = "no_permissio
     등급(grade) 기반 접근 제어 데코레이터.
 
     사용 예)
-      @grade_required("head")          -> head + main_admin 허용
-      @grade_required("leader")        -> leader + sub_admin 허용
+      @grade_required("head")          -> head 허용
+      @grade_required("leader")        -> leader 허용
       @grade_required("superuser")     -> superuser만
-      @grade_required("head", "leader")-> head/main_admin + leader/sub_admin 허용
+      @grade_required("head", "leader")-> head + leader 허용
 
     forbidden_template
       - 기본: 프로젝트 UX와 맞춘 팝업 템플릿 렌더

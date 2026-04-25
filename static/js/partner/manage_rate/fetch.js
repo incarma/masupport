@@ -9,6 +9,8 @@
 import { els } from "./dom_refs.js";
 import { showLoading, hideLoading, alertBox } from "./utils.js";
 import { resetInputSection } from "./input_rows.js";
+import { getCSRFToken } from "../../common/manage/csrf.js";
+import { readJsonOrThrow, isSuccessJson } from "../../common/manage/http.js";
 
 let mainDT = null;
 let delegationBound = false;
@@ -118,13 +120,6 @@ function safeResetInput() {
 }
 
 /* =========================================================
-   CSRF
-========================================================= */
-function getCSRFToken() {
-  return window.csrfToken || "";
-}
-
-/* =========================================================
    Tooltip (Bootstrap 5) - DT redraw 대응
    편제변경 fetch.js 동일 방식
 ========================================================= */
@@ -164,10 +159,8 @@ async function updateProcessDate(id, value) {
     }),
   });
 
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok || data.status !== "success") {
-    throw new Error(data.message || `처리일자 저장 실패 (${res.status})`);
-  }
+  const data = await readJsonOrThrow(res, "처리일자 저장 실패");
+  if (!isSuccessJson(data)) throw new Error(data.message || "처리일자 저장 실패");
   return data;
 }
 
@@ -549,14 +542,12 @@ export async function fetchData(payload = {}) {
       headers: { "X-Requested-With": "XMLHttpRequest" },
       credentials: "same-origin",
     });
-    if (!res.ok) throw new Error(`서버 응답 오류 (${res.status})`);
-
-    const data = await res.json().catch(() => ({}));
+    const data = await readJsonOrThrow(res, "조회 실패");
     const rawRows = Array.isArray(data?.rows) ? data.rows : [];
 
     revealSections();
 
-    if (data.status !== "success") {
+    if (!isSuccessJson(data)) {
       safeResetInput();
       renderMainSheet([]);
       return;

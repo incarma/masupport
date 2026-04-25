@@ -39,6 +39,26 @@ def _team_affiliation(a: str, b: str, c: str) -> str:
     return " ".join(parts) if parts else "-"
 
 
+def _can_use_target(user, target: CustomUser, branch: str) -> bool:
+    grade = getattr(user, "grade", "")
+    target_branch = _to_str(getattr(target, "branch", ""))
+
+    if grade == "superuser":
+        return True
+
+    if target_branch != _to_str(branch):
+        return False
+
+    if grade == "head":
+        return target_branch == _to_str(getattr(user, "branch", ""))
+
+    if grade == "leader":
+        allowed_ids = set(str(x) for x in get_level_team_filter_user_ids(user))
+        return str(target.id) == str(user.id) or str(target.id) in allowed_ids
+
+    return False
+
+
 @require_GET
 @login_required
 @grade_required("superuser", "head", "leader")
@@ -142,6 +162,8 @@ def rate_save(request):
             target = CustomUser.objects.filter(id=target_id).first()
             if not target:
                 continue
+            if not _can_use_target(user, target, branch):
+                return json_err("권한 범위 밖의 대상자가 포함되어 있습니다.", status=403)
 
             rt = RateTable.objects.filter(user=target).first()
             before_ftable = rt.non_life_table if rt else ""

@@ -11,18 +11,25 @@
 from __future__ import annotations
 
 import io
+import logging
+import os
 import traceback
 from datetime import datetime
 from typing import Optional, Tuple
+from urllib.parse import quote
 
 import pandas as pd
 from django.core.files.storage import default_storage
+from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.db.models import Q
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.http import require_GET, require_POST
 
+from accounts.decorators import grade_required
 from accounts.models import CustomUser
+from audit.constants import ACTION
+from audit.services import log_action
 from partner.models import RateTable, SubAdminTemp
 
 from .responses import json_err, json_ok
@@ -39,6 +46,37 @@ COL_NONLIFE = "손해보험"  # ✅ user request: 손해보험 → 손보테이�
 COL_LIFE = "생명보험"    # ✅ user request: 생명보험 → 생보테이블(life_table)
 
 EMP_COL_CANDIDATES = ("사번", "사원번호", "ID", "id", "사원ID")
+
+
+ALLOWED_RATE_TABLE_GRADES = ("superuser", "head")
+logger = logging.getLogger(__name__)
+
+
+def _user_branch(user) -> str:
+    return _to_str(getattr(user, "branch", ""))
+
+
+def _can_access_branch(user, branch: str) -> bool:
+    if getattr(user, "grade", "") == "superuser":
+        return True
+    return bool(branch) and branch == _user_branch(user)
+
+
+def _excel_response(content: bytes, filename: str) -> HttpResponse:
+    response = HttpResponse(
+        content,
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    fallback = "download.xlsx"
+    response["Content-Disposition"] = (
+        f"attachment; filename={fallback}; filename*=UTF-8''{quote(filename)}"
+    )
+    return response
+
+
+def _safe_tmp_name(name: str) -> str:
+    base = os.path.basename(str(name or "upload.xlsx")).replace("\\", "_").replace("/", "_")
+    return base[:120] or "upload.xlsx"
 
 
 def _to_str(v) -> str:
@@ -106,6 +144,8 @@ def _safe_json(res: HttpResponse) -> JsonResponse:
 # =============================================================================
 
 @require_GET
+@login_required
+@grade_required(*ALLOWED_RATE_TABLE_GRADES, forbidden_template=None)
 def ajax_rate_userlist(request):
     """
     JS(/static/js/partner/manage_table.js)에서 기대하는 JSON:
@@ -114,6 +154,8 @@ def ajax_rate_userlist(request):
     branch = _to_str(request.GET.get("branch"))
     if not branch:
         return JsonResponse({"data": []})
+    if not _can_access_branch(request.user, branch):
+        return json_err("다른 지점 데이터에는 접근할 수 없습니다.", status=403, extra={"data": []})
 
     users = (
         CustomUser.objects
@@ -157,6 +199,8 @@ def ajax_rate_userlist(request):
 
 
 @require_GET
+@login_required
+@grade_required(*ALLOWED_RATE_TABLE_GRADES, forbidden_template=None)
 def ajax_rate_userlist_excel(request):
     """
     요율현황 엑셀 다운로드
@@ -166,8 +210,7 @@ def ajax_rate_userlist_excel(request):
     if not branch:
         return JsonResponse({"error": "지점을 선택해주세요."}, status=400)
 
-    user = request.user
-    if user.grade != "superuser" and branch != _to_str(getattr(user, "branch", "")):
+    if not _can_access_branch(request.user, branch):
         return JsonResponse({"error": "다른 지점 데이터에는 접근할 수 없습니다."}, status=403)
 
     users = list(
@@ -209,15 +252,12 @@ def ajax_rate_userlist_excel(request):
         df.to_excel(writer, index=False, sheet_name="요율현황")
 
     filename = f"요율현황_{branch}_{datetime.now():%Y%m%d}.xlsx"
-    response = HttpResponse(
-        output.getvalue(),
-        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    )
-    response["Content-Disposition"] = f'attachment; filename="{filename}"'
-    return response
+    return _excel_response(output.getvalue(), filename)
 
 
 @require_POST
+@login_required
+@grade_required(*ALLOWED_RATE_TABLE_GRADES, forbidden_template=None)
 @transaction.atomic
 def ajax_rate_userlist_upload(request):
     """
@@ -236,14 +276,12 @@ def ajax_rate_userlist_upload(request):
         return json_err("branch가 없습니다.", status=400)
 
     # 권한: superuser 아니면 본인지점만
-    user = request.user
-    user_branch = _to_str(getattr(user, "branch", ""))
-    if getattr(user, "grade", "") != "superuser" and branch != user_branch:
+    if not _can_access_branch(request.user, branch):
         return json_err("다른 지점 데이터에는 업로드할 수 없습니다.", status=403)
 
     file_path = None
     try:
-        file_path = default_storage.save(f"tmp/{excel_file.name}", excel_file)
+        file_path = default_storage.save(f"tmp/{_safe_tmp_name(excel_file.name)}", excel_file)
         file_path_full = default_storage.path(file_path)
 
         # 1) 시트 선택(업로드/Sheet1/첫시트)
@@ -311,12 +349,30 @@ def ajax_rate_userlist_upload(request):
             RateTable.objects.update_or_create(user=target_user, defaults=defaults)
             updated_count += 1
 
+        try:
+            log_action(
+                request,
+                getattr(ACTION, "PARTNER_RATE_UPLOAD", "partner.rate.upload"),
+                object_type="RateTable",
+                object_id=branch,
+                meta={
+                    "branch": branch,
+                    "file_name": _safe_tmp_name(excel_file.name),
+                    "sheet": sheet,
+                    "updated_count": updated_count,
+                    "skipped_count": skipped_count,
+                },
+                success=True,
+            )
+        except Exception:
+            logger.exception("[partner.ratetable_upload] audit log failed")
+
         return json_ok(
             {"message": f"업로드 완료 ({updated_count}건 업데이트 / {skipped_count}건 스킵됨, sheet={sheet})"}
         )
 
     except Exception as e:
-        traceback.print_exc()
+        logger.exception("[partner.ratetable_upload] failed branch=%s user=%s", branch, getattr(request.user, "id", ""))
         return json_err(f"업로드 중 오류: {str(e)}", status=500)
 
     finally:
@@ -328,6 +384,8 @@ def ajax_rate_userlist_upload(request):
 
 
 @require_GET
+@login_required
+@grade_required(*ALLOWED_RATE_TABLE_GRADES, forbidden_template=None)
 def ajax_rate_user_detail(request):
     """
     대상자 요율 상세 + find_table_rate 적용
@@ -338,6 +396,8 @@ def ajax_rate_user_detail(request):
 
     try:
         target = CustomUser.objects.get(id=user_id)
+        if not _can_access_branch(request.user, _to_str(target.branch)):
+            return json_err("대상자 조회 권한이 없습니다.", status=403)
 
         rate_info = RateTable.objects.filter(user=target).first()
         non_life_table = rate_info.non_life_table if rate_info else ""
@@ -369,6 +429,8 @@ def ajax_rate_user_detail(request):
 
 
 @require_GET
+@login_required
+@grade_required(*ALLOWED_RATE_TABLE_GRADES, forbidden_template=None)
 def ajax_rate_userlist_template_excel(request):
     """
     ✅ 업로드 양식 엑셀 (FINAL)
@@ -378,6 +440,8 @@ def ajax_rate_userlist_template_excel(request):
     """
     try:
         branch = _to_str(request.GET.get("branch"))
+        if branch and not _can_access_branch(request.user, branch):
+            return json_err("다른 지점 양식은 다운로드할 수 없습니다.", status=403)
 
         # 실제 업로드 권장 양식(명시 사번 포함 버전)
         df = pd.DataFrame(columns=["사번", COL_NONLIFE, COL_LIFE])
@@ -403,12 +467,7 @@ def ajax_rate_userlist_template_excel(request):
             ws.column_dimensions["C"].width = 20
 
         filename = f"요율현황_업로드양식_{branch+'_' if branch else ''}{datetime.now():%Y%m%d}.xlsx"
-        resp = HttpResponse(
-            output.getvalue(),
-            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        )
-        resp["Content-Disposition"] = f'attachment; filename="{filename}"'
-        return resp
+        return _excel_response(output.getvalue(), filename)
 
     except Exception as e:
         traceback.print_exc()

@@ -5,7 +5,7 @@
 // - ManageBoot(efficiency) 연동 (실패해도 동작)
 // - 입력행/확인서 업로드 핸들러 연결
 // - 검색(runSearch): YM/Branch 검증 + 섹션 오픈 + fetchData
-// - 자동검색: main_admin/sub_admin 기본 autoLoad
+// - 자동검색: head/leader 기본 autoLoad
 // - superuser: branch change 시 자동 재조회
 // - (선택) accordion 헤더 버튼(다운로드/삭제) 클릭 시 토글 전파 차단 + 다운로드 처리
 // =========================================================
@@ -166,7 +166,7 @@ onReady(() => {
       return str(els.branch?.value) || str(root.dataset.branch) || str(user.branch) || "";
     }
 
-    // main/sub는 user.branch 우선
+    // head/leader는 user.branch 우선
     return (
       str(user.branch) ||
       str(boot.branch) ||
@@ -228,9 +228,9 @@ onReady(() => {
   // 5) 자동조회 정책
   const g = grade();
   const shouldAuto =
-    typeof boot.autoLoad === "boolean" ? boot.autoLoad : ["main_admin", "sub_admin"].includes(g);
+    typeof boot.autoLoad === "boolean" ? boot.autoLoad : ["head", "leader"].includes(g);
 
-  if (shouldAuto && ["main_admin", "sub_admin"].includes(g)) {
+  if (shouldAuto && ["head", "leader"].includes(g)) {
     runSearch("auto").catch((e) => err("❌ runSearch(auto) 실패:", e));
   }
 

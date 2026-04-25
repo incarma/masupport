@@ -57,6 +57,29 @@ DEFAULT_PASSWORD_PREFIX = "incar"
 # 진행률 표시를 위한 최소/최대 보정
 PERCENT_MIN = 0
 PERCENT_MAX = 100
+MIN_BATCH_SIZE = 1
+MAX_BATCH_SIZE = 2000
+ALLOWED_EXCEL_SUFFIXES = {".xlsx", ".xlsm", ".xls"}
+
+
+def _validate_task_params(task_id: str, file_path: str, batch_size: int) -> tuple[str, Path, int]:
+    tid = str(task_id or "").strip()
+    if not tid:
+        raise ValueError("task_id가 비어 있습니다.")
+
+    path = Path(str(file_path or "")).expanduser()
+    if not path.exists() or not path.is_file():
+        raise FileNotFoundError(f"업로드 파일을 찾을 수 없습니다: {path}")
+
+    if path.suffix.lower() not in ALLOWED_EXCEL_SUFFIXES:
+        raise ValueError(f"허용되지 않는 엑셀 확장자입니다: {path.suffix}")
+
+    try:
+        bs = int(batch_size or 500)
+    except Exception:
+        bs = 500
+    bs = max(MIN_BATCH_SIZE, min(MAX_BATCH_SIZE, bs))
+    return tid, path, bs
 
 
 # =============================================================================
@@ -193,6 +216,9 @@ def process_users_excel_task(self, task_id: str, file_path: str, batch_size: int
     - 배치 처리: batch_size 단위 transaction
     - 결과 리포트 엑셀 저장
     """
+    task_id, file_path_obj, batch_size = _validate_task_params(task_id, file_path, batch_size)
+    file_path = str(file_path_obj)
+
     k = _cache_init(task_id)
     logger.warning("[TASK START] tid=%s file=%s batch=%s", task_id, file_path, batch_size)
 

@@ -60,10 +60,8 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     # -------------------------------------------------------------------------
     GRADE_CHOICES = [
         ("superuser", "Superuser"),
-        ("main_admin", "Main Admin"),
-        ("head", "Head"),          # decorator alias_map("head") 호환 목적
-        ("sub_admin", "Sub Admin"),
-        ("leader", "Leader"),      # decorator alias_map("leader") 호환 목적
+        ("head", "Head"),
+        ("leader", "Leader"),
         ("basic", "Basic"),
         ("resign", "Resign"),
         ("inactive", "Inactive"),
