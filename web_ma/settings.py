@@ -349,6 +349,41 @@ CELERY_BROKER_URL = config("CELERY_BROKER_URL", default=REDIS_URL)
 CELERY_RESULT_BACKEND = config("CELERY_RESULT_BACKEND", default=REDIS_URL)
 
 # =============================================================================
+# Celery / Redis 운영 안정성
+# -----------------------------------------------------------------------------
+# 목적:
+# - Redis 재시작/순간 단절 시 worker 자동 재연결
+# - broker 연결 지연 시 startup 실패 방지
+# - 장기 실행 task의 connection loss 중복 실행 위험 완화
+#
+# 주의:
+# - TASK_ACKS_LATE=True는 task가 "최소 1회(at-least-once)" 실행될 수 있음을 전제로 한다.
+# - 따라서 중요한 task는 반드시 idempotent(update_or_create, unique key, lock) 구조여야 한다.
+# =============================================================================
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+CELERY_BROKER_CONNECTION_MAX_RETRIES = 100
+CELERY_BROKER_CONNECTION_TIMEOUT = 30
+
+# Redis visibility timeout: worker 장애/연결 단절 시 메시지 재전달 기준 시간.
+# 너무 짧으면 장기 작업이 중복 실행될 수 있고, 너무 길면 장애 복구가 늦어진다.
+CELERY_BROKER_TRANSPORT_OPTIONS = {
+    "visibility_timeout": 60 * 60,  # 1 hour
+}
+CELERY_RESULT_BACKEND_TRANSPORT_OPTIONS = {
+    "visibility_timeout": 60 * 60,
+}
+
+# Task ACK 정책
+CELERY_TASK_ACKS_LATE = True
+CELERY_TASK_REJECT_ON_WORKER_LOST = True
+CELERY_WORKER_CANCEL_LONG_RUNNING_TASKS_ON_CONNECTION_LOSS = True
+
+# Worker 안정성
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+CELERY_TASK_TIME_LIMIT = 60 * 30        # hard limit: 30분
+CELERY_TASK_SOFT_TIME_LIMIT = 60 * 25   # soft limit: 25분
+
+# =============================================================================
 # 11) Upload dirs / Limits
 # =============================================================================
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 10000

@@ -8,10 +8,12 @@
 from __future__ import annotations
 
 from datetime import timedelta
+import hashlib
 import logging
 
 from celery import shared_task
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.utils import timezone
 
 from audit.constants import ACTION
@@ -22,6 +24,23 @@ from board.services.industry_news import default_queries, fetch_naver_news, pars
 
 
 logger = logging.getLogger(__name__)
+
+
+def _task_lock_key(prefix: str, *parts) -> str:
+    raw = ":".join(str(p or "").strip() for p in parts)
+    digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+    return f"{prefix}:{digest}"
+
+
+def _with_task_lock(lock_key: str, ttl_sec: int, fn):
+    if not cache.add(lock_key, "1", timeout=ttl_sec):
+        logger.info("[board.industry] skip locked task key=%s", lock_key)
+        return {"ok": True, "skipped": True, "reason": "lock_exists", "lock_key": lock_key}
+
+    try:
+        return fn()
+    finally:
+        cache.delete(lock_key)
 
 
 def _safe_positive_int(value, *, default: int, minimum: int = 1, maximum: int = 365) -> int:
@@ -47,10 +66,28 @@ def collect_board_industry_news(self, query: str = "", pages: int = 2, actor_id:
     - 사용자 요청 시 외부 API를 직접 호출하지 않음
     - 배치 수집 + DB 조회 구조 유지
     """
+    pages = _safe_positive_int(pages, default=2, minimum=1, maximum=10)
+    query = str(query or "").strip()
+    actor_id = str(actor_id or "").strip()
+
+    lock_key = _task_lock_key(
+        "board:industry:collect",
+        query or "__default__",
+        pages,
+        actor_id or "__system__",
+    )
+
+    return _with_task_lock(
+        lock_key,
+        60 * 50,
+        lambda: _collect_board_industry_news_impl(query=query, pages=pages, actor_id=actor_id),
+    )
+
+
+def _collect_board_industry_news_impl(*, query: str = "", pages: int = 2, actor_id: str = ""):
     User = get_user_model()
     actor = User.objects.filter(pk=actor_id).first() if actor_id else None
-    pages = _safe_positive_int(pages, default=2, minimum=1, maximum=10)
-    queries = [str(query).strip()] if str(query or "").strip() else default_queries()
+    queries = [query] if query else default_queries()
 
     total_inserted = 0
     total_skipped = 0
@@ -173,6 +210,16 @@ def cleanup_old_industry_articles(days: int = 14):
       (단, 북마크된 기사는 삭제 대상에서 제외되므로 북마크 선호도도 보존됨)
     """
     days = _safe_positive_int(days, default=14, minimum=1, maximum=365)
+    lock_key = f"board:industry:cleanup:{days}"
+
+    return _with_task_lock(
+        lock_key,
+        60 * 20,
+        lambda: _cleanup_old_industry_articles_impl(days=days),
+    )
+
+
+def _cleanup_old_industry_articles_impl(*, days: int = 14):
     cutoff = timezone.now() - timedelta(days=days)
     logger.info("[board.industry.cleanup] started days=%s cutoff=%s", days, cutoff.isoformat())
 
