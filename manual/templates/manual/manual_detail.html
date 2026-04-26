@@ -207,7 +207,7 @@
   ========================================================== -->
   {% if user.is_authenticated and user.grade == "superuser" %}
     {% include "manual/_partials/manual_detail_superuser_assets.html" %}
-    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+    <script src="{% static 'vendor/sortablejs/1.15.2/Sortable.min.js' %}"></script>
     <script type="module" src="{% static 'js/manual/manual_detail_block/index.js' %}?v=20260126_02"></script>
     <script src="{% static 'js/manual/manual_detail_section_sort.js' %}?v=20260126_01"></script>
   {% endif %}

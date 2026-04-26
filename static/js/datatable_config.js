@@ -22,7 +22,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const enableExport = table.dataset.export === "true";
 
     const dt = window.jQuery(table).DataTable({
-      language: { url: "//cdn.datatables.net/plug-ins/1.13.8/i18n/ko.json" },
+      language: { url: "/static/vendor/datatables/1.13.8/i18n/ko.json" },
       paging: true,
       searching: true,
       ordering: true,

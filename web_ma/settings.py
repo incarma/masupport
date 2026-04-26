@@ -162,7 +162,8 @@ INSTALLED_APPS = [
 # =============================================================================
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
-    "whitenoise.middleware.WhiteNoiseMiddleware",
+    # ✅ 운영 보안 헤더 SSOT 보강(CSP/Referrer/Permissions 등)
+    "web_ma.middleware.SecurityHeadersMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "audit.middleware.RequestLogMiddleware",
@@ -392,6 +393,90 @@ UPLOAD_RESULT_DIR = Path(config("UPLOAD_RESULT_DIR", default=str(MEDIA_ROOT / "u
 UPLOAD_TEMP_DIR = Path(config("UPLOAD_TEMP_DIR", default=str(MEDIA_ROOT / "upload_temp")))
 
 # =============================================================================
+# 11-1) Board attachment upload policy
+# =============================================================================
+BOARD_ATTACHMENT_MAX_UPLOAD_SIZE = config(
+    "BOARD_ATTACHMENT_MAX_UPLOAD_SIZE",
+    default=10 * 1024 * 1024,
+    cast=int,
+)
+
+BOARD_ATTACHMENT_ALLOWED_EXTENSIONS = {
+    ".pdf",
+    ".jpg", ".jpeg", ".png", ".gif", ".webp",
+    ".txt", ".csv",
+    ".xls", ".xlsx",
+    ".doc", ".docx",
+    ".ppt", ".pptx",
+    ".hwp", ".hwpx",
+}
+
+# MIME allowlist 기본값은 board.services.attachments.DEFAULT_ALLOWED_CONTENT_TYPES 사용.
+# 운영에서 커스터마이징이 필요할 때만 settings에 BOARD_ATTACHMENT_ALLOWED_CONTENT_TYPES를 별도 정의한다.
+
+# =============================================================================
+# 11-2) Board industry cleanup policy
+# =============================================================================
+BOARD_INDUSTRY_CLEANUP_DEFAULT_DAYS = config(
+    "BOARD_INDUSTRY_CLEANUP_DEFAULT_DAYS",
+    default=14,
+    cast=int,
+)
+BOARD_INDUSTRY_CLEANUP_MIN_DAYS = config(
+    "BOARD_INDUSTRY_CLEANUP_MIN_DAYS",
+    default=7,
+    cast=int,
+)
+BOARD_INDUSTRY_CLEANUP_MAX_DAYS = config(
+    "BOARD_INDUSTRY_CLEANUP_MAX_DAYS",
+    default=365,
+    cast=int,
+)
+
+# =============================================================================
+# 11-3) Board internal API abuse/rate-limit policy
+# =============================================================================
+BOARD_RATE_LIMIT_ENABLED = config(
+    "BOARD_RATE_LIMIT_ENABLED",
+    default=True,
+    cast=bool,
+)
+
+# 업계정보 선호도/클릭 API
+BOARD_INDUSTRY_PREF_RATE_LIMIT = config(
+    "BOARD_INDUSTRY_PREF_RATE_LIMIT",
+    default="30/60",
+)
+BOARD_INDUSTRY_CLICK_RATE_LIMIT = config(
+    "BOARD_INDUSTRY_CLICK_RATE_LIMIT",
+    default="60/60",
+)
+
+# 담보평가 계산/삭제 API
+BOARD_COLLATERAL_CALC_RATE_LIMIT = config(
+    "BOARD_COLLATERAL_CALC_RATE_LIMIT",
+    default="20/60",
+)
+BOARD_COLLATERAL_DELETE_RATE_LIMIT = config(
+    "BOARD_COLLATERAL_DELETE_RATE_LIMIT",
+    default="10/60",
+)
+
+# Board form/search/PDF API
+BOARD_SEARCH_USER_RATE_LIMIT = config(
+    "BOARD_SEARCH_USER_RATE_LIMIT",
+    default="30/60",
+)
+BOARD_SUPPORT_PDF_RATE_LIMIT = config(
+    "BOARD_SUPPORT_PDF_RATE_LIMIT",
+    default="10/60",
+)
+BOARD_STATES_PDF_RATE_LIMIT = config(
+    "BOARD_STATES_PDF_RATE_LIMIT",
+    default="10/60",
+)
+
+# =============================================================================
 # 12) CKEditor
 # =============================================================================
 CKEDITOR_UPLOAD_PATH = "uploads/"
@@ -527,6 +612,73 @@ CSRF_FAILURE_VIEW = "accounts.views.csrf_failure"
 # =============================================================================
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 USE_X_FORWARDED_HOST = True
+
+# =============================================================================
+# 15-1) Security headers SSOT
+# -----------------------------------------------------------------------------
+# SSOT: Django settings + web_ma.middleware.SecurityHeadersMiddleware
+# Nginx는 TLS 종료/redirect만 담당하고 CSP/Referrer/Permissions는 Django에서 관리한다.
+#
+# 주의:
+# - base.html은 Bootstrap CDN + Google Fonts를 사용한다.
+# - 일부 템플릿/JS 구조상 inline style/script 이력이 있으므로 즉시 strict CSP는 금지.
+# - 운영 안정화를 위해 env로 CSP Report-Only 전환 가능.
+# =============================================================================
+SECURE_SSL_REDIRECT = config(
+    "SECURE_SSL_REDIRECT",
+    default=IS_PROD,
+    cast=bool,
+)
+
+SECURE_HSTS_SECONDS = config(
+    "SECURE_HSTS_SECONDS",
+    default=(60 * 60 * 24 * 30 if IS_PROD else 0),
+    cast=int,
+)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = config(
+    "SECURE_HSTS_INCLUDE_SUBDOMAINS",
+    default=IS_PROD,
+    cast=bool,
+)
+SECURE_HSTS_PRELOAD = config(
+    "SECURE_HSTS_PRELOAD",
+    default=False,
+    cast=bool,
+)
+
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = "DENY"
+SECURE_REFERRER_POLICY = "same-origin"
+SECURE_CROSS_ORIGIN_OPENER_POLICY = "same-origin"
+
+PERMISSIONS_POLICY = config(
+    "PERMISSIONS_POLICY",
+    default="geolocation=(), microphone=(), camera=(), payment=(), usb=(), fullscreen=(self)",
+)
+
+CSP_REPORT_ONLY = config(
+    "CSP_REPORT_ONLY",
+    default=False,
+    cast=bool,
+)
+
+CONTENT_SECURITY_POLICY = config(
+    "CONTENT_SECURITY_POLICY",
+    default=(
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data: https:; "
+        "font-src 'self' data:; "
+        "connect-src 'self'; "
+        "frame-ancestors 'none'; "
+        "base-uri 'self'; "
+        "form-action 'self'"
+    ),
+)
+
+if IS_PROD and "upgrade-insecure-requests" not in CONTENT_SECURITY_POLICY:
+    CONTENT_SECURITY_POLICY = CONTENT_SECURITY_POLICY.rstrip("; ") + "; upgrade-insecure-requests"
 
 # =============================================================================
 # 16) Dash models directory (pipeline artifacts)

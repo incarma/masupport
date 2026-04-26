@@ -7,6 +7,47 @@ from django.utils.cache import add_never_cache_headers
 from django.conf import settings
 
 
+class SecurityHeadersMiddleware:
+    """
+    운영 보안 헤더 보강.
+
+    - Django 기본 SecurityMiddleware가 처리하지 않는 CSP/Referrer/Permissions 계열을 보완한다.
+    - settings.py의 SECURE_* 설정과 함께 애플리케이션 보안 헤더 SSOT 역할을 한다.
+    - CSP는 운영 영향이 있을 수 있으므로 기본은 보수적으로 same-origin + https CDN 허용.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        response = self.get_response(request)
+
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("Referrer-Policy", getattr(settings, "SECURE_REFERRER_POLICY", "same-origin"))
+        response.headers.setdefault(
+            "Permissions-Policy",
+            getattr(settings, "PERMISSIONS_POLICY", "geolocation=(), microphone=(), camera=()"),
+        )
+        response.headers.setdefault(
+            "Cross-Origin-Opener-Policy",
+            getattr(settings, "SECURE_CROSS_ORIGIN_OPENER_POLICY", "same-origin"),
+        )
+
+        csp = getattr(settings, "CONTENT_SECURITY_POLICY", "")
+        if csp:
+            header_name = (
+                "Content-Security-Policy-Report-Only"
+                if getattr(settings, "CSP_REPORT_ONLY", False)
+                else "Content-Security-Policy"
+            )
+            response.headers.setdefault(header_name, csp)
+
+        # 구형 브라우저 방어용. X_FRAME_OPTIONS와 중복되어도 안전하다.
+        response.headers.setdefault("X-Frame-Options", getattr(settings, "X_FRAME_OPTIONS", "DENY"))
+
+        return response
+
+
 class ForceCSRFCookieOnLoginMiddleware:
     """
     ✅ /login/ (및 /admin/login/) GET 시점에 csrftoken 쿠키를 강제로 발급.

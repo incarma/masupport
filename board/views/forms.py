@@ -16,6 +16,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
+from django.conf import settings
 
 from accounts.decorators import grade_required
 from accounts.search_api import search_users_for_api
@@ -31,7 +32,7 @@ from ..constants import (
 from ..policies import can_access_states_form, can_access_support_form
 from board.utils import generate_request_support as build_support
 from board.utils import generate_request_states as build_states
-
+from board.services.rate_limit import check_rate_limit, rate_limited_json
 
 __all__ = [
     "support_form",
@@ -43,6 +44,25 @@ __all__ = [
 
 
 logger = logging.getLogger(__name__)
+
+
+def _rate_limit_or_none(request: HttpRequest, *, scope: str, setting_name: str, default_rule: str):
+    """
+    Board form/search 계열 API rate limit 공용 helper.
+
+    - settings 값 우선
+    - 없으면 default_rule 사용
+    - 제한 시 JsonResponse(429) 반환
+    - 허용 시 None 반환
+    """
+    rl = check_rate_limit(
+        request,
+        scope=scope,
+        rule=getattr(settings, setting_name, default_rule),
+    )
+    if not rl.allowed:
+        return rate_limited_json(rl)
+    return None
 
 
 def _safe_action(name: str, default: str) -> str:
@@ -154,6 +174,15 @@ def search_user(request: HttpRequest) -> JsonResponse:
     Legacy alias: /board/search-user/
     실제 구현은 accounts.search_api.search_users_for_api(SSOT)
     """
+    limited = _rate_limit_or_none(
+        request,
+        scope="board:search_user",
+        setting_name="BOARD_SEARCH_USER_RATE_LIMIT",
+        default_rule="30/60",
+    )
+    if limited:
+        return limited
+
     return JsonResponse(search_users_for_api(request))
 
 
@@ -164,6 +193,15 @@ def search_user(request: HttpRequest) -> JsonResponse:
 @grade_required(*BOARD_ALLOWED_GRADES)
 def generate_request_support(request: HttpRequest) -> HttpResponse:
     """업무요청서 PDF (superuser/head/leader)"""
+    limited = _rate_limit_or_none(
+        request,
+        scope="board:support_pdf",
+        setting_name="BOARD_SUPPORT_PDF_RATE_LIMIT",
+        default_rule="10/60",
+    )
+    if limited:
+        return limited
+
     if not can_access_support_form(request.user):
         _log_pdf_action(
             request,
@@ -204,6 +242,15 @@ def generate_request_support(request: HttpRequest) -> HttpResponse:
 @require_POST
 def generate_request_states(request: HttpRequest) -> HttpResponse:
     """FA소명서 PDF (inactive 외 모두)"""
+    limited = _rate_limit_or_none(
+        request,
+        scope="board:states_pdf",
+        setting_name="BOARD_STATES_PDF_RATE_LIMIT",
+        default_rule="10/60",
+    )
+    if limited:
+        return limited
+
     if not can_access_states_form(request.user):
         _log_pdf_action(
             request,
