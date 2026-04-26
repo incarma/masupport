@@ -13,6 +13,7 @@ import logging
 
 from celery import shared_task
 from django.contrib.auth import get_user_model
+from django.conf import settings
 from django.core.cache import cache
 from django.utils import timezone
 
@@ -49,6 +50,25 @@ def _safe_positive_int(value, *, default: int, minimum: int = 1, maximum: int = 
     except Exception:
         n = default
     return max(minimum, min(maximum, n))
+
+
+def _cleanup_days_policy() -> tuple[int, int, int]:
+    """
+    업계정보 cleanup 보존기간 정책.
+    - settings에서 운영별 조정 가능
+    - min/max 역전 또는 비정상값은 안전 기본값으로 보정
+    """
+    default = int(getattr(settings, "BOARD_INDUSTRY_CLEANUP_DEFAULT_DAYS", 14) or 14)
+    minimum = int(getattr(settings, "BOARD_INDUSTRY_CLEANUP_MIN_DAYS", 7) or 7)
+    maximum = int(getattr(settings, "BOARD_INDUSTRY_CLEANUP_MAX_DAYS", 365) or 365)
+
+    if minimum < 1:
+        minimum = 1
+    if maximum < minimum:
+        maximum = max(minimum, 365)
+
+    default = _safe_positive_int(default, default=14, minimum=minimum, maximum=maximum)
+    return default, minimum, maximum
 
 
 @shared_task(
@@ -115,6 +135,18 @@ def _collect_board_industry_news_impl(*, query: str = "", pages: int = 2, actor_
 
                 for item in items:
                     defaults = parse_naver_item(item, one_query)
+
+                    # URL이 모두 비정상이면 저장하지 않는다.
+                    # Naver API 공급원이라도 DB 저장 전 서버단에서 최종 차단한다.
+                    if not (defaults.get("original_url") or defaults.get("portal_url")):
+                        skipped_count += 1
+                        logger.warning(
+                            "[board.industry] skipped unsafe article url query=%s title=%s",
+                            one_query,
+                            defaults.get("title", "")[:120],
+                        )
+                        continue
+
                     _, created = IndustryArticle.objects.update_or_create(
                         normalized_hash=defaults["normalized_hash"],
                         defaults=defaults,
@@ -209,17 +241,37 @@ def cleanup_old_industry_articles(days: int = 14):
     - IndustryUserPreference 는 CASCADE로 함께 정리
       (단, 북마크된 기사는 삭제 대상에서 제외되므로 북마크 선호도도 보존됨)
     """
-    days = _safe_positive_int(days, default=14, minimum=1, maximum=365)
+    raw_days = days
+    default_days, min_days, max_days = _cleanup_days_policy()
+    days = _safe_positive_int(days, default=default_days, minimum=min_days, maximum=max_days)
+
+    if str(raw_days) != str(days):
+        logger.warning(
+            "[board.industry.cleanup] invalid days adjusted raw=%r adjusted=%s policy=%s-%s default=%s",
+            raw_days,
+            days,
+            min_days,
+            max_days,
+            default_days,
+        )
     lock_key = f"board:industry:cleanup:{days}"
 
     return _with_task_lock(
         lock_key,
         60 * 20,
-        lambda: _cleanup_old_industry_articles_impl(days=days),
+        lambda: _cleanup_old_industry_articles_impl(
+            days=days,
+            raw_days=raw_days,
+            policy={
+                "default_days": default_days,
+                "min_days": min_days,
+                "max_days": max_days,
+            },
+        ),
     )
 
 
-def _cleanup_old_industry_articles_impl(*, days: int = 14):
+def _cleanup_old_industry_articles_impl(*, days: int = 14, raw_days=None, policy: dict | None = None):
     cutoff = timezone.now() - timedelta(days=days)
     logger.info("[board.industry.cleanup] started days=%s cutoff=%s", days, cutoff.isoformat())
 
@@ -248,6 +300,8 @@ def _cleanup_old_industry_articles_impl(*, days: int = 14):
     return {
         "cutoff": cutoff.isoformat(),
         "days": days,
+        "raw_days": raw_days,
+        "policy": policy or {},
         "deleted_count": deleted_count,
         "bookmarked_preserved": len(bookmarked_ids),
     }

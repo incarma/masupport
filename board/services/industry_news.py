@@ -12,7 +12,7 @@ import hashlib
 import json
 from email.utils import parsedate_to_datetime
 from html import unescape
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 from urllib.request import Request, urlopen
 
 from django.conf import settings
@@ -25,6 +25,53 @@ from board.constants_industry import (
 )
 
 NAVER_NEWS_API_URL = "https://openapi.naver.com/v1/search/news.json"
+ALLOWED_ARTICLE_URL_SCHEMES = {"http", "https"}
+
+
+def normalize_external_url(value: str) -> str:
+    """
+    외부 기사 URL 정규화/검증 SSOT.
+
+    허용:
+    - http://
+    - https://
+
+    차단:
+    - javascript:, data:, file:, vbscript:
+    - scheme 없는 상대경로
+    - host 없는 URL
+    """
+    raw = (value or "").strip()
+    if not raw:
+        return ""
+
+    try:
+        parsed = urlsplit(raw)
+    except Exception:
+        return ""
+
+    scheme = (parsed.scheme or "").lower()
+    netloc = (parsed.netloc or "").strip()
+
+    if scheme not in ALLOWED_ARTICLE_URL_SCHEMES:
+        return ""
+    if not netloc:
+        return ""
+
+    return raw[:1000]
+
+
+def extract_source_name(url: str) -> str:
+    """
+    검증된 URL에서 출처 host 추출.
+    """
+    safe_url = normalize_external_url(url)
+    if not safe_url:
+        return ""
+    try:
+        return urlsplit(safe_url).netloc[:120]
+    except Exception:
+        return ""
 
 
 def normalize_text(value: str) -> str:
@@ -98,15 +145,10 @@ def parse_naver_item(item: dict, query: str) -> dict:
         if timezone.is_naive(published_at):
             published_at = timezone.make_aware(published_at, timezone.get_current_timezone())
 
-    origin = (item.get("originallink") or "").strip()
-    portal = (item.get("link") or "").strip()
+    origin = normalize_external_url(item.get("originallink") or "")
+    portal = normalize_external_url(item.get("link") or "")
 
-    source_name = ""
-    if origin and "://" in origin:
-        try:
-            source_name = origin.split("/")[2]
-        except Exception:
-            source_name = ""
+    source_name = extract_source_name(origin or portal)
 
     topic = infer_topic(title, summary)
     normalized_hash = build_hash(title, source_name, published_at)
@@ -117,8 +159,8 @@ def parse_naver_item(item: dict, query: str) -> dict:
         "external_id": portal[:255],
         "title": title[:300],
         "summary": summary,
-        "original_url": origin[:1000],
-        "portal_url": portal[:1000],
+        "original_url": origin,
+        "portal_url": portal,
         "published_at": published_at,
         "collected_at": timezone.now(),
         "keyword_query": query[:120],

@@ -11,6 +11,7 @@ import logging
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Count, OuterRef, Q, Subquery, Value
 from django.db.models.functions import Coalesce
@@ -422,17 +423,29 @@ def post_create(request: HttpRequest) -> HttpResponse:
         form = PostForm(request.POST, request.FILES)
         if form.is_valid():
             files = request.FILES.getlist("attachments")
-            with transaction.atomic():
-                post = form.save(commit=False)
-                post.user_id = _user_storage_key(request.user)
-                post.user_name = getattr(request.user, "name", "") or ""
-                post.user_branch = getattr(request.user, "branch", "") or ""
-                post.save()
+            try:
+                with transaction.atomic():
+                    post = form.save(commit=False)
+                    post.user_id = _user_storage_key(request.user)
+                    post.user_name = getattr(request.user, "name", "") or ""
+                    post.user_branch = getattr(request.user, "branch", "") or ""
+                    post.save()
 
-                def _create(**kwargs):
-                    return Attachment.objects.create(post=post, **kwargs)
+                    def _create(**kwargs):
+                        return Attachment.objects.create(post=post, **kwargs)
 
-                save_attachments(files=files, create_func=_create)
+                    save_attachments(files=files, create_func=_create)
+            except ValidationError as exc:
+                _log_post_action(
+                    request,
+                    _safe_action("BOARD_POST_CREATE", "board_post_create"),
+                    post=None,
+                    success=False,
+                    reason="attachment_validation_failed",
+                    meta={"errors": exc.messages, "attachment_count": _attachment_upload_count(files)},
+                )
+                messages.error(request, "첨부파일을 확인해주세요. " + " ".join(exc.messages))
+                return render(request, "board/post_create.html", {"form": form})
 
             _log_post_action(
                 request,
@@ -491,16 +504,32 @@ def post_edit(request: HttpRequest, pk: int) -> HttpResponse:
         if form.is_valid():
             delete_ids = _safe_int_ids(request.POST.getlist("delete_files"))
             files = request.FILES.getlist("attachments")
-            with transaction.atomic():
-                form.save()
+            try:
+                with transaction.atomic():
+                    form.save()
 
-                if delete_ids:
-                    Attachment.objects.filter(id__in=delete_ids, post=post).delete()
+                    if delete_ids:
+                        Attachment.objects.filter(id__in=delete_ids, post=post).delete()
+                    def _create(**kwargs):
+                        return Attachment.objects.create(post=post, **kwargs)
 
-                def _create(**kwargs):
-                    return Attachment.objects.create(post=post, **kwargs)
-
-                save_attachments(files=files, create_func=_create)
+                    save_attachments(files=files, create_func=_create)
+            except ValidationError as exc:
+                _log_post_action(
+                    request,
+                   _safe_action("BOARD_POST_UPDATE", "board_post_update"),
+                    post=post,
+                    success=False,
+                    reason="attachment_validation_failed",
+                    meta=_post_meta(post, extra={"errors": exc.messages, "new_attachment_count": _attachment_upload_count(files)}),
+                )
+                messages.error(request, "첨부파일을 확인해주세요. " + " ".join(exc.messages))
+                return render(request, "board/post_edit.html", {
+                    "form": form,
+                    "post": post,
+                    "attachments": post.attachments.all(),
+                    "attachment_download_name": POST_ATTACHMENT_DOWNLOAD,
+                })
 
             _log_post_action(
                 request,

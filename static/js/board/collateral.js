@@ -25,6 +25,7 @@
   var _calcUrl      = "";
   var _deleteBase   = "";
   var _canDelete    = false;
+  var _canViewSensitiveHistory = false;
   var _targetUserId = "";
   var _dt           = null;   /* DataTables 인스턴스 */
 
@@ -53,6 +54,32 @@
   function parse(str) {
     var n = parseInt(String(str || "0").replace(/[^0-9]/g, ""), 10);
     return isNaN(n) ? 0 : n;
+  }
+
+  function escapeHtml(value) {
+    return String(value == null ? "" : value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
+  function maskEmpId(value) {
+    var s = String(value || "").trim();
+    if (s.length <= 3) return s ? "***" : "";
+    return s.slice(0, 3) + "****";
+  }
+
+  function maskLongText(value, visibleLen) {
+    var s = String(value || "").trim();
+    if (!s) return "—";
+    var n = visibleLen || 12;
+    return s.length > n ? s.slice(0, n) + "…" : s;
+  }
+
+  function canViewFullHistoryText() {
+    return _canViewSensitiveHistory === true;
   }
 
   /* ── 입력 필드 콤마 포맷 자동 바인딩 ────────────────── */
@@ -183,10 +210,15 @@
     var targetName   = String(data.target_name   || "").trim();
     var targetBranch = String(data.target_branch || "").trim();
     var targetId     = String(payload.target_user_id || "").trim();
+    var safeTargetId = canViewFullHistoryText() ? targetId : maskEmpId(targetId);
     var targetDisplay = targetName
-      ? (targetName + "(" + targetId + ")")
+      ? (targetName + "(" + safeTargetId + ")")
       : "—";
     var targetBranchDisplay = targetBranch || "—";
+    var memoFull = String(payload.memo || "").trim();
+    var addressFull = String(payload.address || "").trim();
+    var memoDisplay = canViewFullHistoryText() ? memoFull : maskLongText(memoFull, 10);
+    var addressDisplay = canViewFullHistoryText() ? addressFull : maskLongText(addressFull, 14);
 
     /* 삭제 버튼 셀 (권한 있을 때만) */
     var deleteTd = _canDelete
@@ -208,21 +240,21 @@
       '<td class="text-nowrap">—</td>' +
       '<td class="text-nowrap">—</td>' +
       /* 대상자 소속/성명 */
-      '<td class="text-nowrap">' + targetBranchDisplay + '</td>' +
-      '<td class="text-nowrap">' + targetDisplay + '</td>' +
+      '<td class="text-nowrap">' + escapeHtml(targetBranchDisplay) + '</td>' +
+      '<td class="text-nowrap">' + escapeHtml(targetDisplay) + '</td>' +
       /* 물건유형 */
-      '<td class="text-nowrap">' + typeLabel + '</td>' +
+      '<td class="text-nowrap">' + escapeHtml(typeLabel) + '</td>' +
       /* 메모 */
       '<td class="collateral-popup-cell text-nowrap"' +
           ' data-popup-title="메모 전체 보기"' +
-          ' data-fulltext="' + String(payload.memo || "").replace(/"/g, "&quot;") + '">' +
-        '<span class="collateral-popup-text">' + (payload.memo || "—") + '</span>' +
+          ' data-fulltext="' + escapeHtml(canViewFullHistoryText() ? memoFull : memoDisplay) + '">' +
+        '<span class="collateral-popup-text">' + escapeHtml(memoDisplay || "—") + '</span>' +
       '</td>' +
       /* 주소 */
       '<td class="collateral-popup-cell text-nowrap"' +
           ' data-popup-title="주소 전체 보기"' +
-          ' data-fulltext="' + String(payload.address || "").replace(/"/g, "&quot;") + '">' +
-        '<span class="collateral-popup-text">' + (payload.address || "—") + '</span>' +
+          ' data-fulltext="' + escapeHtml(canViewFullHistoryText() ? addressFull : addressDisplay) + '">' +
+        '<span class="collateral-popup-text">' + escapeHtml(addressDisplay || "—") + '</span>' +
       '</td>' +
       /* 금액 */
       '<td class="text-end text-nowrap money-cell">' + fmt(payload.kb_price)   + '</td>' +
@@ -306,8 +338,17 @@
       body: JSON.stringify(payload),
     })
     .then(function (res) {
-      if (!res.ok) throw new Error("서버 오류 (" + res.status + ")");
-      return res.json();
+      return res.json().catch(function () {
+        return {
+          ok: false,
+          message: "서버 응답을 읽지 못했습니다. (" + res.status + ")",
+        };
+      }).then(function (json) {
+        if (!res.ok && !json.message) {
+          json.message = "서버 오류 (" + res.status + ")";
+        }
+        return json;
+      });
     })
     .then(function (json) {
       if (json.ok) {
@@ -345,7 +386,14 @@
       },
       body: JSON.stringify({}),
     })
-    .then(function (res) { return res.json(); })
+    .then(function (res) {
+      return res.json().catch(function () {
+        return {
+          ok: false,
+          message: "서버 응답을 읽지 못했습니다. (" + res.status + ")",
+        };
+      });
+    })
     .then(function (json) {
       if (json.ok) {
         var row = qs('tr[data-eval-id="' + evalId + '"]');
@@ -492,6 +540,7 @@
     _calcUrl    = root.dataset.calcUrl      || "";
     _deleteBase = root.dataset.deleteBaseUrl || "/board/collateral/";
     _canDelete  = root.dataset.canDelete    === "true";
+    _canViewSensitiveHistory = root.dataset.canViewSensitiveHistory === "true" || _canDelete === true;
 
     if (!_calcUrl) {
       console.error("[CollateralApp] calcUrl 없음. #collateralBoot dataset 확인.");

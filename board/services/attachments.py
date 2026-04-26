@@ -12,14 +12,19 @@ from __future__ import annotations
 
 import logging
 import os
+import mimetypes
 import re
 from typing import Any, Callable, Iterable
 
+from django.conf import settings
 from django.core.files import File
+from django.core.exceptions import ValidationError
 from django.http import FileResponse, Http404
 from django.utils.http import content_disposition_header
 
 logger = logging.getLogger("board.access")
+
+DEFAULT_MAX_UPLOAD_SIZE = 10 * 1024 * 1024
 
 
 # -----------------------------
@@ -104,6 +109,95 @@ def _build_download_filename(*, original_name: str, file_path: str) -> str:
 
 
 # -----------------------------
+# Upload validation
+# -----------------------------
+DEFAULT_ALLOWED_EXTENSIONS = {
+    ".pdf",
+    ".jpg", ".jpeg", ".png", ".gif", ".webp",
+    ".txt", ".csv",
+    ".xls", ".xlsx",
+    ".doc", ".docx",
+    ".ppt", ".pptx",
+    ".hwp", ".hwpx",
+}
+
+DEFAULT_ALLOWED_CONTENT_TYPES = {
+    "application/pdf",
+    "image/jpeg",
+    "image/png",
+    "image/gif",
+    "image/webp",
+    "text/plain",
+    "text/csv",
+    "application/csv",
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.ms-powerpoint",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "application/x-hwp",
+    "application/haansofthwp",
+    "application/vnd.hancom.hwp",
+    "application/vnd.hancom.hwpx",
+}
+
+def _as_lower_set(values, *, default: set[str]) -> set[str]:
+    raw = values if values is not None else default
+    return {str(v or "").strip().lower() for v in raw if str(v or "").strip()}
+
+def _upload_limit_bytes() -> int:
+    value = getattr(settings, "BOARD_ATTACHMENT_MAX_UPLOAD_SIZE", DEFAULT_MAX_UPLOAD_SIZE)
+    try:
+        n = int(value)
+    except Exception:
+        n = DEFAULT_MAX_UPLOAD_SIZE
+    return max(1, n)
+
+
+def validate_board_attachment(uploaded_file) -> None:
+    """
+    Board 첨부파일 서버단 검증
+    """
+    name = os.path.basename(str(getattr(uploaded_file, "name", "") or "")).strip()
+    size = int(getattr(uploaded_file, "size", 0) or 0)
+    content_type = str(getattr(uploaded_file, "content_type", "") or "").split(";")[0].strip().lower()
+
+    if not name:
+        raise ValidationError("파일명이 없습니다.")
+
+    if size <= 0:
+        raise ValidationError(f"{name}: 빈 파일입니다.")
+
+    max_size = _upload_limit_bytes()
+    if size > max_size:
+        mb = max_size / (1024 * 1024)
+        raise ValidationError(f"{name}: 파일은 개당 최대 {mb:.0f}MB까지 업로드할 수 있습니다.")
+
+    _, ext = os.path.splitext(name)
+    ext = ext.lower()
+
+    allowed_exts = _as_lower_set(
+        getattr(settings, "BOARD_ATTACHMENT_ALLOWED_EXTENSIONS", None),
+        default=DEFAULT_ALLOWED_EXTENSIONS,
+    )
+
+    if ext not in allowed_exts:
+        raise ValidationError(f"{name}: 허용되지 않는 파일 확장자입니다.")
+
+    allowed_types = _as_lower_set(
+        getattr(settings, "BOARD_ATTACHMENT_ALLOWED_CONTENT_TYPES", None),
+        default=DEFAULT_ALLOWED_CONTENT_TYPES,
+    )
+
+    guessed_type = (mimetypes.guess_type(name)[0] or "").lower()
+    effective_type = content_type or guessed_type
+
+    if effective_type and effective_type not in allowed_types:
+        raise ValidationError(f"{name}: 허용되지 않는 파일 형식입니다.")
+
+
+# -----------------------------
 # Public API
 # -----------------------------
 def save_attachments(*, files: Iterable, create_func: Callable[..., Any]) -> None:
@@ -112,6 +206,7 @@ def save_attachments(*, files: Iterable, create_func: Callable[..., Any]) -> Non
     ✅ create_func: Attachment/TaskAttachment objects.create 래퍼
     """
     for f in files:
+        validate_board_attachment(f)
         create_func(
             file=f,
             original_name=getattr(f, "name", "") or "",

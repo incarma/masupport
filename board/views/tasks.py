@@ -11,6 +11,7 @@ import logging
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Count
 from django.http import HttpRequest, HttpResponse, JsonResponse
@@ -322,17 +323,29 @@ def task_create(request: HttpRequest) -> HttpResponse:
         form = TaskForm(request.POST, request.FILES)
         if form.is_valid():
             files = request.FILES.getlist("attachments")
-            with transaction.atomic():
-                task = form.save(commit=False)
-                task.user_id = _user_storage_key(request.user)
-                task.user_name = getattr(request.user, "name", "") or ""
-                task.user_branch = getattr(request.user, "branch", "") or ""
-                task.save()
+            try:
+                with transaction.atomic():
+                    task = form.save(commit=False)
+                    task.user_id = _user_storage_key(request.user)
+                    task.user_name = getattr(request.user, "name", "") or ""
+                    task.user_branch = getattr(request.user, "branch", "") or ""
+                    task.save()
 
-                def _create(**kwargs):
-                    return TaskAttachment.objects.create(task=task, **kwargs)
+                    def _create(**kwargs):
+                        return TaskAttachment.objects.create(task=task, **kwargs)
 
-                save_attachments(files=files, create_func=_create)
+                    save_attachments(files=files, create_func=_create)
+            except ValidationError as exc:
+                _log_task_action(
+                    request,
+                    _safe_action("BOARD_TASK_CREATE", "board_task_create"),
+                    task=None,
+                    success=False,
+                    reason="attachment_validation_failed",
+                    meta={"errors": exc.messages, "attachment_count": _attachment_upload_count(files)},
+                )
+                messages.error(request, "첨부파일을 확인해주세요. " + " ".join(exc.messages))
+                return render(request, "board/task_create.html", {"form": form})
 
             _log_task_action(
                 request,
@@ -385,26 +398,43 @@ def task_edit(request: HttpRequest, pk: int) -> HttpResponse:
         if form.is_valid():
             delete_ids = _safe_int_ids(request.POST.getlist("delete_files"))
             files = request.FILES.getlist("attachments")
-            with transaction.atomic():
-                # 편집 시에도 user_id 저장 규칙을 post와 동일하게 유지(혼재 방지)
-                task = form.save(commit=False)
-                user_key = (
-                    getattr(request.user, "emp_id", None)
-                    or getattr(request.user, "user_id", None)
-                    or request.user.id
+            try:
+                with transaction.atomic():
+                    # 편집 시에도 user_id 저장 규칙을 post와 동일하게 유지(혼재 방지)
+                    task = form.save(commit=False)
+                    user_key = (
+                        getattr(request.user, "emp_id", None)
+                        or getattr(request.user, "user_id", None)
+                        or request.user.id
+                    )
+                    task.user_id = task.user_id or str(user_key)
+                    task.user_name = task.user_name or (getattr(request.user, "name", "") or "")
+                    task.user_branch = task.user_branch or (getattr(request.user, "branch", "") or "")
+                    task.save()
+
+                    if delete_ids:
+                        TaskAttachment.objects.filter(id__in=delete_ids, task=task).delete()
+
+                    def _create(**kwargs):
+                        return TaskAttachment.objects.create(task=task, **kwargs)
+
+                    save_attachments(files=files, create_func=_create)
+            except ValidationError as exc:
+                _log_task_action(
+                    request,
+                    _safe_action("BOARD_TASK_UPDATE", "board_task_update"),
+                    task=task,
+                    success=False,
+                    reason="attachment_validation_failed",
+                    meta=_task_meta(task, extra={"errors": exc.messages, "new_attachment_count": _attachment_upload_count(files)}),
                 )
-                task.user_id = task.user_id or str(user_key)
-                task.user_name = task.user_name or (getattr(request.user, "name", "") or "")
-                task.user_branch = task.user_branch or (getattr(request.user, "branch", "") or "")
-                task.save()
-
-                if delete_ids:
-                    TaskAttachment.objects.filter(id__in=delete_ids, task=task).delete()
-
-                def _create(**kwargs):
-                    return TaskAttachment.objects.create(task=task, **kwargs)
-
-                save_attachments(files=files, create_func=_create)
+                messages.error(request, "첨부파일을 확인해주세요. " + " ".join(exc.messages))
+                return render(request, "board/task_edit.html", {
+                    "form": form,
+                    "task": task,
+                    "attachments": task.attachments.all(),
+                    "attachment_download_name": TASK_ATTACHMENT_DOWNLOAD,
+                })
 
             _log_task_action(
                 request,

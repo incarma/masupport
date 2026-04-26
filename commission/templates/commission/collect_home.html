@@ -457,7 +457,7 @@
   8) 스크립트 로드 순서
   Commission 공용 유틸 → collect_home.js(module) → excel_upload.js
 ========================================================== -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="{% static 'vendor/xlsx/0.18.5/xlsx.full.min.js' %}"></script>
 <script src="{% static 'js/commission/_dom.js' %}{% if STATIC_VERSION %}?v={{ STATIC_VERSION }}{% endif %}"></script>
 <script src="{% static 'js/commission/_format.js' %}{% if STATIC_VERSION %}?v={{ STATIC_VERSION }}{% endif %}"></script>
 <script src="{% static 'js/commission/_net_json.js' %}{% if STATIC_VERSION %}?v={{ STATIC_VERSION }}{% endif %}"></script>

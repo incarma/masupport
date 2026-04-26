@@ -39,14 +39,16 @@
     <div class="industry-action-group">
       <button type="button" class="btn btn-sm btn-outline-secondary js-bookmark-btn">북마크</button>
       <button type="button" class="btn btn-sm btn-outline-danger js-hide-btn">관심없음</button>
-      <a
-        href="{{ article.display_url }}"
-        target="_blank"
-        rel="noopener noreferrer"
-        class="btn btn-sm btn-primary js-origin-link"
-      >
-        원문보기
-      </a>
+      {% if article.safe_display_url %}
+        <a
+          href="{{ article.safe_display_url }}" 
+          target="_blank"
+          rel="noopener noreferrer"
+          class="btn btn-sm btn-primary js-origin-link"
+        >
+          원문보기
+        </a>
+      {% endif %}
     </div>
   </div>
 </div>

@@ -6,6 +6,7 @@ import json
 import logging
 
 from django.contrib.auth.decorators import login_required
+from django.conf import settings
 from django.core.paginator import Paginator
 from django.http import JsonResponse, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, render
@@ -21,6 +22,8 @@ from board.services.industry_recommend import (
     get_major_articles,
     get_recommended_articles_for_user,
 )
+from board.services.industry_news import normalize_external_url
+from board.services.rate_limit import check_rate_limit, rate_limited_json
 
 
 logger = logging.getLogger(__name__)
@@ -57,6 +60,24 @@ def _get_per_page(request: HttpRequest) -> int:
     return val if val in INDUSTRY_PER_PAGE_CHOICES else INDUSTRY_PER_PAGE_DEFAULT
 
 
+def _attach_safe_display_url(articles) -> list:
+    """
+    기존 DB에 이미 저장된 비정상 URL까지 화면 출력 단계에서 차단한다.
+    - 수집 단계 검증은 신규 데이터 방어
+    - 이 함수는 과거 데이터/수동 입력/DB 오염 방어
+    """
+    out = list(articles or [])
+    for article in out:
+        raw = (
+            getattr(article, "display_url", "")
+            or getattr(article, "original_url", "")
+            or getattr(article, "portal_url", "")
+            or ""
+        )
+        article.safe_display_url = normalize_external_url(raw)
+    return out
+
+
 # =========================================================
 # Page View — 메인
 # =========================================================
@@ -76,7 +97,7 @@ def industry_info(request: HttpRequest) -> HttpResponse:
     # 페이지네이션
     paginator = Paginator(latest_qs, per_page)
     page_obj = paginator.get_page(request.GET.get("page"))
-    latest_articles = list(page_obj)
+    latest_articles = _attach_safe_display_url(page_obj)
 
     try:
         recommended_articles = get_recommended_articles_for_user(
@@ -87,6 +108,8 @@ def industry_info(request: HttpRequest) -> HttpResponse:
     except Exception:
         logger.exception("industry_info recommendation failed; fallback to major articles")
         recommended_articles = get_major_articles(limit=6, topic=topic)
+
+    recommended_articles = _attach_safe_display_url(recommended_articles)
 
     article_ids = [a.id for a in (latest_articles + recommended_articles)]
     pref_map = {
@@ -146,7 +169,7 @@ def industry_bookmarks(request: HttpRequest) -> HttpResponse:
     # 페이지네이션
     paginator = Paginator(latest_qs, per_page)
     page_obj = paginator.get_page(request.GET.get("page"))
-    latest_articles = list(page_obj)
+    latest_articles = _attach_safe_display_url(page_obj)
 
     bookmark_count = IndustryUserPreference.objects.filter(
         user=request.user,
@@ -184,6 +207,14 @@ def industry_bookmarks(request: HttpRequest) -> HttpResponse:
 @login_required
 @require_POST
 def industry_save_preference(request: HttpRequest, article_id: int) -> JsonResponse:
+    rl = check_rate_limit(
+        request,
+        scope="industry:preference",
+        rule=getattr(settings, "BOARD_INDUSTRY_PREF_RATE_LIMIT", "30/60"),
+    )
+    if not rl.allowed:
+        return rate_limited_json(rl)
+    
     article = get_object_or_404(
         IndustryArticle,
         pk=article_id,
@@ -267,6 +298,14 @@ def industry_save_preference(request: HttpRequest, article_id: int) -> JsonRespo
 @login_required
 @require_POST
 def industry_mark_click(request: HttpRequest, article_id: int) -> JsonResponse:
+    rl = check_rate_limit(
+        request,
+        scope="industry:click",
+        rule=getattr(settings, "BOARD_INDUSTRY_CLICK_RATE_LIMIT", "60/60"),
+    )
+    if not rl.allowed:
+        return rate_limited_json(rl)
+
     article = get_object_or_404(
         IndustryArticle,
         pk=article_id,
