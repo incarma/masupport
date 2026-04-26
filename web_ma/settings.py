@@ -162,6 +162,7 @@ INSTALLED_APPS = [
 # =============================================================================
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     # ✅ 운영 보안 헤더 SSOT 보강(CSP/Referrer/Permissions 등)
     "web_ma.middleware.SecurityHeadersMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",

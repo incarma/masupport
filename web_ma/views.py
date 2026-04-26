@@ -1,13 +1,20 @@
 # django_ma/web_ma/views.py
 import logging
-from django.http import HttpResponseServerError
+from django.http import HttpResponse, HttpResponseServerError
 from django.shortcuts import render, redirect
 from django.urls import reverse
 from django.views.decorators.csrf import requires_csrf_token
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.cache import never_cache
 
+
 logger = logging.getLogger(__name__)
+
+
+@never_cache
+def healthz(request):
+    return HttpResponse("ok\n", content_type="text/plain")
+
 
 @requires_csrf_token
 def handler500(request):

@@ -13,7 +13,7 @@ from django.shortcuts import redirect
 from accounts import views as accounts_views
 from accounts.custom_admin import custom_admin_site
 from accounts.views import SessionCloseLoginView
-from web_ma.views import landing_view
+from web_ma.views import healthz, landing_view
 
 import web_ma.views as web_views
 
@@ -24,6 +24,11 @@ handler500 = "web_ma.views.handler500"
 
 
 urlpatterns = [
+    # ---------------------------------------------------------------------
+    # Healthcheck
+    # ---------------------------------------------------------------------
+    path("healthz", healthz, name="healthz"),
+
     # ---------------------------------------------------------------------
     # Auth
     # ---------------------------------------------------------------------
