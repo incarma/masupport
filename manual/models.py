@@ -142,6 +142,11 @@ class ManualBlock(models.Model):
         if self.image:
             self.image.delete(save=False)
         return super().delete(using=using, keep_parents=keep_parents)
+    
+    def save(self, *args, **kwargs):
+        from manual.utils.sanitize import sanitize_quill_html
+        self.content = sanitize_quill_html(self.content)
+        super().save(*args, **kwargs)
 
 
 # =============================================================================

@@ -176,7 +176,7 @@ def manual_edit(request, pk):
         form = ManualForm(request.POST, request.FILES, instance=manual)
         if form.is_valid():
             manual = form.save()
-            return redirect("manual_detail", pk=manual.pk)
+            return redirect("join:manual_detail", pk=manual.pk)
     else:
         form = ManualForm(instance=manual)
     return render(request, "manual/manual_form.html", {"form": form, "mode": "edit", "manual": manual})

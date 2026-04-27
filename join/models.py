@@ -1,6 +1,5 @@
-# django_ma/manual/models.py
+# django_ma/join/models.py
 from django.db import models
-from ckeditor_uploader.fields import RichTextUploadingField
 
 class JoinInfo(models.Model):
     name = models.CharField(max_length=50)
@@ -23,7 +22,7 @@ class JoinInfo(models.Model):
 
 class Manual(models.Model):
     title = models.CharField("제목", max_length=200)
-    content = RichTextUploadingField("내용")  # 이미지 업로드 포함 에디터 필드
+    content = models.TextField("내용")  # 이미지 업로드 포함 에디터 필드
     is_published = models.BooleanField("공개", default=True)
 
     created_at = models.DateTimeField("작성일", auto_now_add=True)
