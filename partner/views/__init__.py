@@ -82,3 +82,12 @@ from .subadmin import (
     ajax_add_sub_admin,
     ajax_delete_subadmin,
 )
+
+from partner.views.esign import (
+    esign_confirm_page,
+    esign_fetch,
+    esign_save,
+    esign_sign,
+    esign_pdf_download,
+    esign_delete_group,
+)

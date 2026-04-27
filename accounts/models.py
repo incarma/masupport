@@ -155,6 +155,17 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
 
     def __str__(self) -> str:
         return f"{self.id} ({self.name})"
+    
+    # -------------------------------------------------------------------------
+    # Phase: 전자서명 도입 — PASS 본인인증 (Phase 2 연동 전 stub)
+    # -------------------------------------------------------------------------
+    # ⚠️ Phase 2(NICE API) 연동 전까지 서명 뷰에서 세션 확인만으로 통과
+    # ⚠️ ci_hash: CI 원본이 아닌 SHA-256 해시값만 저장 (개인정보 최소화)
+    # ⚠️ 전화번호·CI 원본·주민번호는 절대 저장하지 않는다
+    pass_verified        = models.BooleanField(default=False)
+    pass_verified_at     = models.DateTimeField(blank=True, null=True)
+    pass_verified_ip     = models.GenericIPAddressField(blank=True, null=True)
+    ci_hash              = models.CharField(max_length=64, blank=True, default='')
 
     class Meta:
         verbose_name = "user"

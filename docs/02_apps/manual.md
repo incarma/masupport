@@ -1,76 +1,65 @@
-# manual 앱 기준 문서 (최종 리팩토링)
+# django_ma Manual App 운영 지침서 (FINAL)
 
 ## 1. 개요
 
-manual 앱은 내부 매뉴얼 CMS로 다음 구조를 가짐: - Manual → Section →
-Block → Attachment
+-   목적: 매뉴얼(Manual/Section/Block/Attachment) 관리
+-   권한: superuser 중심 편집, 일반 사용자는 조회
+-   보안: 파일 직접 URL 금지, 반드시 View 경유 다운로드
 
-------------------------------------------------------------------------
+## 2. 데이터 구조
 
-## 2. 보안 기준 (강화)
+-   Manual
+-   ManualSection (sort_order)
+-   ManualBlock (content, image, sort_order)
+-   ManualBlockAttachment (file, original_name, size)
 
-### 2.1 파일 접근
+## 3. 핵심 보안 정책
 
--   .url 직접 사용 금지
--   반드시 다운로드 view 경유
+-   /media 직접 접근 차단 (NGINX 403)
+-   다운로드는 View + 권한검증 + FileResponse
+-   업로드: 확장자/MIME/용량 검증
+-   HTML: sanitize_quill_html 적용
+-   Audit: 모든 주요 액션 log_action 기록
 
-### 2.2 업로드 정책
+## 4. 주요 API
 
--   확장자 화이트리스트
--   MIME 검증
--   size 제한
+-   manual_section_add/update/delete/reorder
+-   manual_block create/update/delete/reorder/move
+-   manual_block_attachment upload/delete/download
+-   manual_block_image (inline)
 
-### 2.3 XSS 방어
+## 5. 프론트 구조
 
--   Quill HTML sanitize
--   unsafe script 제거
+-   Boot: #manualDetailBoot dataset
+-   JS: manual_detail_block/\*
+-   공통: ManualShared (fetch/csrf/utils)
+-   Sortable: section/block drag
 
-### 2.4 권한 정책
+## 6. 파일 처리
 
--   ensure_superuser_or_403
--   manual_accessible_or_denied
+-   attachment_download → RFC5987 filename
+-   image → inline + cache-control
 
-------------------------------------------------------------------------
+## 7. 운영 커맨드
 
-## 3. JSON 규약
+-   sanitize_manual_blocks \[--apply\]
+-   cleanup_manual_files \[--apply --delete-missing-attachments\]
 
-성공: { "ok": true }
+## 8. Audit 정책
 
-실패: { "ok": false, "message": "..." }
+-   action / user / object / meta 최소화 저장
+-   meta는 mask 처리
 
-------------------------------------------------------------------------
+## 9. 배포 체크
 
-## 4. JS 구조
+-   collectstatic
+-   nginx /media 차단
+-   static 캐시 정책 확인
 
--   dataset 기반 boot
--   중복 바인딩 방지
--   BFCache 대응
+## 10. 상태
 
-------------------------------------------------------------------------
+-   보안 패치 완료
+-   sanitize/cleanup 정상
+-   audit 구조 완료
 
-## 5. 트랜잭션
-
--   reorder / move atomic 필수
-
-------------------------------------------------------------------------
-
-## 6. 감사 로그
-
--   첨부 다운로드
--   매뉴얼 CRUD
-
-------------------------------------------------------------------------
-
-## 7. 운영 체크리스트
-
--   파일 직접 접근 차단
--   업로드 검증 적용
--   XSS 방어 적용
--   권한 검증 완료
-
-------------------------------------------------------------------------
-
-## 결론
-
-manual 앱은 단순 UI가 아닌\
-보안 중심 CMS 구조로 운영해야 한다.
+작성일: 2026-04-27
