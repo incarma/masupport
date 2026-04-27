@@ -207,8 +207,11 @@
        - include 중복 제거
   ========================================================== -->
   {% if user.is_authenticated and user.grade == "superuser" %}
+    {% include "manual/_partials/create_manual_modal.html" %}
     {% include "manual/_partials/manual_detail_superuser_assets.html" %}
     <script src="{% static 'vendor/sortablejs/1.15.2/Sortable.min.js' %}"></script>
+    <script src="{% static 'js/manual/_shared.js' %}"></script>
+    <script src="{% static 'js/manual/create_manual_modal.js' %}?v=20260427_01"></script>
     <script type="module" src="{% static 'js/manual/manual_detail_block/index.js' %}?v=20260427_01"></script>
     <script src="{% static 'js/manual/manual_detail_section_sort.js' %}?v=20260126_01"></script>
   {% endif %}
