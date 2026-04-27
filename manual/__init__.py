@@ -1,0 +1,1 @@
+# django_ma/manual/__init__.py

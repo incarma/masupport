@@ -240,8 +240,16 @@ export function createSectionSubnavManager({
    * ========================================================================= */
   function bindAddSectionButton({ buildSectionElement }) {
     btnAddSection?.addEventListener("click", async () => {
-      const manualId = toStr(btnAddSection.dataset.manualId);
-      const url = toStr(btnAddSection.dataset.sectionAddUrl);
+      const manualId = toStr(
+        btnAddSection.dataset.manualId ||
+        sectionsEl?.dataset?.manualId ||
+        ""
+      );
+      const url = toStr(
+        btnAddSection.dataset.sectionAddUrl ||
+        sectionsEl?.dataset?.sectionAddUrl ||
+        ""
+      );
 
       if (!isDigits(manualId)) return alert("manual_id가 올바르지 않습니다.");
       if (!url) return alert("section_add_url이 없습니다. (data-section-add-url 확인)");

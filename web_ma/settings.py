@@ -151,8 +151,6 @@ INSTALLED_APPS = [
     # 3rd party
     "widget_tweaks",
     "django_extensions",
-    "ckeditor",
-    "ckeditor_uploader",
     "audit.apps.AuditConfig",
 ]
 
@@ -478,18 +476,12 @@ BOARD_STATES_PDF_RATE_LIMIT = config(
 )
 
 # =============================================================================
-# 12) CKEditor
-# =============================================================================
-CKEDITOR_UPLOAD_PATH = "uploads/"
-CKEDITOR_CONFIGS = {"default": {"toolbar": "full", "height": 420, "width": "100%"}}
-
-# =============================================================================
-# 13) Default PK
+# 12) Default PK
 # =============================================================================
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # =============================================================================
-# 14) Logging (✅ 500 Traceback 확보 / 운영에서도 누락 방지)
+# 13) Logging (✅ 500 Traceback 확보 / 운영에서도 누락 방지)
 # -----------------------------------------------------------------------------
 # 핵심 포인트:
 # - django.request: 500 및 에러 traceback의 표준 로거 (반드시 ERROR 핸들러 지정)

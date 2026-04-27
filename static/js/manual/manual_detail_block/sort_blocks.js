@@ -33,6 +33,25 @@ export function initBlockSortable({ S, rootEl, bootEl, csrfToken }) {
       .map(Number);
   };
 
+  const getBlockIdsAsStrings = (blocksEl) => {
+    return Array.from(blocksEl.querySelectorAll(".manual-block"))
+      .map((el) => toStr(el.dataset.blockId))
+      .filter(isDigits);
+  };
+
+  function restoreBlockOrder(blocksEl, idsAsStrings) {
+    const nodeById = new Map();
+    blocksEl.querySelectorAll(".manual-block").forEach((el) => {
+      const bid = toStr(el.dataset.blockId);
+      if (isDigits(bid)) nodeById.set(String(bid), el);
+    });
+
+    idsAsStrings.forEach((id) => {
+      const el = nodeById.get(String(id));
+      if (el) blocksEl.appendChild(el);
+    });
+  }
+
   async function saveReorder(sectionId, blocksEl) {
     await postJson(reorderUrl, { section_id: Number(sectionId), block_ids: getBlockIds(blocksEl) }, csrfToken);
   }
@@ -76,6 +95,13 @@ export function initBlockSortable({ S, rootEl, bootEl, csrfToken }) {
         ? { name: "manualBlocks", pull: true, put: true }
         : { name: "manualBlocks", pull: false, put: false },
 
+      onStart: (evt) => {
+        const fromEl = evt.from;
+        if (fromEl) {
+          fromEl.dataset.prevOrder = JSON.stringify(getBlockIdsAsStrings(fromEl));
+        }
+      },
+
       onEnd: async (evt) => {
         const fromEl = evt.from;
         const toEl = evt.to;
@@ -102,8 +128,15 @@ export function initBlockSortable({ S, rootEl, bootEl, csrfToken }) {
           console.error(e);
           alert(e?.message || "블록 순서 저장 중 오류가 발생했습니다.");
 
-          // 실패 시: 가장 안전한 복구는 페이지 리로드 (데이터 꼬임 방지)
-          // 원복까지 완벽하게 하려면 스냅샷/restore 로직 추가 가능
+          try {
+            const prevOrder = JSON.parse(fromEl.dataset.prevOrder || "[]");
+            if (fromSectionId === toSectionId && prevOrder.length) {
+              restoreBlockOrder(fromEl, prevOrder);
+              return;
+            }
+          } catch (_) {}
+
+          // 섹션 간 이동 실패는 양쪽 컨테이너 원복이 복잡하므로 리로드가 가장 안전
           window.location.reload();
         }
       },

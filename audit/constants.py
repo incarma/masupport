@@ -34,11 +34,25 @@ class ACTION:
     # Manual
     MANUAL_CREATE = "manual.manual.create"
     MANUAL_UPDATE = "manual.manual.update"
+    MANUAL_BULK_UPDATE = "manual.manual.bulk_update"
+    MANUAL_REORDER = "manual.manual.reorder"
     MANUAL_DELETE = "manual.manual.delete"
+    MANUAL_ATTACHMENT_UPLOAD = "manual.attachment.upload"
+    MANUAL_ATTACHMENT_DELETE = "manual.attachment.delete"
     MANUAL_ATTACHMENT_DOWNLOAD = "manual.attachment.download"
     MANUAL_BLOCK_CREATE = "manual.block.create"
     MANUAL_BLOCK_UPDATE = "manual.block.update"
     MANUAL_BLOCK_DELETE = "manual.block.delete"
+    
+    # Manual / Section
+    MANUAL_SECTION_CREATE = "manual.section.create"
+    MANUAL_SECTION_UPDATE = "manual.section.update"
+    MANUAL_SECTION_DELETE = "manual.section.delete"
+    MANUAL_SECTION_REORDER = "manual.section.reorder"
+
+    # Manual / Block order
+    MANUAL_BLOCK_REORDER = "manual.block.reorder"
+    MANUAL_BLOCK_MOVE = "manual.block.move"
 
     # Partner
     PARTNER_RATE_SAVE = "partner.rate.save"

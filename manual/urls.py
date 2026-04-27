@@ -53,4 +53,10 @@ urlpatterns = [
     # ---------------------------------------------------------------------
     path("ajax/block-attachment/upload/", views.manual_block_attachment_upload_ajax, name="manual_block_attachment_upload_ajax"),
     path("ajax/block-attachment/delete/", views.manual_block_attachment_delete_ajax, name="manual_block_attachment_delete_ajax"),
+
+    # ---------------------------------------------------------------------
+    # Protected Files
+    # ---------------------------------------------------------------------
+    path("attachments/<int:attachment_id>/download/", views.manual_attachment_download, name="manual_attachment_download"),
+    path("blocks/<int:block_id>/image/", views.manual_block_image, name="manual_block_image"),
 ]

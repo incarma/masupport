@@ -4,19 +4,12 @@ URL configuration for web_ma project.
 
 # django_ma/web_ma/urls.py
 
-from django.conf import settings
-from django.conf.urls.static import static
 from django.contrib.auth import views as auth_views
-from django.urls import include, path, re_path
-from django.shortcuts import redirect
+from django.urls import include, path
 
-from accounts import views as accounts_views
 from accounts.custom_admin import custom_admin_site
 from accounts.views import SessionCloseLoginView
 from web_ma.views import healthz, landing_view
-
-import web_ma.views as web_views
-
 
 
 # ✅ 500 에러 핸들러(운영에서 traceback 강제 로깅용)
@@ -59,7 +52,6 @@ urlpatterns = [
     path("dash/", include("dash.urls")),
     path("partner/", include(("partner.urls", "partner"), namespace="partner")),
     path("manual/", include("manual.urls")),
-    path("ckeditor/", include("ckeditor_uploader.urls")),
 
     # ---------------------------------------------------------------------
     # Accounts APIs
@@ -75,7 +67,6 @@ urlpatterns = [
 ]
 
 
-# DEBUG일 때는 Django가 MEDIA_URL도 보조 서빙
-# 운영에서는 객체 단위 권한 검증이 가능한 앱별 다운로드 view만 사용한다.
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+# /media/ 직접 서빙 금지.
+# 파일 접근은 반드시 앱별 보호 view에서 권한 검증 후 FileResponse로 제공한다.
+# DEBUG에서도 동일 원칙을 유지하여 운영/개발 동작 차이를 줄인다.

@@ -65,6 +65,7 @@
            class="mt-3"
            data-manual-id="{{ m.id }}"
            {% if user.is_authenticated and user.grade == "superuser" %}
+           data-section-add-url="{% url 'manual:manual_section_add_ajax' %}"
            data-section-reorder-url="{% url 'manual:manual_section_reorder_ajax' %}"
            {% endif %}>
 
@@ -109,12 +110,12 @@
               {% for b in sec.blocks.all %}
                 <div class="border rounded-3 p-3 mb-3 manual-block"
                      data-block-id="{{ b.id }}"
-                     data-image-url="{% if b.image %}{{ b.image.url }}{% endif %}">
+                     data-image-url="{% if b.image %}{% url 'manual:manual_block_image' b.id %}{% endif %}">
 
                   <div class="manual-block-grid">
                     <div class="manual-block-media">
                       {% if b.image %}
-                        <img src="{{ b.image.url }}"
+                        <img src="{% url 'manual:manual_block_image' b.id %}"
                              class="manual-block-thumb jsManualImg"
                              alt="manual image">
                       {% else %}
@@ -208,7 +209,7 @@
   {% if user.is_authenticated and user.grade == "superuser" %}
     {% include "manual/_partials/manual_detail_superuser_assets.html" %}
     <script src="{% static 'vendor/sortablejs/1.15.2/Sortable.min.js' %}"></script>
-    <script type="module" src="{% static 'js/manual/manual_detail_block/index.js' %}?v=20260126_02"></script>
+    <script type="module" src="{% static 'js/manual/manual_detail_block/index.js' %}?v=20260427_01"></script>
     <script src="{% static 'js/manual/manual_detail_section_sort.js' %}?v=20260126_01"></script>
   {% endif %}
 

@@ -52,6 +52,8 @@ from .block import (
 from .attachment import (
     manual_block_attachment_upload_ajax,
     manual_block_attachment_delete_ajax,
+    manual_attachment_download,
+    manual_block_image,
 )
 
 # ---------------------------------------------------------------------
@@ -90,4 +92,6 @@ __all__ = [
     # Block Attachment AJAX
     "manual_block_attachment_upload_ajax",
     "manual_block_attachment_delete_ajax",
+    "manual_attachment_download",
+    "manual_block_image",
 ]
