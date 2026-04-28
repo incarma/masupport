@@ -1,13 +1,25 @@
 // static/js/partner/esign_confirm/save.js
 // 내용 입력 테이블 행 관리 + 저장 API 호출
-// Playbook: search_user_modal SSOT 경유, 10행 제한 서버/클라이언트 동시 검증
+//
+// search_user_modal.js 연동 방식:
+//   - 버튼: class="btnOpenSearch" + data-bs-toggle/target → 모달 오픈 + activeRow 추적
+//   - 선택 후 "userSelected" 커스텀 이벤트 발행 (document / window)
+//   - save.js가 이벤트를 수신하여 _lastClickedRole("deduct"|"pay") 기준으로
+//     올바른 셀(data-role)의 name/id 필드에 직접 기입
+//   - autofillSelectedUser()의 tg_name/tg_id 자동채움은 의도적으로 무시
+//     (같은 tr 내에 tg_name이 2개라 항상 첫 번째 셀에 적용되는 문제 회피)
 
 "use strict";
 
 window.EsignSave = (function () {
   const MAX_ROWS = 10;
 
-  // ── CSRF 헬퍼 (ES Module 미사용 — 쿠키 직접 읽기) ───────────
+  // ── 상태: 마지막으로 클릭된 검색 버튼의 역할 ─────────────────
+  // "deduct" | "pay" | null
+  let _lastClickedRole = null;
+  let _lastClickedRow  = null;
+
+  // ── CSRF 헬퍼 ────────────────────────────────────────────────
   function getCsrf() {
     return (
       document.cookie.match(/csrftoken=([^;]+)/)?.[1] ||
@@ -24,8 +36,7 @@ window.EsignSave = (function () {
       const d  = new Date(now.getFullYear(), now.getMonth() + i, 1);
       const yy = d.getFullYear();
       const mm = String(d.getMonth() + 1).padStart(2, "0");
-      const val = `${yy}-${mm}`;
-      opts.push(`<option value="${val}">${val}</option>`);
+      opts.push(`<option value="${yy}-${mm}">${yy}-${mm}</option>`);
     }
     return opts.join("");
   }
@@ -34,16 +45,30 @@ window.EsignSave = (function () {
   // ── 카테고리 옵션 ────────────────────────────────────────────
   const CAT_OPTIONS = `
     <option value="">구분 선택</option>
-    <option value="지급">지급</option>
-    <option value="공제">공제</option>
-    <option value="기타">기타</option>`;
+    <option value="지점관리">지점관리</option>
+    <option value="지점시상">지점시상</option>
+    <option value="상위차감">상위차감</option>`;
+
+  // ── XSS 방어 ─────────────────────────────────────────────────
+  function _esc(s) {
+    return String(s ?? "")
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
 
   // ── 행 HTML 생성 ─────────────────────────────────────────────
+  // ⚠️ 공제자/지급자 셀 모두 name="tg_name"/name="tg_id" 사용
+  //    (search_user_modal.js activeRow 추적용 — 실제 값은 userSelected 이벤트로 채움)
+  // ⚠️ 실제 저장값: data-ded-name / data-ded-id / data-pay-name / data-pay-id (tr에 저장)
   function buildRowHtml(branch) {
     return `
-      <tr>
-        <td><input type="text" class="form-control form-control-sm" name="branch_display"
-                   value="${branch}" readonly tabindex="-1"></td>
+      <tr class="input-row"
+          data-ded-name="" data-ded-id=""
+          data-pay-name="" data-pay-id="">
+        <td>
+          <input type="text" class="form-control form-control-sm"
+                 name="branch_display" value="${_esc(branch)}" readonly tabindex="-1">
+        </td>
         <td>
           <select name="start_ym" class="form-select form-select-sm">${YM_OPTIONS}</select>
         </td>
@@ -54,28 +79,41 @@ window.EsignSave = (function () {
           <select name="category" class="form-select form-select-sm">${CAT_OPTIONS}</select>
         </td>
         <td>
-          <input type="text" class="form-control form-control-sm text-end" name="amount"
-                 placeholder="0" inputmode="numeric">
+          <input type="text" class="form-control form-control-sm text-end"
+                 name="amount" placeholder="0" inputmode="numeric">
         </td>
-        <td>
+
+        <!-- 공제자 셀 -->
+        <td data-role="deduct">
           <div class="input-group input-group-sm">
-            <input type="text" class="form-control" name="ded_name" placeholder="성명" readonly>
-            <input type="hidden" name="ded_id">
-            <button type="button" class="btn btn-outline-secondary btn-sm js-search-user-btn"
-                    data-role="deduct" tabindex="-1">검색</button>
+            <input type="text" class="form-control esign-display-name"
+                   placeholder="성명" readonly tabindex="-1">
+            <input type="hidden" class="esign-hidden-id">
+            <button type="button"
+                    class="btn btn-outline-secondary btn-sm btnOpenSearch"
+                    data-role="deduct"
+                    data-bs-toggle="modal"
+                    data-bs-target="#searchUserModal">검색</button>
           </div>
         </td>
-        <td>
+
+        <!-- 지급자 셀 -->
+        <td data-role="pay">
           <div class="input-group input-group-sm">
-            <input type="text" class="form-control" name="pay_name" placeholder="성명" readonly>
-            <input type="hidden" name="pay_id">
-            <button type="button" class="btn btn-outline-secondary btn-sm js-search-user-btn"
-                    data-role="pay" tabindex="-1">검색</button>
+            <input type="text" class="form-control esign-display-name"
+                   placeholder="성명" readonly tabindex="-1">
+            <input type="hidden" class="esign-hidden-id">
+            <button type="button"
+                    class="btn btn-outline-secondary btn-sm btnOpenSearch"
+                    data-role="pay"
+                    data-bs-toggle="modal"
+                    data-bs-target="#searchUserModal">검색</button>
           </div>
         </td>
+
         <td>
-          <input type="text" class="form-control form-control-sm" name="content"
-                 placeholder="최대 80자" maxlength="80">
+          <input type="text" class="form-control form-control-sm"
+                 name="content" placeholder="최대 80자" maxlength="80">
         </td>
         <td class="text-center">
           <button type="button" class="btn btn-outline-danger btn-sm js-del-row">✕</button>
@@ -83,10 +121,61 @@ window.EsignSave = (function () {
       </tr>`;
   }
 
+  // ── 검색 버튼 클릭 추적 (capture) ────────────────────────────
+  // btnOpenSearch 클릭 시 어느 셀(공제/지급)의 버튼인지 기억
+  function handleSearchBtnCapture(e) {
+    const btn = e.target.closest(".btnOpenSearch");
+    if (!btn) return;
+
+    const tbody = window.EsignDom?.inputTbody?.();
+    if (!tbody || !tbody.contains(btn)) return; // inputTable 내부 버튼만 처리
+
+    _lastClickedRole = btn.dataset.role || null; // "deduct" | "pay"
+    _lastClickedRow  = btn.closest("tr.input-row") || null;
+  }
+
+  // ── userSelected 이벤트 수신 → 올바른 셀에 적용 ─────────────
+  function handleUserSelected(e) {
+    const selected = e.detail;
+    if (!selected || !_lastClickedRow || !_lastClickedRole) return;
+
+    // document에 아직 존재하는 행인지 확인
+    if (!document.contains(_lastClickedRow)) {
+      _lastClickedRow = null;
+      _lastClickedRole = null;
+      return;
+    }
+
+    const name = (selected.name || "").trim();
+    const id   = (selected.id   || "").trim();
+
+    // data-role="deduct|pay" 셀 내부 필드에 직접 기입
+    const cell = _lastClickedRow.querySelector(`[data-role="${_lastClickedRole}"]`);
+    if (cell) {
+      const nameInput = cell.querySelector(".esign-display-name");
+      const idInput   = cell.querySelector(".esign-hidden-id");
+      if (nameInput) nameInput.value = name;
+      if (idInput)   idInput.value   = id;
+    }
+
+    // tr에도 캐싱 (collectRows에서 읽음)
+    if (_lastClickedRole === "deduct") {
+      _lastClickedRow.dataset.dedName = name;
+      _lastClickedRow.dataset.dedId   = id;
+    } else {
+      _lastClickedRow.dataset.payName = name;
+      _lastClickedRow.dataset.payId   = id;
+    }
+
+    // 사용 후 초기화
+    _lastClickedRole = null;
+    _lastClickedRow  = null;
+  }
+
   // ── 행 수 표시 갱신 ──────────────────────────────────────────
   function updateRowCount() {
     const tbody = window.EsignDom.inputTbody();
-    const count = tbody ? tbody.querySelectorAll("tr").length : 0;
+    const count = tbody ? tbody.querySelectorAll("tr.input-row").length : 0;
     const msg   = window.EsignDom.rowCountMsg();
     if (msg) {
       msg.textContent = `${count} / ${MAX_ROWS}행`;
@@ -99,15 +188,11 @@ window.EsignSave = (function () {
   function addRow() {
     const tbody = window.EsignDom.inputTbody();
     if (!tbody) return;
-
-    const count = tbody.querySelectorAll("tr").length;
-    if (count >= MAX_ROWS) {
+    if (tbody.querySelectorAll("tr.input-row").length >= MAX_ROWS) {
       alert(`최대 ${MAX_ROWS}건까지 입력할 수 있습니다.`);
       return;
     }
-
-    const root   = window.EsignDom.root();
-    const branch = root?.dataset?.userBranch || "";
+    const branch = window.EsignDom.root()?.dataset?.userBranch || "";
     const tmp    = document.createElement("tbody");
     tmp.innerHTML = buildRowHtml(branch);
     tbody.appendChild(tmp.firstElementChild);
@@ -118,7 +203,7 @@ window.EsignSave = (function () {
   function clearRows() {
     const tbody = window.EsignDom.inputTbody();
     if (!tbody) return;
-    if (tbody.querySelectorAll("tr").length > 0) {
+    if (tbody.querySelectorAll("tr.input-row").length > 0) {
       if (!confirm("입력된 내용을 모두 초기화하시겠습니까?")) return;
     }
     tbody.innerHTML = "";
@@ -129,7 +214,7 @@ window.EsignSave = (function () {
   function handleDeleteRow(e) {
     const btn = e.target.closest(".js-del-row");
     if (!btn) return;
-    btn.closest("tr")?.remove();
+    btn.closest("tr.input-row")?.remove();
     updateRowCount();
   }
 
@@ -139,48 +224,55 @@ window.EsignSave = (function () {
     if (input.name !== "amount") return;
     const raw = input.value.replace(/,/g, "");
     const num = parseInt(raw, 10);
-    if (!isNaN(num) && num > 0) {
-      input.value = num.toLocaleString("ko-KR");
-    } else {
-      input.value = "";
-    }
+    input.value = (!isNaN(num) && num > 0) ? num.toLocaleString("ko-KR") : "";
   }
 
   // ── rows 수집 및 검증 ─────────────────────────────────────────
+  // 공제자/지급자 값: tr의 data-ded-*/data-pay-* (userSelected 이벤트가 채움)
   function collectRows() {
     const tbody = window.EsignDom.inputTbody();
     if (!tbody) throw new Error("입력 테이블을 찾을 수 없습니다.");
 
-    const trs = tbody.querySelectorAll("tr");
+    const trs = tbody.querySelectorAll("tr.input-row");
     if (!trs.length) throw new Error("저장할 행이 없습니다.");
     if (trs.length > MAX_ROWS) throw new Error(`최대 ${MAX_ROWS}건까지 저장할 수 있습니다.`);
 
     const rows = [];
     trs.forEach((tr, i) => {
-      const get = (name) => (tr.querySelector(`[name="${name}"]`)?.value || "").trim();
+      const get = (name) =>
+        (tr.querySelector(`[name="${name}"]`)?.value || "").trim();
 
       const startYm   = get("start_ym");
       const endYm     = get("end_ym");
-      const dedId     = get("ded_id");
-      const payId     = get("pay_id");
       const amountRaw = get("amount").replace(/,/g, "");
 
-      if (!startYm || !endYm) throw new Error(`${i + 1}번 행: 시작월도와 종료월도는 필수입니다.`);
-      if (startYm > endYm)    throw new Error(`${i + 1}번 행: 종료월도는 시작월도 이후여야 합니다.`);
-      if (!dedId)  throw new Error(`${i + 1}번 행: 공제자를 검색하여 선택해 주세요.`);
-      if (!payId)  throw new Error(`${i + 1}번 행: 지급자를 검색하여 선택해 주세요.`);
+      // 공제자/지급자: data-* 에서 읽음
+      const dedName = (tr.dataset.dedName || "").trim();
+      const dedId   = (tr.dataset.dedId   || "").trim();
+      const payName = (tr.dataset.payName || "").trim();
+      const payId   = (tr.dataset.payId   || "").trim();
+
+      if (!startYm || !endYm)
+        throw new Error(`${i + 1}번 행: 시작월도와 종료월도는 필수입니다.`);
+      if (startYm > endYm)
+        throw new Error(`${i + 1}번 행: 종료월도는 시작월도 이후여야 합니다.`);
+      if (!dedId)
+        throw new Error(`${i + 1}번 행: 공제자를 검색하여 선택해 주세요.`);
+      if (!payId)
+        throw new Error(`${i + 1}번 행: 지급자를 검색하여 선택해 주세요.`);
 
       const amount = amountRaw ? parseInt(amountRaw, 10) : null;
-      if (amountRaw && isNaN(amount)) throw new Error(`${i + 1}번 행: 금액이 올바르지 않습니다.`);
+      if (amountRaw && isNaN(amount))
+        throw new Error(`${i + 1}번 행: 금액이 올바르지 않습니다.`);
 
       rows.push({
         start_ym: startYm,
         end_ym:   endYm,
         category: get("category"),
         amount:   amount,
-        ded_name: get("ded_name"),
+        ded_name: dedName,
         ded_id:   dedId,
-        pay_name: get("pay_name"),
+        pay_name: payName,
         pay_id:   payId,
         content:  get("content"),
       });
@@ -237,7 +329,6 @@ window.EsignSave = (function () {
 
       alert(`저장 완료! (${data.saved_count}건, 서명자 ${data.signer_count}명 등록)`);
 
-      // 초기화 + 재조회
       if (dom.inputTbody()) dom.inputTbody().innerHTML = "";
       updateRowCount();
       await window.EsignFetch.fetchData();
@@ -247,31 +338,6 @@ window.EsignSave = (function () {
       alert("저장 중 오류가 발생했습니다.");
     } finally {
       if (btnSave) { btnSave.disabled = false; btnSave.textContent = "저장"; }
-    }
-  }
-
-  // ── 검색 모달 연동 (이벤트 위임) ────────────────────────────
-  function handleSearchBtn(e) {
-    const btn = e.target.closest(".js-search-user-btn");
-    if (!btn) return;
-
-    const tr   = btn.closest("tr");
-    const role = btn.dataset.role; // "deduct" | "pay"
-
-    // search_user_modal.js SSOT 경유
-    if (typeof window.openSearchUserModal === "function") {
-      window.openSearchUserModal({
-        onSelect: (user) => {
-          const nameKey = role === "deduct" ? "ded_name" : "pay_name";
-          const idKey   = role === "deduct" ? "ded_id"   : "pay_id";
-          const nameField = tr.querySelector(`[name="${nameKey}"]`);
-          const idField   = tr.querySelector(`[name="${idKey}"]`);
-          if (nameField) nameField.value = user.name || "";
-          if (idField)   idField.value   = user.id   || "";
-        },
-      });
-    } else {
-      alert("사용자 검색 모달을 불러올 수 없습니다.");
     }
   }
 
@@ -287,10 +353,14 @@ window.EsignSave = (function () {
     clrBtn?.addEventListener("click", clearRows);
     savBtn?.addEventListener("click", save);
 
-    // 이벤트 위임 (tbody — 동적 행 대응)
-    tbody?.addEventListener("click", handleDeleteRow);
-    tbody?.addEventListener("click", handleSearchBtn);
-    tbody?.addEventListener("blur",  handleAmountBlur, true); // capture
+    tbody?.addEventListener("click",  handleDeleteRow);
+    tbody?.addEventListener("blur",   handleAmountBlur, true);
+
+    // ── 검색 버튼 클릭 감지 (capture — btnOpenSearch 클릭 전 role 기억)
+    document.addEventListener("click", handleSearchBtnCapture, true);
+
+    // ── userSelected 이벤트 수신 (search_user_modal.js가 발행)
+    document.addEventListener("userSelected", handleUserSelected);
 
     updateRowCount();
   }

@@ -187,8 +187,13 @@ window.EsignSign = (function () {
     const btn = e.target.closest(".js-esign-delete-btn");
     if (!btn) return;
 
-    const requestId = btn.dataset.requestId;
-    if (!confirm("서명 대기 상태의 확인서를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.")) return;
+    const requestId  = btn.dataset.requestId;
+    const signStatus = btn.dataset.signStatus || "";
+    const isCompleted = signStatus === "completed";
+    const confirmMsg  = isCompleted
+      ? "⚠️ 서명이 완료된 확인서입니다.\n삭제하면 PDF를 포함한 모든 서명 기록이 영구 삭제됩니다.\n\n정말 삭제하시겠습니까?"
+      : "확인서를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.";
+    if (!confirm(confirmMsg)) return;
 
     const root      = window.EsignDom.root();
     const deleteUrl = root?.dataset.deleteGroupUrl;

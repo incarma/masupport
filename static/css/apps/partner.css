@@ -11,7 +11,8 @@
 ========================================================== */
 #manage-structure,
 #manage-rate,
-#manage-efficiency {
+#manage-efficiency,
+#esign-confirm {
   width: 86vw;
   max-width: none;
   margin-left: calc(-43vw + 50%);
@@ -21,7 +22,8 @@
 @media (max-width: 576px) {
   #manage-structure,
   #manage-rate,
-  #manage-efficiency {
+  #manage-efficiency,
+  #esign-confirm {
     width: 100%;
     margin-left: 0;
   }
@@ -30,7 +32,8 @@
 /* 테이블 공통 베이스 */
 #manage-structure table,
 #manage-rate table,
-#manage-efficiency table {
+#manage-efficiency table,
+#esign-confirm table {
   width: 100%;
   table-layout: fixed;
 }
@@ -38,7 +41,8 @@
 /* 테이블 헤더 공통 */
 #manage-structure th,
 #manage-rate th,
-#manage-efficiency th {
+#manage-efficiency th,
+#esign-confirm th {
   font-size: 12px;
   font-weight: 600;
   text-align: center;
@@ -1159,4 +1163,240 @@
     max-width: 100%;
     margin: 0;
   }
+}
+
+/* ==========================================================
+  13) ESIGN CONFIRM
+  - Efficiency 화면 톤앤매너 확장
+========================================================== */
+#esign-confirm {
+  --ctl-w-ym: 90px;
+  --ctl-w-org: 160px;
+  --ctl-gap: 12px;
+}
+
+#esign-confirm #yearSelect,
+#esign-confirm #monthSelect {
+  max-width: var(--ctl-w-ym);
+}
+
+#esign-confirm #partSelect,
+#esign-confirm #branchSelect {
+  max-width: var(--ctl-w-org);
+}
+
+#esign-confirm #controlsForm .form-select {
+  font-size: .875rem;
+}
+
+@media (min-width: 768px) {
+  #esign-confirm #controlsForm {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: var(--ctl-gap);
+    align-items: flex-end;
+  }
+
+  #esign-confirm #controlsForm > div {
+    flex: 0 0 auto;
+    width: auto !important;
+    max-width: none !important;
+  }
+
+  #esign-confirm #controlsForm .form-label {
+    white-space: nowrap;
+  }
+
+  #esign-confirm #controlsForm .btn-search {
+    white-space: nowrap;
+    min-width: 88px;
+  }
+}
+
+#esign-confirm .manage-input-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  min-width: 0;
+}
+
+#esign-confirm .manage-input-title {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+#esign-confirm .manage-input-actions {
+  flex: 1 1 auto;
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 2px;
+}
+
+#esign-confirm .manage-input-actions .btn {
+  white-space: nowrap;
+}
+
+#esign-confirm #inputSection .table-responsive {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+#esign-confirm #inputTable {
+  table-layout: fixed;
+  width: max-content;
+  min-width: 1500px;
+}
+
+#esign-confirm #inputTable :is(th, td) {
+  font-size: 12px;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  vertical-align: middle;
+}
+
+#esign-confirm #inputTable tbody td :is(input, select) {
+  font-size: 12px;
+  padding-left: 6px;
+  padding-right: 6px;
+  min-width: 0 !important;
+}
+
+#esign-confirm #mainSheet {
+  min-width: 0;
+}
+
+#esign-confirm #confirmGroupsAccordion .accordion-body {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ---------- Esign accordion header: Efficiency 패턴 확장 ---------- */
+#esign-confirm .eff-acc-head {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+}
+
+#esign-confirm .eff-acc-toggle {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  height: 56px;
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  border-radius: 12px;
+  position: relative;
+  padding: 8px 44px 8px 14px;
+  white-space: nowrap;
+  line-height: 1.2;
+}
+
+#esign-confirm .eff-acc-toggle::after {
+  position: absolute;
+  left: auto !important;
+  right: 12px !important;
+  margin: 0 !important;
+}
+
+#esign-confirm .eff-group-scroll {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: nowrap;
+  width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden !important;
+  white-space: nowrap;
+  max-height: 40px;
+  scrollbar-width: none;
+}
+
+#esign-confirm .eff-group-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+#esign-confirm .eff-group-scroll > * {
+  flex: 0 0 auto;
+}
+
+#esign-confirm .eff-group-title {
+  font-weight: 800;
+  line-height: 1.15;
+}
+
+#esign-confirm .eff-group-sub {
+  font-size: 12px;
+  color: #6c757d;
+}
+
+/* ---------- Esign status ---------- */
+#esign-confirm .esign-status-area {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  background: #fff;
+  height: 56px;
+  min-height: 56px;
+  overflow-y: hidden !important;
+}
+
+#esign-confirm .esign-badge {
+  font-size: 11px;
+  padding: 4px 8px;
+}
+
+#esign-confirm .esign-badge--pending {
+  background: #dc3545;
+  color: #fff;
+}
+
+#esign-confirm .esign-badge--partial {
+  background: #ffc107;
+  color: #333;
+}
+
+#esign-confirm .esign-badge--completed {
+  background: #198754;
+  color: #fff;
+}
+
+/* ---------- Esign accordion body / tables ---------- */
+#esign-confirm .accordion-body {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+#esign-confirm .main-group-table {
+  width: max-content;
+  min-width: 100%;
+  table-layout: fixed;
+}
+
+#esign-confirm .main-group-table :is(th, td) {
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#esign-confirm .signer-list {
+  font-size: 11px;
+}
+
+#esign-confirm .signer-list :is(td, th) {
+  padding: 3px 8px;
 }

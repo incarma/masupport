@@ -6,17 +6,15 @@
 Playbook 규칙:
   - 뷰는 얇게 (비즈니스 로직은 esign_service로 위임)
   - JSON 응답: _ok / _err 헬퍼로 포맷 통일
-  - 권한: grade_required 데코레이터 사용 (inactive 자동 차단)
+  - 권한: login_required + grade 검사 (inactive 세션 레벨 차단)
   - 파일: pdf_file.url 직접 노출 금지 → FileResponse + RFC5987 파일명
-  - 감사 로그: audit.services.log_action 연계
-  - 저장 트랜잭션: transaction.atomic() + esign_service 호출
+  - 감사 로그: audit.services.log_action(request, action, ...) SSOT 준수
 """
 
 from __future__ import annotations
 
 import json
 import logging
-import unicodedata
 from urllib.parse import quote
 
 from django.contrib.auth.decorators import login_required
@@ -26,7 +24,11 @@ from django.shortcuts import render
 from django.urls import reverse
 from django.views.decorators.http import require_POST, require_http_methods
 
+from audit.services import log_action
+from audit.constants import ACTION
+
 logger = logging.getLogger(__name__)
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # JSON 응답 헬퍼 (프로젝트 공통 포맷)
@@ -44,13 +46,6 @@ def _err(message: str, status: int = 400) -> JsonResponse:
     return JsonResponse({'status': 'error', 'message': message}, status=status)
 
 
-def _require_login(request):
-    """로그인 여부 확인 — inactive는 Django 세션 레벨에서 차단됨."""
-    if not request.user.is_authenticated:
-        return _err('로그인이 필요합니다.', status=401)
-    return None
-
-
 def _parse_json(request) -> tuple[dict | None, JsonResponse | None]:
     """request.body JSON 파싱. 실패 시 (None, error_response) 반환."""
     try:
@@ -60,7 +55,7 @@ def _parse_json(request) -> tuple[dict | None, JsonResponse | None]:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# P3-3-1. 페이지 뷰
+# 1. 페이지 뷰
 # ─────────────────────────────────────────────────────────────────────────────
 
 @login_required
@@ -71,24 +66,24 @@ def esign_confirm_page(request):
     접근: superuser / head / leader / basic (inactive 세션 레벨 차단)
     내용입력 카드: superuser / head / leader만 표시 (basic 숨김)
     """
-    user = request.user
+    user  = request.user
     grade = getattr(user, 'grade', 'basic')
 
-    # 내용 입력 카드 노출 여부 (템플릿에서 사용)
-    can_input = grade in ('superuser', 'head', 'leader')
-    # 삭제 버튼 노출 여부
-    can_delete = grade in ('superuser', 'head')
+    can_input        = grade in ('superuser', 'head', 'leader')
+    can_delete       = grade in ('superuser', 'head')
+    can_process_date = grade in ('superuser', 'head')
 
     context = {
-        'can_input':  can_input,
-        'can_delete': can_delete,
+        'can_input':        can_input,
+        'can_delete':       can_delete,
+        'can_process_date': can_process_date,
         'search_user_url': reverse('accounts:api_search_user'),
     }
     return render(request, 'partner/esign_confirm.html', context)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# P3-3-2. 데이터 조회
+# 2. 데이터 조회
 # ─────────────────────────────────────────────────────────────────────────────
 
 @login_required
@@ -96,7 +91,6 @@ def esign_confirm_page(request):
 def esign_fetch(request):
     """
     GET /partner/api/esign/fetch/?month=YYYY-MM&branch=...
-
     권한 스코프: esign_service.build_esign_queryset 위임
     """
     from partner.services.esign_service import (
@@ -122,7 +116,6 @@ def esign_fetch(request):
         my_status = get_my_sign_status(req, user)
         my_sid    = get_my_sign_id(req, user)
 
-        # 서명자 목록
         signers_data = [
             {
                 'sign_id':     s.pk,
@@ -135,7 +128,6 @@ def esign_fetch(request):
             for s in signs
         ]
 
-        # 행 데이터
         rows_data = [
             {
                 'id':             r.pk,
@@ -150,13 +142,12 @@ def esign_fetch(request):
                 'pay_name':       r.pay_name or '',
                 'pay_id':         r.pay_id or '',
                 'content':        r.content or '',
-                # 서명일시: ded/pay 각각의 signed_at
-                'signed_at': _row_signed_at(r, signs),
+                'signed_at':      _row_signed_at(r, signs),
+                'process_date':   r.process_date.strftime('%Y-%m-%d') if r.process_date else '',
             }
             for r in rows
         ]
 
-        # PDF URL — pdf_file.url 직접 노출 금지, 뷰 URL로만 제공
         pdf_ready = bool(req.pdf_file)
         pdf_url   = (
             reverse('partner:esign_pdf', kwargs={'request_id': req.pk})
@@ -192,7 +183,7 @@ def _row_signed_at(row, signs: list) -> str | None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# P3-3-3. 저장
+# 3. 저장
 # ─────────────────────────────────────────────────────────────────────────────
 
 @login_required
@@ -202,10 +193,8 @@ def esign_save(request):
     POST /partner/api/esign/save/
 
     저장 권한: superuser / head / leader
-    트랜잭션: atomic — EfficiencyConfirmGroup + EfficiencyChange + EfficiencySignRequest + EfficiencyConfirmSign
+    트랜잭션: atomic — Group + EfficiencyChange + SignRequest + ConfirmSign
     """
-    from audit.constants import ACTION
-    from audit.services import log_action
     from partner.models import EfficiencyChange, EfficiencyConfirmGroup
     from partner.services.esign_service import create_sign_request
 
@@ -219,8 +208,8 @@ def esign_save(request):
     if err:
         return err
 
-    month  = (body.get('month') or '').strip()
-    part   = (body.get('part')  or '').strip()
+    month  = (body.get('month')  or '').strip()
+    part   = (body.get('part')   or '').strip()
     branch = (body.get('branch') or '').strip()
     rows   = body.get('rows', [])
 
@@ -245,9 +234,11 @@ def esign_save(request):
             return _err(f'{i}번 행: 지급자 사번은 필수입니다.')
 
     # ── 트랜잭션 ─────────────────────────────────────────────────────────────
+    sign_request = None
+    group        = None
     try:
         with transaction.atomic():
-            # 1) EfficiencyConfirmGroup 생성 (기존 _generate_confirm_group_id 재사용)
+            # 1) EfficiencyConfirmGroup 생성
             group_id = _generate_confirm_group_id(user)
             group = EfficiencyConfirmGroup.objects.create(
                 confirm_group_id=group_id,
@@ -302,16 +293,17 @@ def esign_save(request):
         logger.exception("esign_save unexpected error: user=%s", user.pk)
         return _err('저장 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.')
 
-    # 감사 로그
+    # ── 감사 로그 ─────────────────────────────────────────────────────────────
     try:
         log_action(
-            actor=user,
-            action=ACTION.PARTNER_ESIGN_CREATE,
-            target=f'EfficiencySignRequest:{sign_request.pk}',
-            metadata={
-                'ym': month, 'branch': branch,
+            request,
+            ACTION.PARTNER_ESIGN_CREATE,
+            object_type='EfficiencySignRequest',
+            object_id=str(sign_request.pk),
+            meta={
+                'ym': month,
+                'branch': branch,
                 'row_count': len(rows),
-                'sign_request_id': sign_request.pk,
             },
             success=True,
         )
@@ -329,14 +321,14 @@ def esign_save(request):
 def _generate_confirm_group_id(user) -> str:
     """
     EfficiencyConfirmGroup ID 생성.
-    기존 manage_efficiency의 _generate_confirm_group_id 규약과 동일한 포맷 유지.
-    포맷: YYYYMMHHMM_<user_id>_<seq2>
+    기존 manage_efficiency 규약과 동일한 포맷 유지.
+    포맷: YYYYMMDDHHММ_<user_id>_<seq02d>
     """
     from django.utils import timezone as tz
     from partner.models import EfficiencyConfirmGroup
 
-    now   = tz.localtime()
-    base  = now.strftime('%Y%m%d%H%M')
+    now    = tz.localtime()
+    base   = now.strftime('%Y%m%d%H%M')
     prefix = f"{base}_{user.pk}_"
 
     last = (
@@ -357,7 +349,7 @@ def _generate_confirm_group_id(user) -> str:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# P3-3-4. 서명하기
+# 4. 서명하기
 # ─────────────────────────────────────────────────────────────────────────────
 
 @login_required
@@ -369,8 +361,6 @@ def esign_sign(request, request_id: int):
     - 로그인 세션 기반 서명 (Phase 2 이전)
     - select_for_update로 중복 서명 방지 (esign_service에서 처리)
     """
-    from audit.constants import ACTION
-    from audit.services import log_action
     from partner.models import EfficiencyConfirmSign
     from partner.services.esign_service import process_sign
 
@@ -385,17 +375,21 @@ def esign_sign(request, request_id: int):
     except EfficiencyConfirmSign.DoesNotExist:
         return _err('서명 권한이 없거나 이미 서명이 완료된 항목입니다.', status=403)
     except Exception:
-        logger.exception("esign_sign unexpected error: request_id=%s user=%s", request_id, user.pk)
+        logger.exception(
+            "esign_sign unexpected error: request_id=%s user=%s",
+            request_id, user.pk,
+        )
         return _err('서명 처리 중 오류가 발생했습니다.')
 
-    # 감사 로그
+    # ── 감사 로그 ─────────────────────────────────────────────────────────────
     try:
         log_action(
-            actor=user,
-            action=ACTION.PARTNER_ESIGN_SIGN,
-            target=f'EfficiencySignRequest:{request_id}',
-            metadata={
-                'signed_at': result['signed_at'],
+            request,
+            ACTION.PARTNER_ESIGN_SIGN,
+            object_type='EfficiencySignRequest',
+            object_id=str(request_id),
+            meta={
+                'signed_at':  result['signed_at'],
                 'all_signed': result['all_signed'],
             },
             success=True,
@@ -407,7 +401,7 @@ def esign_sign(request, request_id: int):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# P3-3-5. PDF 다운로드
+# 5. PDF 다운로드
 # ─────────────────────────────────────────────────────────────────────────────
 
 @login_required
@@ -423,8 +417,6 @@ def esign_pdf_download(request, request_id: int):
       head         → 본인 branch
       leader/basic → 본인이 서명 참여자인 내역만
     """
-    from audit.constants import ACTION
-    from audit.services import log_action
     from partner.models import EfficiencySignRequest
 
     user = request.user
@@ -437,7 +429,7 @@ def esign_pdf_download(request, request_id: int):
     if not req.pdf_file:
         return _err('서명이 완료되지 않아 확인서를 다운로드할 수 없습니다.', status=404)
 
-    # 권한 검증
+    # ── 권한 검증 ────────────────────────────────────────────────────────────
     grade = getattr(user, 'grade', 'basic')
     if grade == 'superuser':
         pass
@@ -445,28 +437,28 @@ def esign_pdf_download(request, request_id: int):
         if user.branch != req.branch:
             return _err('접근 권한이 없습니다.', status=403)
     else:
-        # leader / basic: 서명 참여자인지 확인
         is_participant = req.signs.filter(signer=user).exists()
         if not is_participant:
             return _err('접근 권한이 없습니다.', status=403)
 
-    # 감사 로그
+    # ── 감사 로그 ─────────────────────────────────────────────────────────────
     try:
         log_action(
-            actor=user,
-            action=ACTION.PARTNER_ESIGN_PDF_DL,
-            target=f'EfficiencySignRequest:{request_id}',
-            metadata={'branch': req.branch, 'ym': req.ym},
+            request,
+            ACTION.PARTNER_ESIGN_PDF_DL,
+            object_type='EfficiencySignRequest',
+            object_id=str(request_id),
+            meta={'branch': req.branch, 'ym': req.ym},
             success=True,
         )
     except Exception:
         logger.warning("esign_pdf_download audit log failed (non-critical)", exc_info=True)
 
-    # RFC5987 한글 파일명 — 다운로드 시 깨짐 방지
-    group  = req.confirm_group
-    doc_id = getattr(group, 'confirm_group_id', str(req.pk)) if group else str(req.pk)
-    display_filename = f"지점효율_사실확인서_{req.ym}_{req.branch}_{doc_id}.pdf"
-    encoded_filename = quote(display_filename, safe='')
+    # ── RFC5987 한글 파일명 ───────────────────────────────────────────────────
+    group    = req.confirm_group
+    doc_id   = getattr(group, 'confirm_group_id', str(req.pk)) if group else str(req.pk)
+    display_filename  = f"지점효율_사실확인서_{req.ym}_{req.branch}_{doc_id}.pdf"
+    encoded_filename  = quote(display_filename, safe='')
     content_disposition = (
         f"attachment; filename=\"esign_{req.pk}.pdf\"; "
         f"filename*=UTF-8''{encoded_filename}"
@@ -475,7 +467,9 @@ def esign_pdf_download(request, request_id: int):
     try:
         file_handle = req.pdf_file.open('rb')
     except Exception:
-        logger.exception("esign_pdf_download file open error: request_id=%s", request_id)
+        logger.exception(
+            "esign_pdf_download file open error: request_id=%s", request_id,
+        )
         return _err('파일을 열 수 없습니다. 관리자에게 문의해 주세요.', status=500)
 
     response = FileResponse(file_handle, content_type='application/pdf')
@@ -484,7 +478,7 @@ def esign_pdf_download(request, request_id: int):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# P3-3-6. 그룹 삭제
+# 6. 그룹 삭제
 # ─────────────────────────────────────────────────────────────────────────────
 
 @login_required
@@ -494,11 +488,7 @@ def esign_delete_group(request):
     POST /partner/api/esign/delete-group/
 
     조건: status == 'pending' 이고 superuser 또는 해당 branch head만 가능
-    연쇄 삭제: EfficiencySignRequest → EfficiencyConfirmSign (CASCADE)
-               EfficiencyConfirmGroup → EfficiencyChange
     """
-    from audit.constants import ACTION
-    from audit.services import log_action
     from partner.models import EfficiencySignRequest
     from partner.services.esign_service import delete_sign_request
 
@@ -529,16 +519,98 @@ def esign_delete_group(request):
         )
         return _err('삭제 중 오류가 발생했습니다.')
 
-    # 감사 로그
+    # ── 감사 로그 ─────────────────────────────────────────────────────────────
     try:
         log_action(
-            actor=user,
-            action=ACTION.PARTNER_ESIGN_DELETE,
-            target=f'EfficiencySignRequest:{sign_request_id}',
-            metadata={},
+            request,
+            ACTION.PARTNER_ESIGN_DELETE,
+            object_type='EfficiencySignRequest',
+            object_id=str(sign_request_id),
+            meta={},
             success=True,
         )
     except Exception:
         logger.warning("esign_delete_group audit log failed (non-critical)", exc_info=True)
 
     return _ok({'deleted': True})
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 7. 처리일시 업데이트
+# ─────────────────────────────────────────────────────────────────────────────
+
+@login_required
+@require_POST
+def esign_update_process_date(request):
+    """
+    POST /partner/api/esign/process-date/
+
+    권한: superuser / head
+    body: {"updates": [{"row_id": 123, "process_date": "2026-04-28"}, ...]}
+    - process_date가 null이면 해당 행의 process_date를 초기화
+    """
+    from partner.models import EfficiencyChange
+
+    user  = request.user
+    grade = getattr(user, 'grade', 'basic')
+
+    if grade not in ('superuser', 'head'):
+        return _err('처리일시 수정 권한이 없습니다.', status=403)
+
+    body, err = _parse_json(request)
+    if err:
+        return err
+
+    updates = body.get('updates', [])
+    if not isinstance(updates, list) or not updates:
+        return _err('업데이트할 항목이 없습니다.')
+
+    row_ids = []
+    date_map = {}
+    for item in updates:
+        try:
+            rid = int(item.get('row_id'))
+        except (TypeError, ValueError):
+            return _err('row_id가 올바르지 않습니다.')
+        row_ids.append(rid)
+        date_map[rid] = (item.get('process_date') or '').strip() or None
+
+    # 권한 스코프: superuser 전체 / head는 본인 branch만
+    qs = EfficiencyChange.objects.filter(pk__in=row_ids)
+    if grade == 'head':
+        qs = qs.filter(branch__iexact=user.branch)
+
+    updated_count = 0
+    errors = []
+    for row in qs:
+        raw_date = date_map.get(row.pk)
+        if raw_date:
+            from datetime import date as dt_date
+            try:
+                parts = raw_date.split('-')
+                row.process_date = dt_date(int(parts[0]), int(parts[1]), int(parts[2]))
+            except (ValueError, IndexError):
+                errors.append(f'row {row.pk}: 날짜 형식 오류 ({raw_date})')
+                continue
+        else:
+            row.process_date = None
+        row.save(update_fields=['process_date'])
+        updated_count += 1
+
+    if errors:
+        logger.warning("esign_update_process_date errors: %s", errors)
+
+    # 감사 로그
+    try:
+        log_action(
+            request,
+            ACTION.PARTNER_ESIGN_PROCESS_DATE_UPDATE,
+            object_type='EfficiencyChange',
+            object_id=','.join(str(i) for i in row_ids[:5]),
+            meta={'updated_count': updated_count},
+            success=True,
+        )
+    except Exception:
+        logger.warning("esign_update_process_date audit log failed", exc_info=True)
+
+    return _ok({'updated_count': updated_count, 'errors': errors})

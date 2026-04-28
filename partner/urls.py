@@ -108,4 +108,6 @@ urlpatterns = [
  
     # PDF 다운로드 (FileResponse — url 직접 노출 금지)
     path('api/esign/<int:request_id>/pdf/', views.esign_pdf_download, name='esign_pdf'),
+
+    path('api/esign/process-date/', views.esign_update_process_date, name='esign_update_process_date'),
 ]

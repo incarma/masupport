@@ -6,108 +6,6 @@
 
 {% block app_css %}
 <link rel="stylesheet" href="{% static 'css/apps/partner.css' %}">
-<style>
-/* ── #esign-confirm 스코프 — partner.css 누수 방지 ── */
-#esign-confirm {
-  width: 86vw;
-  max-width: none;
-  margin-left: calc(-43vw + 50%);
-}
-@media (max-width: 576px) {
-  #esign-confirm { width: 100%; margin-left: 0; }
-}
-
-/* 컨트롤 폼 */
-#esign-confirm #controlsForm {
-  --ctl-w-ym: 90px;
-  --ctl-w-org: 160px;
-  --ctl-gap: 12px;
-}
-#esign-confirm #yearSelect,
-#esign-confirm #monthSelect { max-width: 90px; }
-#esign-confirm #partSelect,
-#esign-confirm #branchSelect { max-width: 160px; }
-#esign-confirm #controlsForm .form-select { font-size: .875rem; }
-@media (min-width: 768px) {
-  #esign-confirm #controlsForm {
-    display: flex; flex-wrap: nowrap;
-    gap: 12px; align-items: flex-end;
-  }
-  #esign-confirm #controlsForm > div {
-    flex: 0 0 auto; width: auto !important; max-width: none !important;
-  }
-  #esign-confirm #controlsForm .form-label { white-space: nowrap; }
-  #esign-confirm #controlsForm .btn-search { white-space: nowrap; min-width: 88px; }
-}
-
-/* 입력 테이블 */
-#esign-confirm #inputTable {
-  table-layout: fixed; width: max-content; min-width: 1500px;
-}
-#esign-confirm #inputTable :is(th, td) {
-  font-size: 12px; white-space: nowrap !important;
-  overflow: hidden !important; text-overflow: ellipsis !important;
-  vertical-align: middle;
-}
-#esign-confirm #inputTable tbody td :is(input, select) {
-  font-size: 12px; padding-left: 6px; padding-right: 6px; min-width: 0 !important;
-}
-#esign-confirm #inputSection .table-responsive {
-  overflow-x: auto; -webkit-overflow-scrolling: touch;
-}
-
-/* 아코디언 — manage_efficiency 패턴 재사용 */
-#esign-confirm .eff-acc-head { display: flex; align-items: stretch; gap: 10px; }
-#esign-confirm .eff-acc-toggle {
-  flex: 1 1 auto; min-width: 0; overflow: hidden;
-  height: 56px; min-height: 56px;
-  display: flex; align-items: center;
-  border-radius: 12px; position: relative;
-  padding: 8px 44px 8px 14px; white-space: nowrap; line-height: 1.2;
-}
-#esign-confirm .eff-acc-toggle::after {
-  position: absolute; left: auto !important; right: 12px !important; margin: 0 !important;
-}
-#esign-confirm .eff-group-scroll {
-  display: flex; align-items: center; gap: 12px;
-  flex-wrap: nowrap; width: 100%; min-width: 0;
-  overflow-x: auto; overflow-y: hidden !important;
-  white-space: nowrap;
-  max-height: 40px;
-  scrollbar-width: none;
-}
-#esign-confirm .eff-group-scroll::-webkit-scrollbar { display: none; }
-#esign-confirm .eff-group-scroll > * { flex: 0 0 auto; }
-#esign-confirm .eff-group-title { font-weight: 800; line-height: 1.15; }
-#esign-confirm .eff-group-sub   { font-size: 12px; color: #6c757d; }
-
-/* 서명 상태 영역 */
-#esign-confirm .esign-status-area {
-  flex: 0 0 auto; display: flex; align-items: center;
-  gap: 6px; padding: 8px 10px; background: #fff;
-  height: 56px; min-height: 56px; overflow-y: hidden !important;
-}
-#esign-confirm .esign-badge { font-size: 11px; padding: 4px 8px; }
-#esign-confirm .esign-badge--pending   { background: #dc3545; color: #fff; }
-#esign-confirm .esign-badge--partial   { background: #ffc107; color: #333; }
-#esign-confirm .esign-badge--completed { background: #198754; color: #fff; }
-
-/* 아코디언 바디 */
-#esign-confirm .accordion-body {
-  padding-left: 0 !important; padding-right: 0 !important;
-  overflow-x: auto; -webkit-overflow-scrolling: touch;
-}
-#esign-confirm .main-group-table {
-  width: max-content; min-width: 100%; table-layout: fixed;
-}
-#esign-confirm .main-group-table :is(th, td) {
-  font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-
-/* 서명자 목록 작은 테이블 */
-#esign-confirm .signer-list { font-size: 11px; }
-#esign-confirm .signer-list td, #esign-confirm .signer-list th { padding: 3px 8px; }
-</style>
 {% endblock %}
 
 {% block content_wrapper %}
@@ -115,6 +13,8 @@
 
   <!-- Boot root: JS는 이 div의 dataset만 읽는다 (Playbook Boot 패턴) -->
   <div id="esign-confirm"
+       data-esign-root="true"
+       data-root-alias="manage-efficiency"
        data-user-grade="{{ user.grade }}"
        data-user-id="{{ user.id }}"
        data-user-branch="{{ user.branch }}"
@@ -122,103 +22,111 @@
        data-fetch-url="{% url 'partner:esign_fetch' %}"
        data-save-url="{% url 'partner:esign_save' %}"
        data-delete-group-url="{% url 'partner:esign_delete_group' %}"
+       data-process-date-url="{% url 'partner:esign_update_process_date' %}"
        data-sign-url-template="/partner/api/esign/{id}/sign/"
        data-pdf-url-template="/partner/api/esign/{id}/pdf/"
        data-search-user-url="{% url 'accounts:api_search_user' %}"
        data-can-input="{{ can_input|yesno:'true,false' }}"
-       data-can-delete="{{ can_delete|yesno:'true,false' }}">
+       data-can-delete="{{ can_delete|yesno:'true,false' }}"
+       data-can-process-date="{{ can_process_date|yesno:'true,false' }}">
 
     <!-- 페이지 헤더 -->
-    <div class="d-flex align-items-center gap-2 mb-3">
-      <h5 class="mb-0 fw-bold">사실확인서 전자서명</h5>
-      <span class="badge bg-secondary">Phase 1 — 세션 기반</span>
-    </div>
+    <h3 class="text-center fw-bold mb-4" style="color:#003f7d;">사실확인서 전자서명 페이지</h3>
 
     <!-- 컨트롤 폼 -->
-    <div class="card mb-3">
-      <div class="card-body py-2">
-        <form id="controlsForm" autocomplete="off" onsubmit="return false;">
-          <div>
-            <label class="form-label mb-1">연도</label>
-            <select id="yearSelect" class="form-select form-select-sm"></select>
-          </div>
-          <div>
-            <label class="form-label mb-1">월</label>
-            <select id="monthSelect" class="form-select form-select-sm"></select>
-          </div>
-          <div>
-            <label class="form-label mb-1">부서</label>
-            <select id="partSelect" class="form-select form-select-sm">
-              <option value="">부서 선택</option>
-            </select>
-          </div>
-          <div>
-            <label class="form-label mb-1">지점</label>
-            <select id="branchSelect" class="form-select form-select-sm" disabled>
-              <option value="">지점 선택</option>
-            </select>
-          </div>
-          <div class="align-self-end">
-            <button type="button" id="btnSearch" class="btn btn-primary btn-sm btn-search" disabled>
-              조회
-            </button>
-          </div>
-        </form>
-      </div>
+    <div class="card shadow p-3 border-0 rounded-4 mb-3">
+      <form id="controlsForm" autocomplete="off" onsubmit="return false;">
+        <div>
+          <label class="form-label mb-1">연도</label>
+          <select id="yearSelect" class="form-select form-select-sm"></select>
+        </div>
+        <div>
+          <label class="form-label mb-1">월</label>
+          <select id="monthSelect" class="form-select form-select-sm"></select>
+        </div>
+        <!-- superuser만 channel/part/branch 셀렉터 활성화 -->
+        {% if user.grade == 'superuser' %}
+        <div>
+          <label class="form-label mb-1">부문</label>
+          <select id="channelSelect" class="form-select form-select-sm">
+            <option value="">부문 선택</option>
+          </select>
+        </div>
+        {% endif %}
+        <div>
+          <label class="form-label mb-1">부서</label>
+          <select id="partSelect" class="form-select form-select-sm">
+            <option value="">부서 선택</option>
+          </select>
+        </div>
+        <div>
+          <label class="form-label mb-1">지점</label>
+          <select id="branchSelect" class="form-select form-select-sm" disabled>
+            <option value="">지점 선택</option>
+          </select>
+        </div>
+        <div class="align-self-end">
+          <button type="button" id="btnSearch" class="btn btn-primary btn-sm btn-search" disabled>
+            조회
+          </button>
+        </div>
+      </form>
     </div>
 
     <!-- 내용 입력 카드 (superuser/head/leader만 표시, basic 숨김) -->
     {% if can_input %}
-    <div id="inputSection" class="card mb-3">
-      <div class="card-body">
-        <div class="manage-input-head mb-2">
-          <span class="manage-input-title fw-bold">내용 입력</span>
-          <div class="manage-input-actions ms-auto">
-            <button type="button" id="btnAddRow"    class="btn btn-outline-secondary btn-sm">+ 행 추가</button>
-            <button type="button" id="btnClearRows" class="btn btn-outline-danger btn-sm">초기화</button>
-            <button type="button" id="btnSave"      class="btn btn-primary btn-sm">저장</button>
-          </div>
+    <div id="inputSection" class="card shadow p-3 border-0 rounded-4 mb-3">
+      <div class="manage-input-head mb-2">
+        <h5 class="manage-input-title fw-bold mb-0" style="color:#005BAC;">내용입력</h5>
+        <div class="manage-input-actions ms-auto">
+          <button type="button" id="btnAddRow"    class="btn btn-primary btn-sm">추가</button>
+          <button type="button" id="btnClearRows" class="btn btn-outline-secondary btn-sm">초기화</button>
+          <button type="button" id="btnSave"      class="btn btn-success btn-sm">저장</button>
         </div>
-        <div class="table-responsive">
-          <table id="inputTable" class="table table-sm table-bordered mb-0">
-            <colgroup>
-              <col style="width:140px"> <!-- 소속 -->
-              <col style="width:120px"> <!-- 시작월도 -->
-              <col style="width:120px"> <!-- 종료월도 -->
-              <col style="width:100px"> <!-- 구분 -->
-              <col style="width:140px"> <!-- 금액 -->
-              <col style="width:200px"> <!-- 공제자 -->
-              <col style="width:200px"> <!-- 지급자 -->
-              <col style="width:380px"> <!-- 내용 -->
-              <col style="width:70px">  <!-- 삭제 -->
-            </colgroup>
-            <thead class="table-light">
-              <tr>
-                <th>소속(요청자)</th>
-                <th>시작월도 <span class="text-danger">*</span></th>
-                <th>종료월도 <span class="text-danger">*</span></th>
-                <th>구분</th>
-                <th>금액</th>
-                <th>공제자 <span class="text-danger">*</span></th>
-                <th>지급자 <span class="text-danger">*</span></th>
-                <th>내용(비고)</th>
-                <th>삭제</th>
-              </tr>
-            </thead>
-            <tbody id="inputTbody">
-              <!-- JS로 행 동적 생성 (save.js EsignSave.addRow) -->
-            </tbody>
-          </table>
-        </div>
-        <div class="mt-1">
-          <small class="text-muted" id="rowCountMsg">0 / 10행</small>
-        </div>
+      </div>
+      <div class="table-responsive">
+        <table id="inputTable" class="table table-sm table-bordered mb-0">
+          <colgroup>
+            <col style="width:140px"> <!-- 소속 -->
+            <col style="width:120px"> <!-- 시작월도 -->
+            <col style="width:120px"> <!-- 종료월도 -->
+            <col style="width:100px"> <!-- 구분 -->
+            <col style="width:140px"> <!-- 금액 -->
+            <col style="width:200px"> <!-- 공제자 -->
+            <col style="width:200px"> <!-- 지급자 -->
+            <col style="width:380px"> <!-- 내용 -->
+            <col style="width:70px">  <!-- 삭제 -->
+          </colgroup>
+          <thead class="table-light">
+            <tr>
+              <th>소속(요청자)</th>
+              <th>시작월도 <span class="text-danger">*</span></th>
+              <th>종료월도 <span class="text-danger">*</span></th>
+              <th>구분</th>
+              <th>금액</th>
+              <th>공제자 <span class="text-danger">*</span></th>
+              <th>지급자 <span class="text-danger">*</span></th>
+              <th>내용(비고)</th>
+              <th>삭제</th>
+            </tr>
+          </thead>
+          <tbody id="inputTbody">
+            <!-- JS로 행 동적 생성 (save.js EsignSave.addRow) -->
+          </tbody>
+        </table>
+      </div>
+      <div class="mt-1">
+        <small class="text-muted" id="rowCountMsg">0 / 10행</small>
       </div>
     </div>
     {% endif %}
 
     <!-- 아코디언 영역 (조회 결과) -->
-    <div id="mainSheet">
+    <div id="mainSheet" class="card shadow p-3 border-0 rounded-4">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <h5 class="fw-bold mb-0" style="color:#005BAC;">메인시트</h5>
+        <div class="small text-muted" id="sheetNotice"></div>
+      </div>
       <div id="esignLoadingMsg" class="text-center text-muted py-4" hidden>
         <div class="spinner-border spinner-border-sm me-2"></div>불러오는 중...
       </div>
@@ -233,12 +141,14 @@
   <!-- 서명하기 모달 -->
   {% include "partner/includes/_esign_sign_modal.html" %}
 
+  <!-- 사용자 검색 모달 (search_user_modal.js SSOT — manage_calculate 동일 패턴) -->
+  {% include 'components/search_user_modal.html' with search_url=search_user_url|default:'/api/accounts/search-user/' %}
+
 </div><!-- /container-fluid -->
 {% endblock %}
 
 {% block extra_js %}
-<!-- 공통 유틸 (manage_boot은 버전쿼리 없이 — 기존 efficiency 패턴 동일) -->
-<script src="{% static 'js/common/manage_boot.js' %}"></script>
+<!-- 공통 유틸 -->
 <script src="{% static 'js/common/part_branch_selector.js' %}?v={% now 'U' %}"></script>
 <script src="{% static 'js/common/search_user_modal.js' %}?v={% now 'U' %}"></script>
 

@@ -369,32 +369,24 @@ def delete_sign_request(*, sign_request, actor) -> None:
     서명 요청 삭제.
 
     조건:
-      - status == 'pending' 일 때만 허용
-      - superuser 또는 해당 branch head만 가능
+      - superuser 또는 해당 branch head만 가능 (모든 상태 삭제 가능)
+      - 완료된 확인서 삭제는 감사 로그로 추적
     연쇄 삭제:
       EfficiencySignRequest → EfficiencyConfirmSign (CASCADE)
-      EfficiencyConfirmGroup → EfficiencyChange (PROTECT → 뷰에서 직접 삭제)
+      EfficiencyConfirmGroup → EfficiencyChange (PROTECT → 직접 삭제)
 
     예외:
       PermissionError — 권한 없음
-      ValueError      — pending 상태가 아님
     """
     grade = getattr(actor, 'grade', 'basic')
 
-    # 권한 검증
+    # 권한 검증 (superuser/head만 삭제 가능 — 상태 무관)
     if grade == 'superuser':
         pass
     elif grade == 'head' and actor.branch == sign_request.branch:
         pass
     else:
         raise PermissionError("삭제 권한이 없습니다.")
-
-    # 상태 검증
-    if not sign_request.is_pending:
-        raise ValueError(
-            "서명이 진행 중이거나 완료된 확인서는 삭제할 수 없습니다. "
-            f"(현재 상태: {sign_request.get_status_display()})"
-        )
 
     with transaction.atomic():
         group = sign_request.confirm_group

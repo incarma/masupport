@@ -90,4 +90,5 @@ from partner.views.esign import (
     esign_sign,
     esign_pdf_download,
     esign_delete_group,
+    esign_update_process_date,
 )

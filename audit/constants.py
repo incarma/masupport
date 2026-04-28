@@ -110,3 +110,4 @@ class ACTION:
     PARTNER_ESIGN_SIGN   = "partner.esign.sign"
     PARTNER_ESIGN_DELETE = "partner.esign.delete"
     PARTNER_ESIGN_PDF_DL = "partner.esign.pdf.download"
+    PARTNER_ESIGN_PROCESS_DATE_UPDATE = "partner.esign.process_date.update"
