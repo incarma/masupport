@@ -93,4 +93,21 @@ urlpatterns = [
 
     path("api/add-sub-admin/", views.ajax_add_sub_admin, name="ajax_add_sub_admin"),
     path("ajax/delete-subadmin/", views.ajax_delete_subadmin, name="ajax_delete_subadmin"),
+
+    # ── 전자서명 (esign) ───────────────────────────────────────
+    # 페이지
+    path('esign/', views.esign_confirm_page, name='esign_confirm'),
+ 
+    # 데이터 API
+    path('api/esign/fetch/',        views.esign_fetch,        name='esign_fetch'),
+    path('api/esign/save/',         views.esign_save,         name='esign_save'),
+    path('api/esign/delete-group/', views.esign_delete_group, name='esign_delete_group'),
+ 
+    # 서명 API
+    path('api/esign/<int:request_id>/sign/', views.esign_sign, name='esign_sign'),
+ 
+    # PDF 다운로드 (FileResponse — url 직접 노출 금지)
+    path('api/esign/<int:request_id>/pdf/', views.esign_pdf_download, name='esign_pdf'),
+
+    path('api/esign/process-date/', views.esign_update_process_date, name='esign_update_process_date'),
 ]

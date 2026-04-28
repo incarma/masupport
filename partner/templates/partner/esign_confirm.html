@@ -1,0 +1,161 @@
+<!-- partner/templates/partner/esign_confirm.html -->
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}사실확인서 전자서명{% endblock %}
+
+{% block app_css %}
+<link rel="stylesheet" href="{% static 'css/apps/partner.css' %}">
+{% endblock %}
+
+{% block content_wrapper %}
+<div class="container-fluid my-4">
+
+  <!-- Boot root: JS는 이 div의 dataset만 읽는다 (Playbook Boot 패턴) -->
+  <div id="esign-confirm"
+       data-esign-root="true"
+       data-root-alias="manage-efficiency"
+       data-user-grade="{{ user.grade }}"
+       data-user-id="{{ user.id }}"
+       data-user-branch="{{ user.branch }}"
+       data-user-part="{{ user.part }}"
+       data-fetch-url="{% url 'partner:esign_fetch' %}"
+       data-save-url="{% url 'partner:esign_save' %}"
+       data-delete-group-url="{% url 'partner:esign_delete_group' %}"
+       data-process-date-url="{% url 'partner:esign_update_process_date' %}"
+       data-sign-url-template="/partner/api/esign/{id}/sign/"
+       data-pdf-url-template="/partner/api/esign/{id}/pdf/"
+       data-search-user-url="{% url 'accounts:api_search_user' %}"
+       data-can-input="{{ can_input|yesno:'true,false' }}"
+       data-can-delete="{{ can_delete|yesno:'true,false' }}"
+       data-can-process-date="{{ can_process_date|yesno:'true,false' }}">
+
+    <!-- 페이지 헤더 -->
+    <h3 class="text-center fw-bold mb-4" style="color:#003f7d;">사실확인서 전자서명 페이지</h3>
+
+    <!-- 컨트롤 폼 -->
+    <div class="card shadow p-3 border-0 rounded-4 mb-3">
+      <form id="controlsForm" autocomplete="off" onsubmit="return false;">
+        <div>
+          <label class="form-label mb-1">연도</label>
+          <select id="yearSelect" class="form-select form-select-sm"></select>
+        </div>
+        <div>
+          <label class="form-label mb-1">월</label>
+          <select id="monthSelect" class="form-select form-select-sm"></select>
+        </div>
+        <!-- superuser만 channel/part/branch 셀렉터 활성화 -->
+        {% if user.grade == 'superuser' %}
+        <div>
+          <label class="form-label mb-1">부문</label>
+          <select id="channelSelect" class="form-select form-select-sm">
+            <option value="">부문 선택</option>
+          </select>
+        </div>
+        {% endif %}
+        <div>
+          <label class="form-label mb-1">부서</label>
+          <select id="partSelect" class="form-select form-select-sm">
+            <option value="">부서 선택</option>
+          </select>
+        </div>
+        <div>
+          <label class="form-label mb-1">지점</label>
+          <select id="branchSelect" class="form-select form-select-sm" disabled>
+            <option value="">지점 선택</option>
+          </select>
+        </div>
+        <div class="align-self-end">
+          <button type="button" id="btnSearch" class="btn btn-primary btn-sm btn-search" disabled>
+            조회
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- 내용 입력 카드 (superuser/head/leader만 표시, basic 숨김) -->
+    {% if can_input %}
+    <div id="inputSection" class="card shadow p-3 border-0 rounded-4 mb-3">
+      <div class="manage-input-head mb-2">
+        <h5 class="manage-input-title fw-bold mb-0" style="color:#005BAC;">내용입력</h5>
+        <div class="manage-input-actions ms-auto">
+          <button type="button" id="btnAddRow"    class="btn btn-primary btn-sm">추가</button>
+          <button type="button" id="btnClearRows" class="btn btn-outline-secondary btn-sm">초기화</button>
+          <button type="button" id="btnSave"      class="btn btn-success btn-sm">저장</button>
+        </div>
+      </div>
+      <div class="table-responsive">
+        <table id="inputTable" class="table table-sm table-bordered mb-0">
+          <colgroup>
+            <col style="width:140px"> <!-- 소속 -->
+            <col style="width:120px"> <!-- 시작월도 -->
+            <col style="width:120px"> <!-- 종료월도 -->
+            <col style="width:100px"> <!-- 구분 -->
+            <col style="width:140px"> <!-- 금액 -->
+            <col style="width:200px"> <!-- 공제자 -->
+            <col style="width:200px"> <!-- 지급자 -->
+            <col style="width:380px"> <!-- 내용 -->
+            <col style="width:70px">  <!-- 삭제 -->
+          </colgroup>
+          <thead class="table-light">
+            <tr>
+              <th>소속(요청자)</th>
+              <th>시작월도 <span class="text-danger">*</span></th>
+              <th>종료월도 <span class="text-danger">*</span></th>
+              <th>구분</th>
+              <th>금액</th>
+              <th>공제자 <span class="text-danger">*</span></th>
+              <th>지급자 <span class="text-danger">*</span></th>
+              <th>내용(비고)</th>
+              <th>삭제</th>
+            </tr>
+          </thead>
+          <tbody id="inputTbody">
+            <!-- JS로 행 동적 생성 (save.js EsignSave.addRow) -->
+          </tbody>
+        </table>
+      </div>
+      <div class="mt-1">
+        <small class="text-muted" id="rowCountMsg">0 / 10행</small>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- 아코디언 영역 (조회 결과) -->
+    <div id="mainSheet" class="card shadow p-3 border-0 rounded-4">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <h5 class="fw-bold mb-0" style="color:#005BAC;">메인시트</h5>
+        <div class="small text-muted" id="sheetNotice"></div>
+      </div>
+      <div id="esignLoadingMsg" class="text-center text-muted py-4" hidden>
+        <div class="spinner-border spinner-border-sm me-2"></div>불러오는 중...
+      </div>
+      <div id="esignEmptyMsg" class="text-center text-muted py-4" hidden>
+        조회된 내역이 없습니다.
+      </div>
+      <div id="confirmGroupsAccordion" class="accordion"></div>
+    </div>
+
+  </div><!-- /esign-confirm -->
+
+  <!-- 서명하기 모달 -->
+  {% include "partner/includes/_esign_sign_modal.html" %}
+
+  <!-- 사용자 검색 모달 (search_user_modal.js SSOT — manage_calculate 동일 패턴) -->
+  {% include 'components/search_user_modal.html' with search_url=search_user_url|default:'/api/accounts/search-user/' %}
+
+</div><!-- /container-fluid -->
+{% endblock %}
+
+{% block extra_js %}
+<!-- 공통 유틸 -->
+<script src="{% static 'js/common/part_branch_selector.js' %}?v={% now 'U' %}"></script>
+<script src="{% static 'js/common/search_user_modal.js' %}?v={% now 'U' %}"></script>
+
+<!-- esign 전용 모듈 (의존 순서 고정: dom_refs → fetch/save/sign → index) -->
+<script src="{% static 'js/partner/esign_confirm/dom_refs.js' %}?v={% now 'U' %}"></script>
+<script src="{% static 'js/partner/esign_confirm/fetch.js' %}?v={% now 'U' %}"></script>
+<script src="{% static 'js/partner/esign_confirm/save.js' %}?v={% now 'U' %}"></script>
+<script src="{% static 'js/partner/esign_confirm/sign.js' %}?v={% now 'U' %}"></script>
+<script src="{% static 'js/partner/esign_confirm/index.js' %}?v={% now 'U' %}"></script>
+{% endblock %}

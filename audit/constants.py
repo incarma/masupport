@@ -104,3 +104,10 @@ class ACTION:
     COLLECT_FEEDBACK_DELETE = "collect.feedback.delete"
 
     RETENTION_EXCEL_UPLOAD = "retention.record.upload"
+
+    # Partner / esign
+    PARTNER_ESIGN_CREATE = "partner.esign.create"
+    PARTNER_ESIGN_SIGN   = "partner.esign.sign"
+    PARTNER_ESIGN_DELETE = "partner.esign.delete"
+    PARTNER_ESIGN_PDF_DL = "partner.esign.pdf.download"
+    PARTNER_ESIGN_PROCESS_DATE_UPDATE = "partner.esign.process_date.update"

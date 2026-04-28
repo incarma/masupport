@@ -300,6 +300,16 @@ class EfficiencyChange(models.Model):
         verbose_name="확인서(레거시)",
     )
 
+    # 전자서명 연동 필드 (blank 허용 — 기존 저장 경로 영향 없음)
+    start_ym = models.CharField(
+        max_length=7, blank=True, default='',
+        verbose_name='시작월도',  # "YYYY-MM"
+    )
+    end_ym = models.CharField(
+        max_length=7, blank=True, default='',
+        verbose_name='종료월도',  # "YYYY-MM"
+    )
+
     class Meta:
         ordering = ["-id"]
         indexes = [
@@ -309,3 +319,159 @@ class EfficiencyChange(models.Model):
 
     def __str__(self):
         return f"{self.month} - {getattr(self.requester, 'name', '-')}"
+    
+
+
+# ============================================================
+# 전자서명 시스템 — Phase 1 신규 모델
+# 설계 기준: django_ma_esign_final_design.md v2.0
+# ============================================================
+
+class EfficiencySignRequest(models.Model):
+    """
+    지점효율 사실확인서 전자서명 요청 단위.
+    EfficiencyConfirmGroup 1개당 1:1 대응.
+
+    ⚠️ pdf_file.url 직접 노출 절대 금지.
+       반드시 esign_pdf_download 뷰에서 FileResponse로만 제공.
+    """
+
+    STATUS_PENDING   = 'pending'
+    STATUS_PARTIAL   = 'partial'
+    STATUS_COMPLETED = 'completed'
+    STATUS_CANCELLED = 'cancelled'
+
+    STATUS_CHOICES = [
+        (STATUS_PENDING,   '서명 대기'),
+        (STATUS_PARTIAL,   '일부 서명'),
+        (STATUS_COMPLETED, '서명 완료'),
+        (STATUS_CANCELLED, '취소'),
+    ]
+
+    confirm_group = models.OneToOneField(
+        'partner.EfficiencyConfirmGroup',
+        on_delete=models.CASCADE,
+        related_name='sign_request',
+        null=True,
+        blank=True,
+    )
+
+    ym         = models.CharField(max_length=7, verbose_name='월도')       # "YYYY-MM"
+    branch     = models.CharField(max_length=50, default='-', verbose_name='지점')
+    created_by = models.ForeignKey(
+        'accounts.CustomUser',
+        on_delete=models.PROTECT,
+        related_name='esign_requests_created',
+        verbose_name='생성자',
+    )
+
+    # 완성 PDF — 서명 완료 시에만 생성
+    doc_hash = models.CharField(
+        max_length=64, blank=True, default='',
+        verbose_name='PDF SHA-256',
+    )
+    pdf_file = models.FileField(
+        upload_to='esign/completed/',
+        null=True, blank=True,
+        verbose_name='완성 PDF',
+    )
+
+    status     = models.CharField(
+        max_length=20, choices=STATUS_CHOICES,
+        default=STATUS_PENDING, verbose_name='서명 상태',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = '전자서명 요청'
+        verbose_name_plural = '전자서명 요청 목록'
+        indexes = [
+            models.Index(fields=['ym', 'branch']),
+            models.Index(fields=['status']),
+        ]
+
+    def __str__(self):
+        return f"{self.ym}/{self.branch} [{self.get_status_display()}]"
+
+    @property
+    def is_pending(self):
+        return self.status == self.STATUS_PENDING
+
+    @property
+    def is_completed(self):
+        return self.status == self.STATUS_COMPLETED
+
+
+class EfficiencyConfirmSign(models.Model):
+    """
+    서명 요청 내 개별 참여자 서명 상태 — 감사추적 핵심 테이블.
+
+    role:
+      'deduct'       → 공제대상자 (ded_id 기준 자동 등록)
+      'pay'          → 지급대상자 (pay_id 기준 자동 등록)
+      'head_confirm' → 최고관리자 확인 (branch head 자동 등록)
+    """
+
+    ROLE_DEDUCT       = 'deduct'
+    ROLE_PAY          = 'pay'
+    ROLE_HEAD_CONFIRM = 'head_confirm'
+
+    ROLE_CHOICES = [
+        (ROLE_DEDUCT,       '공제대상자'),
+        (ROLE_PAY,          '지급대상자'),
+        (ROLE_HEAD_CONFIRM, '최고관리자 확인'),
+    ]
+
+    request = models.ForeignKey(
+        EfficiencySignRequest,
+        on_delete=models.CASCADE,
+        related_name='signs',
+        verbose_name='서명 요청',
+    )
+    signer = models.ForeignKey(
+        'accounts.CustomUser',
+        on_delete=models.PROTECT,
+        related_name='esign_participations',
+        verbose_name='서명자',
+    )
+    role = models.CharField(
+        max_length=20, choices=ROLE_CHOICES,
+        verbose_name='역할',
+    )
+
+    # ── 서명 감사추적 ────────────────────────────────────────────
+    # ⚠️ 민감 개인정보(전화번호·CI 등) 절대 저장 금지
+    signed_at   = models.DateTimeField(null=True, blank=True, verbose_name='서명일시')
+    ip_address  = models.GenericIPAddressField(null=True, blank=True, verbose_name='서명 IP')
+    user_agent  = models.TextField(blank=True, default='', verbose_name='User-Agent')
+    session_key = models.CharField(
+        max_length=40, blank=True, default='',
+        verbose_name='세션 키 스냅샷',
+    )
+
+    # 서명 당시 PASS 인증 상태 스냅샷 (Phase 2 연동 전까지 null)
+    pass_verified_at_sign = models.DateTimeField(
+        null=True, blank=True,
+        verbose_name='PASS 인증일시 스냅샷',
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('request', 'signer')
+        verbose_name = '서명 참여자'
+        verbose_name_plural = '서명 참여자 목록'
+        ordering = ['created_at']
+
+    def __str__(self):
+        return (
+            f"{self.request_id} - {self.signer_id}"
+            f" ({self.get_role_display()})"
+            f" {'✅' if self.signed_at else '⏳'}"
+        )
+
+    @property
+    def is_signed(self):
+        return self.signed_at is not None

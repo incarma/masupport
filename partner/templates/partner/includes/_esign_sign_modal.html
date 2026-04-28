@@ -1,0 +1,69 @@
+<!-- partner/templates/partner/includes/_esign_sign_modal.html -->
+<!-- 서명하기 모달 — esign_confirm.html에서 include -->
+
+<div class="modal fade" id="esignSignModal" tabindex="-1" aria-labelledby="esignSignModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content">
+
+      <div class="modal-header">
+        <h5 class="modal-title fw-bold" id="esignSignModalLabel">
+          ✍️ 지점효율 사실확인서 서명
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="닫기"></button>
+      </div>
+
+      <div class="modal-body">
+
+        <!-- 그룹 정보 (sign.js에서 동적 주입) -->
+        <div class="d-flex align-items-center gap-2 mb-3">
+          <span class="fw-bold" id="signModalTitle">—</span>
+          <span class="badge bg-secondary" id="signModalMonth">—</span>
+        </div>
+
+        <!-- 내역 테이블 (sign.js에서 동적 렌더) -->
+        <div class="table-responsive mb-3">
+          <table class="table table-sm table-bordered" style="min-width:700px; font-size:12px;">
+            <thead class="table-light">
+              <tr>
+                <th style="width:40px">번호</th>
+                <th style="width:80px">시작월</th>
+                <th style="width:80px">종료월</th>
+                <th style="width:90px">금액</th>
+                <th style="width:100px">공제자</th>
+                <th style="width:100px">지급자</th>
+                <th>내용</th>
+              </tr>
+            </thead>
+            <tbody id="signModalTbody">
+              <!-- JS에서 동적 렌더 -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- 서명 현황 (sign.js에서 동적 렌더) -->
+        <div class="mb-3">
+          <p class="fw-semibold mb-1" style="font-size:13px;">서명 현황</p>
+          <div id="signModalSigners" class="d-flex flex-wrap gap-2"></div>
+        </div>
+
+        <!-- 동의 체크 — 체크 전 서명하기 버튼 disabled -->
+        <div class="form-check border rounded p-3 bg-light">
+          <input class="form-check-input" type="checkbox" id="signAgreementCheck">
+          <label class="form-check-label fw-semibold" for="signAgreementCheck" style="font-size:13px;">
+            위 내용을 확인하였으며, 전자서명에 동의합니다.
+          </label>
+        </div>
+
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">취소</button>
+        <!-- btnDoSign: 동의 체크 전 disabled, sign.js에서 data-request-id 주입 -->
+        <button type="button" class="btn btn-warning fw-bold" id="btnDoSign" disabled>
+          ✍️ 서명하기
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
