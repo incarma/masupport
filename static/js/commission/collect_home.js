@@ -261,6 +261,7 @@ function renderTableHead(tab) {
   thead.innerHTML = `<tr>${
     cols.map(c => {
       const cls = `text-nowrap${c.money ? " text-end" : ""}`;
+
       if (c.dropdownType) {
         // dropdownType이 있어도 sortKey가 있으면 정렬 가능한 헤더로 렌더링
         if (c.sortKey) {
@@ -272,9 +273,11 @@ function renderTableHead(tab) {
         }
         return `<th class="${cls} collect-th-dropdown">${esc(c.label)}</th>`;
       }
+
       if (!c.sortKey) {
         return `<th class="${cls} collect-th-feedback">${esc(c.label)}</th>`;
       }
+
       const isActive = state.sortKey === c.sortKey;
       const icon = isActive ? (state.sortDir === "asc" ? " ▲" : " ▼") : " ⇅";
       return `<th class="${cls} collect-sort-th"
