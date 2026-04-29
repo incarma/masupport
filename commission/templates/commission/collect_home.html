@@ -145,6 +145,15 @@
               </select>
             </div>
 
+            <!-- 키워드 검색 — id="collectKeywordInput" 변경 금지 -->
+            <div class="collect-filter-item" style="flex: 1 1 200px; max-width: 280px;">
+              <label for="collectKeywordInput" class="form-label form-label-sm fw-semibold mb-1">검색</label>
+              <input type="text"
+                    id="collectKeywordInput"
+                    class="form-control form-control-sm"
+                    placeholder="사원명, 사번, 영업가족 등">
+            </div>
+
             <div class="collect-filter-btn">
               <label class="form-label form-label-sm fw-semibold mb-1 invisible">조회</label>
               <button type="button" id="collectSearchBtn"
@@ -301,6 +310,37 @@
           <label for="feedbackContent" class="form-label form-label-sm fw-semibold">
             새 피드백 입력
           </label>
+
+          <!-- 입력일 / 담당부서 / 담당자 -->
+          <div class="row g-2 mb-2">
+            <div class="col-12 col-sm-4">
+              <label for="feedbackDateInput" class="form-label form-label-sm mb-1">입력일</label>
+              <!-- id="feedbackDateInput" 변경 금지 -->
+              <input type="date"
+                     id="feedbackDateInput"
+                     class="form-control form-control-sm">
+            </div>
+            <div class="col-12 col-sm-4">
+              <label for="feedbackDepartment" class="form-label form-label-sm mb-1">담당부서</label>
+              <!-- id="feedbackDepartment" 변경 금지 -->
+              <select id="feedbackDepartment" class="form-select form-select-sm">
+                <option value="">선택</option>
+                <option value="채권추심부">채권추심부</option>
+                <option value="담당부서">담당부서</option>
+                <option value="영업지점">영업지점</option>
+              </select>
+            </div>
+            <div class="col-12 col-sm-4">
+              <label for="feedbackManager" class="form-label form-label-sm mb-1">담당자</label>
+              <!-- id="feedbackManager" 변경 금지 -->
+              <input type="text"
+                     id="feedbackManager"
+                     class="form-control form-control-sm"
+                     placeholder="담당자 이름"
+                     maxlength="50">
+            </div>
+          </div>
+
           <!-- id="feedbackContent" 변경 금지 -->
           <textarea id="feedbackContent"
                     class="form-control form-control-sm mb-2"

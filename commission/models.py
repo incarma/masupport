@@ -436,6 +436,25 @@ class CollectFeedback(models.Model):
         verbose_name="작성자",
     )
     content    = models.TextField(verbose_name="피드백 내용")
+
+    # ── 추가 메타 정보 (1번 요구사항) ──
+    DEPARTMENT_CHOICES = [
+        ("채권추심부", "채권추심부"),
+        ("담당부서",   "담당부서"),
+        ("영업지점",   "영업지점"),
+    ]
+    date_input  = models.DateField(
+        null=True, blank=True, verbose_name="입력일",
+        help_text="피드백 작성 기준일 (자동 입력일과 별개)"
+    )
+    department  = models.CharField(
+        max_length=20, blank=True, default="",
+        choices=DEPARTMENT_CHOICES, verbose_name="담당부서"
+    )
+    manager     = models.CharField(
+        max_length=50, blank=True, default="", verbose_name="담당자"
+    )
+
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="작성일시")
     updated_at = models.DateTimeField(auto_now=True,     verbose_name="수정일시")
 

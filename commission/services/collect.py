@@ -448,6 +448,9 @@ def get_feedbacks(emp_id: str) -> list[dict]:
             "author_id":   fb.author_id,
             "author_name": fb.author.name,
             "content":     fb.content,
+            "date_input":  fb.date_input.strftime("%Y-%m-%d") if fb.date_input else "",
+            "department":  fb.department or "",
+            "manager":     fb.manager    or "",
             "created_at":  fb.created_at.strftime("%Y-%m-%d %H:%M"),
             "updated_at":  fb.updated_at.strftime("%Y-%m-%d %H:%M") if is_modified else "",
             "is_modified": is_modified,
@@ -460,6 +463,9 @@ def create_feedback(
     author: CustomUser,
     emp_id: str,
     content: str,
+    date_input=None,
+    department: str = "",
+    manager: str = "",
 ) -> CollectFeedback:
     """
     피드백을 생성한다.
@@ -481,6 +487,9 @@ def create_feedback(
         emp_id=emp_id,
         author=author,
         content=content,
+        date_input=date_input,
+        department=department.strip() if department else "",
+        manager=manager.strip()    if manager    else "",
     )
     logger.info(
         "[collect] feedback created: id=%s, author=%s, emp_id=%s",
