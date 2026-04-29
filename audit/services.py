@@ -6,7 +6,7 @@ from typing import Any, Optional
 from django.db import transaction
 
 from .models import AuditLog
-from .utils import get_client_ip, mask_value
+from .utils import get_client_ip, is_sensitive_key, mask_value
 
 
 MAX_META_DEPTH = 2
@@ -32,7 +32,8 @@ def _safe_meta_value(value: Any, *, depth: int = 0) -> Any:
             if i >= MAX_META_ITEMS:
                 safe["_truncated"] = True
                 break
-            safe[str(k)[:100]] = _safe_meta_value(v, depth=depth + 1)
+            key = str(k)[:100]
+            safe[key] = "***" if is_sensitive_key(key) else _safe_meta_value(v, depth=depth + 1)
         return safe
 
     if isinstance(value, (list, tuple, set)):
@@ -57,7 +58,7 @@ def _safe_meta(meta: Optional[dict[str, Any]]) -> dict[str, Any]:
     safe: dict[str, Any] = {}
     for k, v in meta.items():
         key = str(k)[:100]
-        safe_value = _safe_meta_value(v, depth=0)
+        safe_value = "***" if is_sensitive_key(key) else _safe_meta_value(v, depth=0)
         if safe_value is None:
             continue
         safe[key] = safe_value

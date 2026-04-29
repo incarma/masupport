@@ -20,14 +20,6 @@
   <!-- ✅ App CSS: 페이지(앱)별로 필요할 때만 로드 -->
   {% block app_css %}{% endblock %}
 
-  <!-- ✅ Mobile Offcanvas tweak -->
-  <style>
-    #mobileOffcanvas { width: min(60vw, 360px); }
-    #mobileOffcanvas .accordion-button { padding: 14px 16px; font-weight: 700; }
-    #mobileOffcanvas .accordion-body a { color:#333; font-weight:600; text-decoration:none; }
-    #mobileOffcanvas .accordion-body a:hover { color:#005BAC; }
-  </style>
-
   {% block extra_head %}{% endblock %}
 
   <!-- DataTables CSS (옵션) -->
@@ -45,7 +37,7 @@
 
       <!-- 🔹 Logo -->
       <a class="navbar-brand" href="{% url 'home' %}">
-        <img src="{% static 'images/logo.png' %}" alt="인카 로고" style="height: 40px;">
+        <img src="{% static 'images/logo.png' %}" alt="인카 로고" class="navbar-logo">
       </a>
 
       <!-- 🔹 Mobile Offcanvas button -->
@@ -60,7 +52,7 @@
 
       <!-- 🔹 Center menu (Desktop only) -->
       <div class="collapse navbar-collapse justify-content-center position-absolute start-50 translate-middle-x d-none d-lg-flex"
-           id="navbarContent" style="width: fit-content;">
+           id="navbarContent">
         <ul class="navbar-nav mb-2 mb-lg-0">
 
           <!-- ✅ Dashboard (superuser/head only) -->
@@ -161,7 +153,7 @@
 
       <!-- 🔹 Right user info + logout (Desktop only) -->
       <div class="d-none d-lg-flex align-items-center ms-auto">
-        <div class="me-3" style="font-weight:500; color:#333;">
+        <div class="navbar-user-summary me-3">
           {{ user.branch }}&nbsp;<strong>{{ user.name }}({{ user.id }})</strong>
         </div>
         <!-- =====================================================
@@ -198,8 +190,8 @@
   <div class="offcanvas offcanvas-end" tabindex="-1" id="mobileOffcanvas" aria-labelledby="mobileOffcanvasLabel">
     <div class="offcanvas-header">
       <div>
-        <div class="fw-bold" style="font-size: 1.05rem;">전체 메뉴</div>
-        <div class="text-muted" style="font-size: .85rem;">
+        <div class="fw-bold mobile-menu-title">전체 메뉴</div>
+        <div class="text-muted mobile-menu-user">
           {{ user.branch }} · {{ user.name }}({{ user.id }})
         </div>
       </div>
@@ -345,14 +337,14 @@
                - 모바일에서도 사용자가 바로 비번변경 가능하도록 제공
           ====================================================== -->
           <div class="mb-2">
-            <a class="btn btn-outline-secondary w-100" style="border-radius:10px;"
+            <a class="btn btn-outline-secondary w-100 btn-rounded-10"
                href="{% url 'accounts:password_change' %}">
               비번변경
             </a>
           </div>
           <form method="post" action="{% url 'logout' %}">
             {% csrf_token %}
-            <button type="submit" class="btn btn-danger w-100" style="border-radius:10px;">로그아웃</button>
+            <button type="submit" class="btn btn-danger w-100 btn-rounded-10">로그아웃</button>
           </form>
         </div>
 

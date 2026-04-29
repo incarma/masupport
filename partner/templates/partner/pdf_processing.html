@@ -1,11 +1,16 @@
 <!-- django_ma/partner/templates/partner/pdf_processing.html -->
 
 {% extends "base.html" %}
+{% load static %}
 
 {% block title %}PDF 생성 중{% endblock %}
 
 {% block content %}
-<div class="container mt-5">
+<div id="pdfProcessingRoot"
+     class="container mt-5"
+     data-task-id="{{ task_id }}"
+     data-status-url-template="/manual/status/{taskId}/"
+     data-download-url-template="/manual/download/{taskId}/">
   <div class="mx-auto" style="max-width: 600px;">
     <div class="card shadow p-5 border-0 rounded-4 text-center">
       <h3 class="mb-4" style="font-family:'Noto Sans KR', sans-serif; color:#003f7d; font-weight:700;">
@@ -33,19 +38,5 @@
   </div>
 </div>
 
-<script>
-  const taskId = "{{ task_id }}";
-  const checkStatus = async () => {
-    const res = await fetch(`/manual/status/${taskId}/`);
-    const data = await res.json();
-    if (data.status === 'SUCCESS' && data.pdf_ready) {
-      window.location.href = `/manual/download/${taskId}/`;
-    } else if (data.status === 'FAILURE') {
-      alert('PDF 생성에 실패했습니다.');
-    } else {
-      setTimeout(checkStatus, 2000);
-    }
-  };
-  checkStatus();
-</script>
+<script src="{% static 'js/partner/pdf_processing.js' %}?v={% now 'U' %}"></script>
 {% endblock %}

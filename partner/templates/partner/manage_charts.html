@@ -228,37 +228,15 @@
 <!-- ===================================================== -->
 <!-- Boot 데이터 전달 -->
 <!-- ===================================================== -->
-<script>
-  window.ManageStructureBoot = {
-    userGrade: "{{ user.grade }}",
-    currentYear: {{ current_year }},
-    currentMonth: {{ current_month }},
-    selectedYear: {{ selected_year }},
-    selectedMonth: {{ selected_month }},
-    autoLoad: {{ auto_load|yesno:"true,false" }},
-    dataFetchUrl: "{{ data_fetch_url }}",
-    dataSaveUrl: "{{ data_save_url }}",
-    dataDeleteUrl: "{{ data_delete_url }}",
-    setDeadlineUrl: "{{ set_deadline_url }}",
-  };
-</script>
-
-<script>
-  window.currentUser = {
-    id: "{{ user.id|escapejs }}",
-    name: "{{ user.name|escapejs }}",
-    part: "{{ user.part|escapejs }}",
-    branch: "{{ user.branch|escapejs }}",
-    grade: "{{ user.grade|escapejs }}",
-    level: "{{ subadmin_info.level|default:''|escapejs }}",
-    team_a: "{{ subadmin_info.team_a|default:''|escapejs }}",
-    team_b: "{{ subadmin_info.team_b|default:''|escapejs }}",
-    team_c: "{{ subadmin_info.team_c|default:''|escapejs }}"
-  };
-  window.csrfToken = "{{ csrf_token }}";
-</script>
-
-<script>window.STATIC_VERSION = "{% now 'U' %}";</script>
+{{ ManageStructureBoot|json_script:"boot-structure" }}
+{{ currentUser|json_script:"current-user" }}
+<script src="{% static 'js/common/json_boot_bridge.js' %}?v={% now 'U' %}"
+        data-json-id="boot-structure"
+        data-window-name="ManageStructureBoot"></script>
+<script src="{% static 'js/common/json_boot_bridge.js' %}?v={% now 'U' %}"
+        data-json-id="current-user"
+        data-window-name="currentUser"></script>
+<script src="{% static 'js/common/csrf_window.js' %}?v={% now 'U' %}"></script>
 
 <!-- ✅ 공통 부서/지점 로더 -->
 <script src="{% static 'js/common/part_branch_selector.js' %}?v={% now 'U' %}"></script>

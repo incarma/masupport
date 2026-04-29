@@ -24,6 +24,23 @@ document.addEventListener("DOMContentLoaded", () => {
     "";
 
   const safeText = (v) => (v === null || v === undefined ? "" : String(v));
+  const escapeHtml = (v) =>
+    safeText(v)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+
+  const safeSameOriginUrl = (v) => {
+    try {
+      const u = new URL(safeText(v), window.location.origin);
+      if (u.origin !== window.location.origin) return "";
+      return u.pathname + u.search + u.hash;
+    } catch (_) {
+      return "";
+    }
+  };
 
   const showToastIfExists = () => {
     const el = document.getElementById("uploadToast");
@@ -95,12 +112,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
       // 모달 표시용 메시지 구성
       if (data.ok) {
-        const msg = safeText(data.message) || "✅ 업로드가 완료되었습니다.";
-        const uploaded = safeText(data.uploaded);
+        const msg = escapeHtml(data.message) || "✅ 업로드가 완료되었습니다.";
+        const uploaded = escapeHtml(data.uploaded);
         const missing = Number(data.missing_users || 0);
-        const part = safeText(data.part);
-        const uploadType = safeText(data.upload_type);
-        const uploadedDate = safeText(data.uploaded_date);
+         const part = escapeHtml(data.part);
+        const uploadType = escapeHtml(data.upload_type);
+        const uploadedDate = escapeHtml(data.uploaded_date);
 
         let bodyHtml = `
           <div class="mb-2 text-success fw-bold">${msg}</div>
@@ -117,14 +134,15 @@ document.addEventListener("DOMContentLoaded", () => {
           bodyHtml += `
             <hr class="my-3">
             <div class="text-warning fw-bold">⚠️ 미등록 사용자 ${missing}건</div>
-            ${sample.length ? `<div class="small mt-1">예시: ${sample.map(safeText).join(", ")}</div>` : ""}
+            ${sample.length ? `<div class="small mt-1">예시: ${sample.map(escapeHtml).join(", ")}</div>` : ""}
           `;
         }
 
-        if (data.fail_download_url) {
+        const failUrl = safeSameOriginUrl(data.fail_download_url);
+        if (failUrl) {
           bodyHtml += `
             <div class="mt-3">
-              <a class="btn btn-sm btn-outline-danger" href="${safeText(data.fail_download_url)}">
+              <a class="btn btn-sm btn-outline-danger" href="${failUrl}">
                 실패 엑셀 다운로드
               </a>
             </div>
@@ -139,7 +157,7 @@ document.addEventListener("DOMContentLoaded", () => {
           showReload: true, // 정책: 성공 시 새로고침 버튼 제공
         });
       } else {
-        const errMsg = safeText(data.message) || "업로드에 실패했습니다.";
+        const errMsg = escapeHtml(data.message) || "업로드에 실패했습니다.";
         hideUploadModalIfOpen();
         showResultModal({
           titleHtml: "❌ 업로드 실패",

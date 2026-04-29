@@ -83,6 +83,7 @@ class ACTION:
     ACCOUNTS_GRADE_UPDATE = "accounts.user.grade.update"
     ACCOUNTS_PASSWORD_RESET_UNLOCK = "accounts.user.password_reset_unlock"
     ACCOUNTS_PASSWORD_CHANGE_COMPLETED = "accounts.user.password_change.completed"
+    ACCOUNTS_PASSWORD_CHANGE_CLEARED = "accounts.password_change_cleared"
 
     # Support
     SUPPORT_COLLECT_RUN = "support.collect.run"

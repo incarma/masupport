@@ -2,6 +2,7 @@
 from __future__ import annotations
 from pathlib import Path
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import (
@@ -40,10 +41,13 @@ from django.http import HttpResponseForbidden
 
 from audit.constants import ACTION
 from audit.services import log_action
+from audit.utils import mask_value
 
 logger = logging.getLogger("django.security.csrf")
 access_logger = logging.getLogger("accounts.access")
 UserModel = get_user_model()
+
+UPLOAD_TASK_OWNER_PREFIX = "accounts_upload_owner"
 
 
 # =============================================================================
@@ -54,19 +58,19 @@ def csrf_failure(request, reason=""):
     logger.warning(
         "CSRF FAILED | reason=%s | path=%s | method=%s | host=%s | secure=%s | "
         "xf_proto=%s | xf_host=%s | referer=%s | origin=%s | cookie=%s | ua=%s",
-        reason,
-        request.path,
+        mask_value(reason),
+        mask_value(request.path),
         request.method,
-        request.get_host(),
+        mask_value(request.get_host()),
         request.is_secure(),
-        request.META.get("HTTP_X_FORWARDED_PROTO"),
-        request.META.get("HTTP_X_FORWARDED_HOST"),
-        request.META.get("HTTP_REFERER"),
-        request.META.get("HTTP_ORIGIN"),
-        request.META.get("HTTP_COOKIE"),
-        request.META.get("HTTP_USER_AGENT"),
+        mask_value(request.META.get("HTTP_X_FORWARDED_PROTO", "")),
+        mask_value(request.META.get("HTTP_X_FORWARDED_HOST", "")),
+        mask_value(request.META.get("HTTP_REFERER", "")),
+        mask_value(request.META.get("HTTP_ORIGIN", "")),
+        "***",
+        mask_value(request.META.get("HTTP_USER_AGENT", "")),
     )
-    return HttpResponseForbidden(f"CSRF Failed: {reason}")
+    return HttpResponseForbidden("CSRF Failed")
 
 
 # =============================================================================
@@ -87,6 +91,34 @@ def _is_ajax(request: HttpRequest) -> bool:
     landing.js의 fetch() 호출에 'X-Requested-With: XMLHttpRequest' 헤더가 포함되어야 한다.
     """
     return request.headers.get("X-Requested-With") == "XMLHttpRequest"
+
+
+def _task_owner_key(task_id: str) -> str:
+    return cache_key(UPLOAD_TASK_OWNER_PREFIX, task_id)
+
+
+def _is_upload_task_allowed(request: HttpRequest, task_id: str) -> bool:
+    user = getattr(request, "user", None)
+    if not getattr(user, "is_authenticated", False):
+        return False
+
+    owner_id = cache.get(_task_owner_key(task_id))
+    if owner_id:
+        return str(owner_id) == str(getattr(user, "pk", ""))
+
+    # 구버전 캐시에 owner가 없는 경우: 관리자급만 fallback 허용
+    grade = (getattr(user, "grade", "") or "").strip()
+    return bool(getattr(user, "is_superuser", False) or grade in {"superuser", "head"})
+
+
+def _safe_upload_result_path(raw_path: str | Path) -> Path:
+    p = Path(raw_path).resolve()
+    base = Path(getattr(settings, "UPLOAD_RESULT_DIR", settings.MEDIA_ROOT)).resolve()
+    if base not in p.parents and p != base:
+        raise Http404("파일을 찾을 수 없습니다.")
+    if not p.exists() or not p.is_file():
+        raise Http404("파일을 찾을 수 없습니다.")
+    return p
 
 
 # =============================================================================
@@ -160,6 +192,10 @@ password_change_done_view = UserPasswordChangeDoneView.as_view()
 @login_required
 def upload_progress_view(request: HttpRequest) -> JsonResponse:
     task_id = (request.GET.get("task_id") or "").strip()
+
+    if not _is_upload_task_allowed(request, task_id):
+        return JsonResponse({"percent": 0, "status": "FORBIDDEN", "error": "권한이 없습니다.", "download_url": ""}, status=403)
+
     if not task_id:
         return JsonResponse({"percent": 0, "status": "PENDING", "error": "", "download_url": ""})
 
@@ -190,13 +226,14 @@ def upload_progress_view(request: HttpRequest) -> JsonResponse:
 
 @login_required
 def upload_result_view(request: HttpRequest, task_id: str) -> FileResponse:
+    if not _is_upload_task_allowed(request, task_id):
+        raise Http404("결과 파일을 찾을 수 없습니다.")
+
     result_path = cache.get(cache_key(CACHE_RESULT_PATH_PREFIX, task_id))
     if not result_path:
         raise Http404("결과 파일을 찾을 수 없습니다.")
 
-    p = Path(result_path)
-    if not p.exists() or not p.is_file():
-        raise Http404("파일을 찾을 수 없습니다.")
+    p = _safe_upload_result_path(result_path)
 
     return FileResponse(open(p, "rb"), as_attachment=True, filename=p.name)
 

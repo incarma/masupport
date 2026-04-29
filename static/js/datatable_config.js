@@ -8,6 +8,14 @@
  * - ✅ jQuery/DataTables 존재 체크 가드
  */
 document.addEventListener("DOMContentLoaded", function () {
+  const escapeHtml = (v) =>
+    String(v ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+
   const tables = document.querySelectorAll(".datatable");
   if (!tables.length) return;
 
@@ -51,7 +59,7 @@ document.addEventListener("DOMContentLoaded", function () {
       .each(function () {
         const title = window.jQuery(this).text();
         window.jQuery(this).html(
-          title + '<br><input type="text" class="form-control form-control-sm" placeholder="검색" />'
+          escapeHtml(title) + '<br><input type="text" class="form-control form-control-sm" placeholder="검색" />'
         );
       });
 

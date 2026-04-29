@@ -392,6 +392,21 @@ UPLOAD_RESULT_DIR = Path(config("UPLOAD_RESULT_DIR", default=str(MEDIA_ROOT / "u
 UPLOAD_TEMP_DIR = Path(config("UPLOAD_TEMP_DIR", default=str(MEDIA_ROOT / "upload_temp")))
 
 # =============================================================================
+# 11-0) Audit / Request logging safety
+# =============================================================================
+AUDIT_TRUSTED_PROXY_CIDRS = config(
+    "AUDIT_TRUSTED_PROXY_CIDRS",
+    default="127.0.0.1/32,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16",
+    cast=lambda v: tuple(s.strip() for s in v.split(",") if s.strip()),
+)
+
+AUDIT_REQUESTLOG_EXCLUDE_PATH_PREFIXES = config(
+    "AUDIT_REQUESTLOG_EXCLUDE_PATH_PREFIXES",
+    default="/healthz,/nginx-healthz,/static/,/favicon.ico,/robots.txt",
+    cast=lambda v: tuple(s.strip() for s in v.split(",") if s.strip()),
+)
+
+# =============================================================================
 # 11-1) Board attachment upload policy
 # =============================================================================
 BOARD_ATTACHMENT_MAX_UPLOAD_SIZE = config(
@@ -659,11 +674,12 @@ CONTENT_SECURITY_POLICY = config(
     "CONTENT_SECURITY_POLICY",
     default=(
         "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+        "script-src 'self'; "
         "style-src 'self' 'unsafe-inline'; "
         "img-src 'self' data: https:; "
         "font-src 'self' data:; "
         "connect-src 'self'; "
+        "object-src 'none'; "
         "frame-ancestors 'none'; "
         "base-uri 'self'; "
         "form-action 'self'"

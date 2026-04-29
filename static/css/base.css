@@ -9,6 +9,53 @@
 ========================================================== */
 
 /* ==========================================================
+   Base layout / CSP-safe helpers
+========================================================== */
+.navbar-logo {
+  height: 40px;
+}
+
+#navbarContent {
+  width: fit-content;
+}
+
+.navbar-user-summary {
+  font-weight: 500;
+  color: #333;
+}
+
+#mobileOffcanvas {
+  width: min(60vw, 360px);
+}
+
+#mobileOffcanvas .accordion-button {
+  padding: 14px 16px;
+  font-weight: 700;
+}
+
+#mobileOffcanvas .accordion-body a {
+  color: #333;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+#mobileOffcanvas .accordion-body a:hover {
+  color: #005BAC;
+}
+
+.mobile-menu-title {
+  font-size: 1.05rem;
+}
+
+.mobile-menu-user {
+  font-size: .85rem;
+}
+
+.btn-rounded-10 {
+  border-radius: 10px;
+}
+
+/* ==========================================================
  0) TOKENS: Design Tokens / Root Variables
 ========================================================== */
 :root {
