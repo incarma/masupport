@@ -48,6 +48,7 @@ EXPORT_SELECTED_FILENAME = "selected_custom_users.xlsx"
 EXPORT_ALL_FILENAME = "all_custom_users.xlsx"
 
 DEFAULT_BATCH_SIZE = 500
+UPLOAD_TASK_OWNER_PREFIX = "accounts_upload_owner"
 
 SAFE_FILENAME_PATTERN = re.compile(r"[^0-9A-Za-z가-힣._-]+")
 
@@ -100,7 +101,10 @@ def _save_uploaded_file_to_disk(uploaded_file, *, task_id: str) -> Path:
 
 
 def _file_response_or_404(abs_path: str | Path, *, download_name: Optional[str] = None) -> FileResponse:
-    p = Path(abs_path)
+    p = Path(abs_path).resolve()
+    base = Path(getattr(settings, "UPLOAD_RESULT_DIR", settings.MEDIA_ROOT)).resolve()
+    if base not in p.parents and p != base:
+        raise Http404("파일을 찾을 수 없습니다.")
     if not p.exists() or not p.is_file():
         raise Http404("파일을 찾을 수 없습니다.")
     fh = open(p, "rb")
@@ -206,6 +210,11 @@ def upload_users_from_excel_view(request: HttpRequest) -> HttpResponse:
         )
 
     _init_upload_cache(task_id)
+    cache.set(
+        cache_key(UPLOAD_TASK_OWNER_PREFIX, task_id),
+        str(getattr(request.user, "pk", "")),
+        timeout=CACHE_TIMEOUT_SECONDS,
+    )
 
     # tasks.py에서도 동일 constants 사용 (cache_key/prefix 통일)
     process_users_excel_task.delay(task_id, str(save_path), DEFAULT_BATCH_SIZE)
@@ -218,6 +227,10 @@ def upload_users_from_excel_view(request: HttpRequest) -> HttpResponse:
 
 
 def upload_users_result_view(request: HttpRequest, task_id: str) -> FileResponse:
+    owner_id = cache.get(cache_key(UPLOAD_TASK_OWNER_PREFIX, task_id))
+    if owner_id and str(owner_id) != str(getattr(request.user, "pk", "")):
+        raise Http404("결과 파일을 찾을 수 없습니다.")
+
     result_path = cache.get(cache_key(CACHE_RESULT_PATH_PREFIX, task_id))
     if not result_path:
         raise Http404("결과 파일을 찾을 수 없습니다.")
@@ -408,7 +421,26 @@ class CustomUserAdmin(UserAdmin):
         - 강제 정책 적용 실패/문의 폭주 시, 특정 사용자만 빠르게 해제할 수 있어야 합니다.
         - (주의) '비번이 안전해졌다'는 의미는 아니므로, 현장 SOP에 따라 사용하세요.
         """
-        queryset.update(must_change_password=False)
+        now = timezone.now()
+        changed = 0
+        for selected in queryset:
+            with transaction.atomic():
+                target = CustomUser.objects.select_for_update().get(pk=selected.pk)
+                target.must_change_password = False
+                target.must_change_password_cleared_at = now
+                target.save(update_fields=["must_change_password", "must_change_password_cleared_at"])
+                try:
+                    log_action(
+                        request,
+                        ACTION.ACCOUNTS_PASSWORD_CHANGE_CLEARED,
+                        obj=target,
+                        meta={"user_id": target.id},
+                        success=True,
+                    )
+                except Exception:
+                    pass
+                changed += 1
+        self.message_user(request, f"{changed}명의 강제 비밀번호 변경 플래그를 해제했습니다.", level=messages.SUCCESS)
     
     def get_actions(self, request):
         actions = super().get_actions(request)

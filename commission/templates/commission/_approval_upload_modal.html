@@ -123,25 +123,4 @@
   </div>
 </div>
 
-<script>
-  // Bootstrap validation (light defense)
-  // - 업로드 로직/중복제출 방지는 approval_excel_upload.js가 담당
-  // - 여기서는 checkValidity() 실패 시 submit만 막고 was-validated만 표시
-
-  (function () {
-    const form = document.getElementById("approvalUploadForm");
-    if (!form) return;
-
-    form.addEventListener(
-      "submit",
-      function (e) {
-        if (!form.checkValidity()) {
-          e.preventDefault();
-          e.stopPropagation();
-        }
-        form.classList.add("was-validated");
-      },
-      { passive: false }
-    );
-  })();
-</script>
+<script src="{% static 'js/commission/approval_upload_validation.js' %}{% if STATIC_VERSION %}?v={{ STATIC_VERSION }}{% endif %}"></script>

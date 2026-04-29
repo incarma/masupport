@@ -295,10 +295,13 @@
 
   {{ ManageefficiencyBoot|json_script:"boot-efficiency" }}
   {{ currentUser|json_script:"current-user" }}
-  <script>
-    window.ManageefficiencyBoot = JSON.parse(document.getElementById("boot-efficiency").textContent);
-    window.currentUser = JSON.parse(document.getElementById("current-user").textContent);
-  </script>
+  <script src="{% static 'js/common/json_boot_bridge.js' %}?v={% now 'U' %}"
+          data-json-id="boot-efficiency"
+          data-window-name="ManageefficiencyBoot"></script>
+  <script src="{% static 'js/common/json_boot_bridge.js' %}?v={% now 'U' %}"
+          data-json-id="current-user"
+          data-window-name="currentUser"></script>
+  <script src="{% static 'js/common/csrf_window.js' %}?v={% now 'U' %}"></script>
 
   <script type="module" src="{% static 'js/common/part_branch_selector.js' %}?v={% now 'U' %}"></script>
   <script type="module" src="{% static 'js/common/manage_boot.js' %}?v=20251228_01"></script>

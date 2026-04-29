@@ -4,6 +4,7 @@ from __future__ import annotations
 import time
 import uuid
 
+from django.conf import settings
 from django.utils.deprecation import MiddlewareMixin
 
 from .models import RequestLog
@@ -16,6 +17,10 @@ class RequestLogMiddleware(MiddlewareMixin):
     - body는 저장하지 않음
     - querystring은 마스킹 후 저장
     """
+    def _should_skip(self, request) -> bool:
+        path = (getattr(request, "path", "") or "")
+        prefixes = getattr(settings, "AUDIT_REQUESTLOG_EXCLUDE_PATH_PREFIXES", ())
+        return any(path.startswith(prefix) for prefix in prefixes)
 
     def process_request(self, request):
         request._audit_start = time.perf_counter()
@@ -25,6 +30,13 @@ class RequestLogMiddleware(MiddlewareMixin):
 
     def process_response(self, request, response):
         try:
+            rid = (getattr(request, "audit_request_id", "") or "")[:64]
+            if rid:
+                response.headers.setdefault("X-Request-ID", rid)
+
+            if self._should_skip(request):
+                return response
+
             start = getattr(request, "_audit_start", None)
             duration_ms = int((time.perf_counter() - start) * 1000) if start else 0
 

@@ -35,7 +35,7 @@
 
     <!-- 컨트롤 폼 -->
     <div class="card shadow p-3 border-0 rounded-4 mb-3">
-      <form id="controlsForm" autocomplete="off" onsubmit="return false;">
+      <form id="controlsForm" autocomplete="off" data-prevent-submit="true">
         <div>
           <label class="form-label mb-1">연도</label>
           <select id="yearSelect" class="form-select form-select-sm"></select>
@@ -151,6 +151,7 @@
 <!-- 공통 유틸 -->
 <script src="{% static 'js/common/part_branch_selector.js' %}?v={% now 'U' %}"></script>
 <script src="{% static 'js/common/search_user_modal.js' %}?v={% now 'U' %}"></script>
+<script src="{% static 'js/common/prevent_form_submit.js' %}?v={% now 'U' %}"></script>
 
 <!-- esign 전용 모듈 (의존 순서 고정: dom_refs → fetch/save/sign → index) -->
 <script src="{% static 'js/partner/esign_confirm/dom_refs.js' %}?v={% now 'U' %}"></script>

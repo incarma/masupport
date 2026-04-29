@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import re
+from ipaddress import ip_address, ip_network
 from urllib.parse import parse_qsl, urlencode
+from django.conf import settings
 
 SENSITIVE_KEYS = {
     "password", "passwd", "pwd",
@@ -11,6 +13,23 @@ SENSITIVE_KEYS = {
     "ssn", "resident", "resident_no", "jumin", "주민번호",
     "session", "sessionid", "csrftoken",
 }
+
+SENSITIVE_KEY_FRAGMENTS = (
+    "password", "passwd", "pwd",
+    "token", "authorization", "auth", "api_key",
+    "secret", "session", "cookie", "csrf",
+    "ssn", "resident", "jumin", "주민",
+)
+
+PHONE_RE = re.compile(r"\b(01[016789])[-.\s]?(\d{3,4})[-.\s]?(\d{4})\b")
+SSN_RE = re.compile(r"\b(\d{6})[-\s]?(\d{7})\b")
+
+
+def is_sensitive_key(key: str) -> bool:
+    k = (key or "").strip().lower()
+    if not k:
+        return False
+    return k in SENSITIVE_KEYS or any(fragment in k for fragment in SENSITIVE_KEY_FRAGMENTS)
 
 PHONE_RE = re.compile(r"\b(01[016789])[-.\s]?(\d{3,4})[-.\s]?(\d{4})\b")
 SSN_RE = re.compile(r"\b(\d{6})[-\s]?(\d{7})\b")
@@ -45,7 +64,7 @@ def mask_querystring(raw_qs: str) -> str:
         out = []
         for k, v in pairs:
             kl = (k or "").strip().lower()
-            if kl in SENSITIVE_KEYS:
+            if is_sensitive_key(kl):
                 out.append((k, "***"))
             else:
                 out.append((k, mask_value(v)))
@@ -56,12 +75,42 @@ def mask_querystring(raw_qs: str) -> str:
 
 
 def get_client_ip(request) -> str:
-    # (운영 환경에 따라) X-Forwarded-For / X-Real-IP 를 신뢰할지 결정 필요
+    """
+    신뢰 가능한 reverse proxy에서 들어온 요청일 때만 X-Forwarded-For/X-Real-IP를 사용한다.
+    그렇지 않으면 REMOTE_ADDR을 최종 IP로 사용한다.
+    """
+    if request is None:
+        return ""
+
+    remote_addr = (request.META.get("REMOTE_ADDR", "") or "").strip()
+
+    trusted_cidrs = getattr(settings, "AUDIT_TRUSTED_PROXY_CIDRS", ())
+    trusted = False
+    try:
+        remote_ip = ip_address(remote_addr)
+        trusted = any(remote_ip in ip_network(cidr, strict=False) for cidr in trusted_cidrs)
+    except Exception:
+        trusted = False
+
+    if not trusted:
+        return remote_addr
+
     xff = request.META.get("HTTP_X_FORWARDED_FOR", "")
     if xff:
-        # "client, proxy1, proxy2"
-        return xff.split(",")[0].strip()
+        for candidate in xff.split(","):
+            candidate = candidate.strip()
+            try:
+                ip_address(candidate)
+                return candidate
+            except Exception:
+                continue
+
     xrip = request.META.get("HTTP_X_REAL_IP", "")
     if xrip:
-        return xrip.strip()
-    return request.META.get("REMOTE_ADDR", "") or ""
+        try:
+            ip_address(xrip.strip())
+            return xrip.strip()
+        except Exception:
+            pass
+
+    return remote_addr

@@ -318,32 +318,15 @@
   <script type="module" src="{% static 'js/partner/manage_rate/index.js' %}?v={{ cache_bust }}"></script>
 
   <!-- Boot 데이터 -->
-  <script>
-    window.ManageRateBoot = {
-      userGrade: "{{ user.grade|default:'' }}",
-      currentYear: {{ current_year|default:0 }},
-      currentMonth: {{ current_month|default:0 }},
-      selectedYear: {{ selected_year|default:0 }},
-      selectedMonth: {{ selected_month|default:0 }},
-      autoLoad: {{ auto_load|yesno:"true,false" }},
-    };
-  </script>
-
-  <script>
-    window.currentUser = {
-      id: "{{ user.id|escapejs }}",
-      name: "{{ user.name|escapejs }}",
-      part: "{{ user.part|default:''|escapejs }}",
-      branch: "{{ user.branch|default:''|escapejs }}",
-      grade: "{{ user.grade|default:''|escapejs }}",
-
-      level: "{{ subadmin_info.level|default:''|escapejs }}",
-      team_a: "{{ subadmin_info.team_a|default:''|escapejs }}",
-      team_b: "{{ subadmin_info.team_b|default:''|escapejs }}",
-      team_c: "{{ subadmin_info.team_c|default:''|escapejs }}"
-    };
-    window.csrfToken = "{{ csrf_token }}";
-  </script>
+  {{ ManageRateBoot|json_script:"boot-rate" }}
+  {{ currentUser|json_script:"current-user" }}
+  <script src="{% static 'js/common/json_boot_bridge.js' %}?v={{ cache_bust }}"
+          data-json-id="boot-rate"
+          data-window-name="ManageRateBoot"></script>
+  <script src="{% static 'js/common/json_boot_bridge.js' %}?v={{ cache_bust }}"
+          data-json-id="current-user"
+          data-window-name="currentUser"></script>
+  <script src="{% static 'js/common/csrf_window.js' %}?v={{ cache_bust }}"></script>
 
   {% include 'components/search_user_modal.html' with search_url='/api/accounts/search-user/' %}
 {% endblock %}
