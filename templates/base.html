@@ -108,7 +108,7 @@
               <a class="nav-link dropdown-toggle {% if '/partner' in request.path %}active{% else %}inactive{% endif %}"
                 href="#" id="partnerMenu" data-bs-toggle="dropdown">조직관리</a>
               <ul class="dropdown-menu" aria-labelledby="partnerMenu">
-                <li><a class="dropdown-item" href="{% url 'partner:esign_confirm' %}">지점효율 확인서</a></li>
+                <!-- <li><a class="dropdown-item" href="{% url 'partner:esign_confirm' %}">지점효율(제작중)</a></li> -->
                 <li><a class="dropdown-item" href="{% url 'partner:join_form' %}">위촉서류(제작중)</a></li>
                 {% if user.grade == 'superuser' or user.grade == 'head' or user.grade == 'leader' %}
                   <li><a class="dropdown-item" href="{% url 'partner:manage_charts' %}">편제변경</a></li>
@@ -274,7 +274,7 @@
             </h2>
             <div id="mPartner" class="accordion-collapse collapse" aria-labelledby="mPartnerHead" data-bs-parent="#mobileMenuAccordion">
               <div class="accordion-body pt-0">
-                <a class="d-block py-2" href="{% url 'partner:esign_confirm' %}">지점효율 확인서</a>
+                <!-- <a class="d-block py-2" href="{% url 'partner:esign_confirm' %}">지점효율(제작중)</a> -->
                 <a class="d-block py-2" href="{% url 'partner:join_form' %}">위촉서류(제작중)</a>
                 {% if user.grade == 'superuser' or user.grade == 'head' or user.grade == 'leader' %}
                   <a class="d-block py-2" href="{% url 'partner:manage_charts' %}">편제변경</a>

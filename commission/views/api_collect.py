@@ -172,17 +172,32 @@ def api_collect_feedback_create(request):
 
     emp_id  = str(body.get("emp_id",  "")).strip()
     content = str(body.get("content", "")).strip()
+    date_input_str = str(body.get("date_input", "")).strip()
+    department     = str(body.get("department", "")).strip()
+    manager        = str(body.get("manager",    "")).strip()
 
     if not emp_id:
         return _json_error("대상자 사번을 입력해주세요.")
     if not content:
         return _json_error("피드백 내용을 입력해주세요.")
+    
+    # date_input 파싱 (YYYY-MM-DD 형식, 빈 값이면 None)
+    from datetime import date as _date
+    date_input = None
+    if date_input_str:
+        try:
+            date_input = _date.fromisoformat(date_input_str)
+        except ValueError:
+            return _json_error("입력일 형식이 올바르지 않습니다. (YYYY-MM-DD)")
 
     try:
         fb = svc.create_feedback(
             author=request.user,
             emp_id=emp_id,
             content=content,
+            date_input=date_input,
+            department=department,
+            manager=manager,
         )
         # Audit 로그 — 생성 성공
         log_action(

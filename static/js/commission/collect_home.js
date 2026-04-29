@@ -58,6 +58,7 @@ const state = {
   part:            "",
   bizmoon:         "",
   branch:          "",            // 영업가족(지점) 필터
+  keyword:         "",   // 키워드 검색
   selectedEmpId:   "",
   selectedEmpName: "",
   sortKey:         "",
@@ -171,8 +172,8 @@ function getDropdownClass(value) {
 }
 
 // 신규 피드백 컬럼 정의 (TAB_COLS에서 공유)
-const DROPDOWN_BRANCH_COL = { label: "영업가족 피드백", dropdownType: "branch" };
-const DROPDOWN_HQ_COL     = { label: "본사 피드백",     dropdownType: "hq" };
+const DROPDOWN_BRANCH_COL = { label: "영업가족 피드백", dropdownType: "branch", sortKey: "branch_feedback" };
+const DROPDOWN_HQ_COL     = { label: "본사 피드백",     dropdownType: "hq",     sortKey: "hq_feedback" };
 const LATEST_FB_COL       = { label: "최신 피드백" };
 
 const TAB_COLS = {
@@ -261,6 +262,14 @@ function renderTableHead(tab) {
     cols.map(c => {
       const cls = `text-nowrap${c.money ? " text-end" : ""}`;
       if (c.dropdownType) {
+        // dropdownType이 있어도 sortKey가 있으면 정렬 가능한 헤더로 렌더링
+        if (c.sortKey) {
+          const isActive = state.sortKey === c.sortKey;
+          const icon = isActive ? (state.sortDir === "asc" ? " ▲" : " ▼") : " ⇅";
+          return `<th class="${cls} collect-th-dropdown collect-sort-th"
+                      style="cursor:pointer;user-select:none;"
+                      data-sort-key="${esc(c.sortKey)}">${esc(c.label)}${icon}</th>`;
+        }
         return `<th class="${cls} collect-th-dropdown">${esc(c.label)}</th>`;
       }
       if (!c.sortKey) {
@@ -333,6 +342,24 @@ function refreshBranchSelect(rows) {
 function applyBranchFilter(rows) {
   if (!state.branch) return rows;
   return rows.filter(r => (r.branch || "") === state.branch);
+}
+
+/**
+ * 키워드 검색 필터링 (클라이언트 사이드).
+ * 부서/부문/영업가족/사원명/사번/재직상태 컬럼 대상.
+ * state.keyword가 비어있으면 전체 반환.
+ */
+function applyKeywordFilter(rows) {
+  const kw = state.keyword.trim().toLowerCase();
+  if (!kw) return rows;
+  return rows.filter(r => {
+    const fields = [
+      r.part, r.bizmoon, r.branch, r.emp_name,
+      r.emp_id, r.work_status, r.latest_feedback,
+      r.branch_feedback, r.hq_feedback,
+    ];
+    return fields.some(f => String(f || "").toLowerCase().includes(kw));
+  });
 }
 
 // ============================================================
@@ -467,7 +494,7 @@ function buildDropdownCell(row, dropdownType) {
   }).join("");
 
   return `<td class="collect-td-dropdown">
-    <select class="form-select form-select-sm collect-dropdown-select"
+    <select class="form-select form-select-sm collect-dropdown-select${valCls ? " " + valCls : ""}"
             data-emp-id="${esc(row.emp_id)}"
             data-ym="${esc(ym)}"
             data-feedback-type="${esc(dropdownType)}"
@@ -586,7 +613,7 @@ async function fetchCollectList() {
     _allTabData[state.tab] = rawRows;
 
     // 영업가족 필터 적용 후 렌더링
-    const filteredRows = applyBranchFilter(rawRows);
+    const filteredRows = applyKeywordFilter(applyBranchFilter(rawRows));
 
     renderTableHead(state.tab);
     renderCollectTable(filteredRows, state.tab);
@@ -673,6 +700,9 @@ function renderFeedbackList(feedbacks) {
           <div class="small text-muted">
             <strong>${esc(fb.author_name)}</strong>(${esc(String(fb.author_id))})
             · ${esc(fb.created_at)}${modifiedMark}
+            ${fb.date_input ? `<span class="ms-2 badge bg-secondary">${esc(fb.date_input)}</span>` : ""}
+            ${fb.department ? `<span class="ms-1 badge bg-info text-dark">${esc(fb.department)}</span>` : ""}
+            ${fb.manager    ? `<span class="ms-1 text-primary fw-semibold">${esc(fb.manager)}</span>` : ""}
           </div>
         </div>
         <div class="feedback-content-area mt-1 small">${esc(fb.content)}</div>
@@ -774,6 +804,9 @@ function bindEvents() {
       btn.classList.add("active");
       state.tab     = btn.dataset.tab;
       state.branch  = "";     // 탭 전환 시 영업가족 필터 초기화
+      state.keyword = "";
+      const kInput = document.getElementById("collectKeywordInput");
+      if (kInput) kInput.value = "";
       state.sortKey = "";
       state.sortDir = "asc";
       const bSel = document.getElementById("branchSelect");
@@ -790,6 +823,9 @@ function bindEvents() {
       state.part    = document.getElementById("partSelect")?.value    || "";
       state.bizmoon = document.getElementById("bizmoonSelect")?.value || "";
       state.branch  = "";     // 조회 버튼 클릭 시 영업가족 필터 초기화
+      state.keyword = "";
+      const kInput = document.getElementById("collectKeywordInput");
+      if (kInput) kInput.value = "";
       state.sortKey = "";
       state.sortDir = "asc";
       // 영업가족 드랍다운 초기화 (새 조회 결과로 재구성)
@@ -817,7 +853,19 @@ function bindEvents() {
       state.sortKey = "";
       state.sortDir = "asc";
       const cached   = _allTabData[state.tab] ?? [];
-      const filtered = applyBranchFilter(cached);
+      const filtered = applyKeywordFilter(applyBranchFilter(cached));
+      renderTableHead(state.tab);
+      renderCollectTable(filtered, state.tab);
+    });
+  }
+
+  // ── 키워드 검색 ──────────────────────────────────────────
+  const keywordInput = document.getElementById("collectKeywordInput");
+  if (keywordInput) {
+    keywordInput.addEventListener("input", () => {
+      state.keyword = keywordInput.value;
+      const cached   = _allTabData[state.tab] ?? [];
+      const filtered = applyKeywordFilter(applyBranchFilter(cached));
       renderTableHead(state.tab);
       renderCollectTable(filtered, state.tab);
     });
@@ -1001,9 +1049,19 @@ function bindEvents() {
         const data = await apiPost(URLS.feedbackCreate, {
           emp_id: state.selectedEmpId,
           content,
+          date_input: document.getElementById("feedbackDateInput")?.value  || "",
+          department: document.getElementById("feedbackDepartment")?.value || "",
+          manager:    document.getElementById("feedbackManager")?.value    || "",
         });
         if (!data.ok) { alert(data.message || "저장에 실패했습니다."); return; }
         if (textarea) textarea.value = "";
+        // 저장 성공 후 추가 필드도 초기화
+        const dateEl = document.getElementById("feedbackDateInput");
+        const deptEl = document.getElementById("feedbackDepartment");
+        const mgrEl  = document.getElementById("feedbackManager");
+        if (dateEl) dateEl.value = "";
+        if (deptEl) deptEl.value = "";
+        if (mgrEl)  mgrEl.value  = "";
         await fetchFeedbacks(state.selectedEmpId);
         fetchCollectList();
       } catch (err) {
