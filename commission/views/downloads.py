@@ -11,15 +11,40 @@ Downloads (Excel)
 
 from datetime import datetime
 
+from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
 from django.views.decorators.http import require_GET
 
+from accounts.decorators import grade_required
 from ..models import ApprovalPending, EfficiencyPayExcess
 from ._excel_export import rows_to_excel_response
 from .utils_json import _json_error
 
 
+def _can_download_fail_payload(request, payload: dict) -> bool:
+    """
+    실패 엑셀 token 다운로드 권한.
+    - 신규 token: owner_id가 있으면 업로드 실행자 본인만 허용
+    - legacy token: owner_id가 없으면 superuser만 허용
+    """
+    user = getattr(request, "user", None)
+    if not getattr(user, "is_authenticated", False):
+        return False
+
+    grade = (getattr(user, "grade", "") or "").strip()
+    if grade != "superuser" and not getattr(user, "is_superuser", False):
+        return False
+
+    owner_id = str((payload or {}).get("owner_id") or "").strip()
+    if owner_id:
+        return owner_id == str(getattr(user, "pk", "") or "")
+
+    return True
+
+
 @require_GET
+@login_required
+@grade_required("superuser")
 def download_upload_fail_excel(request):
     """
     업로드 실패 목록 엑셀 다운로드 (token 기반)
@@ -33,6 +58,9 @@ def download_upload_fail_excel(request):
     payload = cache.get(key)
     if not payload:
         return _json_error("만료되었거나 존재하지 않는 token입니다.", status=404)
+    
+    if not _can_download_fail_payload(request, payload):
+        return _json_error("다운로드 권한이 없습니다.", status=403)
 
     content = payload.get("content")
     filename = payload.get("filename") or f"upload_fail_{datetime.now():%Y%m%d_%H%M%S}.xlsx"
@@ -45,6 +73,8 @@ def download_upload_fail_excel(request):
 
 
 @require_GET
+@login_required
+@grade_required("superuser")
 def download_approval_pending_excel(request):
     """
     수수료 미결현황 엑셀 다운로드
@@ -85,6 +115,8 @@ def download_approval_pending_excel(request):
 
 
 @require_GET
+@login_required
+@grade_required("superuser")
 def download_efficiency_excess_excel(request):
     """
     지점효율 지급 초과현황 엑셀 다운로드

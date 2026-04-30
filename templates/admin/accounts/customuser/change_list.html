@@ -3,41 +3,7 @@
 
 {% block extrastyle %}
 {{ block.super }}
-<style>
-/* ==========================================================
-   CustomUser Admin — Object Tools Layout Fix
-   목적: 버튼이 세로로 떨어지는 Admin 테마 문제 방어
-========================================================== */
-
-.object-tools {
-  display: flex !important;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-  float: none;
-  margin-bottom: 12px;
-}
-
-.object-tools,
-.object-tools ul {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.object-tools li {
-  display: inline-flex;
-}
-
-.object-tools a {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  white-space: nowrap;
-  border-radius: 999px;
-  padding: 6px 14px;
-}
-</style>
+<link rel="stylesheet" href="{% static 'css/admin/accounts_customuser.css' %}?v={% now 'U' %}">
 {% endblock %}
 
 {% block object-tools %}

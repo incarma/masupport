@@ -198,7 +198,7 @@
   function hideWarnById(warnId) {
     const warnEl = document.getElementById(warnId);
     if (!warnEl) return;
-    warnEl.style.display = "none";
+    el.classList.add("d-none");
     warnEl.textContent = "";
   }
 

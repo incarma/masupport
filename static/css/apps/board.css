@@ -1007,3 +1007,31 @@
   font-size: 0.95rem;
   margin-bottom: 16px;
 }
+
+/* ==========================================================
+  CSP strict helpers - Board
+========================================================== */
+
+.board-scope .worktask-col-category { width: 90px; }
+.board-scope .worktask-col-priority { width: 70px; }
+.board-scope .worktask-col-due { width: 110px; }
+.board-scope .worktask-col-status { width: 90px; }
+.board-scope .worktask-col-actions { width: 100px; }
+
+.board-scope .post-col-receipt { width: 9%; }
+.board-scope .post-col-date { width: 10%; }
+.board-scope .post-col-category { width: 9%; }
+.board-scope .post-col-title { width: 25%; }
+.board-scope .post-col-channel { width: 8%; }
+.board-scope .post-col-requester { width: 9%; }
+.board-scope .post-col-handler { width: 10%; }
+.board-scope .post-col-status { width: 10%; }
+.board-scope .post-col-status-date { width: 10%; }
+
+.board-scope .task-col-receipt { width: 10%; }
+.board-scope .task-col-date { width: 12%; }
+.board-scope .task-col-title { width: 36%; }
+.board-scope .task-col-category { width: 8%; }
+.board-scope .task-col-requester { width: 10%; }
+.board-scope .task-col-handler { width: 10%; }
+.board-scope .task-col-status { width: 12%; }

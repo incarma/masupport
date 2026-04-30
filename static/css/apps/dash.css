@@ -680,3 +680,19 @@
   .dash-retention-page .dr-kpi__value { font-size: 1.5rem; }
   .dash-retention-page .dr-chart-box { min-height: 260px; }
 }
+
+/* ==========================================================
+  CSP strict helpers - Dash
+========================================================== */
+
+.dash-title {
+  color: #003f7d;
+}
+
+.dash-filter-flex {
+  flex: 1;
+}
+
+.dash-product-modal {
+  max-width: 720px;
+}

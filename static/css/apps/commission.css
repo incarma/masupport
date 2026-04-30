@@ -385,3 +385,21 @@
   color: #005BAC;
   margin-right: 6px;
 }
+
+/* ==========================================================
+  CSP strict helpers - Commission
+========================================================== */
+
+.commission-title {
+  color: #003f7d;
+}
+
+.collect-filter-item-wide {
+  flex: 1 1 200px;
+  max-width: 280px;
+}
+
+.feedback-list-scroll {
+  max-height: 300px;
+  overflow-y: auto;
+}

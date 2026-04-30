@@ -56,7 +56,7 @@
           <div class="list-group-item board-mobile-item">
             <div class="d-flex justify-content-between align-items-start gap-2">
 
-              <div class="flex-grow-1" style="min-width:0;">
+              <div class="flex-grow-1 min-w-0">
                 <div class="board-mobile-title">
                   <a href="{% url 'board:task_detail' task.pk %}"
                      class="text-decoration-none text-dark">
@@ -98,13 +98,13 @@
           <table class="table table-hover align-middle text-center mb-0 board-post-table">
 
             <colgroup>
-              <col style="width:10%">
-              <col style="width:12%">
-              <col style="width:36%">
-              <col style="width:8%">
-              <col style="width:10%">
-              <col style="width:10%">
-              <col style="width:12%">
+              <col class="task-col-receipt">
+              <col class="task-col-date">
+              <col class="task-col-title">
+              <col class="task-col-category">
+              <col class="task-col-requester">
+              <col class="task-col-handler">
+              <col class="task-col-status">
             </colgroup>
 
             <thead class="table-light">

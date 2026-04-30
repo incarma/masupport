@@ -1,4 +1,13 @@
-# django_ma/board/admin.py
+# board/admin.py
+#
+# 변경 내용 (기존 코드 무변경):
+#   - 기존 PostAdmin / IndustryArticleAdmin 등 전부 그대로 유지
+#   - 하단에 WorkCategory / WorkTask / WorkTaskAttachment Admin 3개 추가
+#
+# WorkTask Admin 예외 정책 (worktask.md §17):
+#   Django Admin 에서는 superuser(is_staff)가 모든 WorkTask를 열람·수정할 수 있다.
+#   일반 뷰(/board/worktasks/)의 owner 격리 정책과는 완전히 별개이며,
+#   운영 목적의 명시적 예외다.
 
 from openpyxl import Workbook
 from openpyxl.styles import Font
@@ -17,7 +26,7 @@ from .industry_models import (
     IndustryRecommendation,
     IndustryUserPreference,
 )
-from .models import Post
+from .models import Post, WorkCategory, WorkTask, WorkTaskAttachment
 
 
 # =========================================================
@@ -66,10 +75,10 @@ def export_posts_as_excel(queryset, filename: str = "posts_export.xlsx") -> Http
             localtime(post.status_updated_at).strftime("%Y-%m-%d %H:%M") if post.status_updated_at else "-",
             localtime(post.created_at).strftime("%Y-%m-%d %H:%M"),
         ])
-    
+
     # Auto filter
     ws.auto_filter.ref = ws.dimensions
-    
+
     # 열 너비 자동 조정(상한 적용)
     MAX_W = 50
     PADDING = 2
@@ -217,7 +226,6 @@ class PostAdmin(admin.ModelAdmin):
     get_created_at.short_description = "최초등록일"
 
 
-
 # =========================================================
 # Industry Info Admin (Proxy Models)
 # - 실제 DB는 support_* 테이블을 사용
@@ -283,3 +291,124 @@ class IndustryCollectJobLogAdmin(admin.ModelAdmin):
     )
     list_filter = ("source", "status")
     search_fields = ("query", "message")
+
+
+# =========================================================
+# WorkTask 업무관리 Admin (Phase 1 신규 추가)
+#
+# 운영 예외 정책 (worktask.md §17):
+#   - 이 Admin 에서는 모든 WorkTask 전체 열람·수정 가능
+#   - 일반 뷰(/board/worktasks/)의 owner=request.user 격리와 별개
+#   - custom_admin_site 접근 자체가 superuser 전용이므로 추가 제한 불필요
+# =========================================================
+
+# ---------------------------------------------------------
+# WorkCategory — 업무 분류 마스터
+# ---------------------------------------------------------
+@admin.register(WorkCategory, site=custom_admin_site)
+class WorkCategoryAdmin(admin.ModelAdmin):
+    """
+    관리자가 직접 업무 분류를 등록·관리.
+
+    초기 등록 필요 데이터 (worktask.md §3.1):
+        commission  수수료 업무
+        bond        채권·환수
+        risk        리스크관리
+        biz_dev     제휴영업
+        misc        기타
+    """
+    list_display  = ["code", "label", "sort_order", "is_active"]
+    list_editable = ["label", "sort_order", "is_active"]
+    ordering      = ["sort_order", "code"]
+
+
+# ---------------------------------------------------------
+# WorkTaskAttachment — WorkTask 하위 인라인
+# ---------------------------------------------------------
+class WorkTaskAttachmentInline(admin.TabularInline):
+    """
+    WorkTask 상세에서 첨부파일 인라인 관리.
+    Admin 에서는 파일 직접 링크 허용 (운영 목적 예외).
+    """
+    model           = WorkTaskAttachment
+    extra           = 0
+    readonly_fields = ["original_name", "uploaded_by", "uploaded_at"]
+    fields          = ["file", "original_name", "uploaded_by", "uploaded_at"]
+    show_change_link = False
+
+
+# ---------------------------------------------------------
+# WorkTask — 업무 항목 (전체 열람 Admin)
+# ---------------------------------------------------------
+@admin.register(WorkTask, site=custom_admin_site)
+class WorkTaskAdmin(admin.ModelAdmin):
+    """
+    운영용 전체 열람 Admin.
+    ⚠️ 일반 뷰의 owner 격리(owner=request.user)가 적용되지 않는다.
+    """
+
+    # List
+    list_display  = [
+        "id", "owner", "category", "title",
+        "status", "priority", "due_date",
+        "recurrence_type", "target_ym",
+        "is_notified", "created_at",
+    ]
+    list_filter   = ["status", "category", "recurrence_type", "is_notified"]
+    search_fields = ["title", "owner__id", "owner__name"]
+    ordering      = ["-created_at"]
+
+    # Detail
+    readonly_fields   = ["created_at", "updated_at"]
+    raw_id_fields     = ["owner", "template_task"]
+    filter_horizontal = ["related_users"]
+    inlines           = [WorkTaskAttachmentInline]
+
+    fieldsets = [
+        (
+            "소유자 / 분류",
+            {"fields": ["owner", "category"]},
+        ),
+        (
+            "내용",
+            {"fields": ["title", "description", "related_users"]},
+        ),
+        (
+            "일정 / 반복",
+            {
+                "fields": [
+                    "due_date",
+                    "recurrence_type", "recurrence_day",
+                    "template_task", "target_ym",
+                ],
+            },
+        ),
+        (
+            "상태 / 우선순위",
+            {"fields": ["status", "priority"]},
+        ),
+        (
+            "알림",
+            {"fields": ["notify_days_before", "is_notified"]},
+        ),
+        (
+            "감사 (읽기전용)",
+            {
+                "fields": ["created_at", "updated_at"],
+                "classes": ["collapse"],
+            },
+        ),
+    ]
+
+
+# ---------------------------------------------------------
+# WorkTaskAttachment — 단독 조회 Admin
+# ---------------------------------------------------------
+@admin.register(WorkTaskAttachment, site=custom_admin_site)
+class WorkTaskAttachmentAdmin(admin.ModelAdmin):
+    """첨부파일 단독 운영 조회."""
+    list_display    = ["id", "task", "original_name", "uploaded_by", "uploaded_at"]
+    search_fields   = ["original_name", "task__title"]
+    raw_id_fields   = ["task", "uploaded_by"]
+    readonly_fields = ["uploaded_at"]
+    ordering        = ["-uploaded_at"]

@@ -10,102 +10,9 @@
      Bootstrap Icons
 ========================================================= -->
 <link href="{% static 'vendor/bootstrap-icons/1.11.3/bootstrap-icons.css' %}" rel="stylesheet">
-
-<style>
-  /* =========================
-     Mobile UX (Manage Grades)
-     ========================= */
-
-  /* 1) 타이틀/버튼/뱃지 줄바꿈 방지 */
-  #manage-grades h3,
-  #manage-grades h5,
-  #manage-grades .btn,
-  #manage-grades .badge,
-  #manage-grades .form-label,
-  #manage-grades .text-muted.small {
-    white-space: nowrap;
-  }
-
-  /* 2) 카드 헤더(타이틀+버튼+안내문구) 줄바꿈 대신 가로 스크롤 */
-  #manage-grades .mg-header-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: .75rem;
-    flex-wrap: nowrap;          /* 줄바꿈 X */
-    overflow-x: auto;           /* 넘치면 가로 스크롤 */
-    -webkit-overflow-scrolling: touch;
-  }
-
-  #manage-grades .mg-header-left {
-    display: flex;
-    align-items: center;
-    gap: .5rem;
-    flex-wrap: nowrap;          /* 줄바꿈 X */
-    min-width: max-content;     /* 내용 폭 유지 */
-  }
-
-  #manage-grades .mg-header-right {
-    min-width: max-content;     /* 안내문구도 줄바꿈 X */
-  }
-
-  /* 3) 테이블: 가로 스크롤 + 셀 줄바꿈 방지 */
-  #manage-grades .mg-table-scroll {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  #manage-grades table {
-    width: 100%;
-    min-width: 980px; /* 모바일에서 가로 스크롤이 생기도록 최소 폭 확보 */
-  }
-
-  #manage-grades table th,
-  #manage-grades table td {
-    white-space: nowrap;        /* 셀 줄바꿈 방지 */
-    word-break: keep-all;
-    vertical-align: middle;
-  }
-
-  /* 4) DataTables 상단 컨트롤 영역도 가로 스크롤 (모바일에서 깨짐 방지) */
-  #manage-grades .dataTables_wrapper {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  #manage-grades .dataTables_wrapper .dt-buttons .btn,
-  #manage-grades .dataTables_wrapper .dataTables_filter label,
-  #manage-grades .dataTables_wrapper .dataTables_length label {
-    white-space: nowrap;
-  }
-
-  /* 5) 모바일에서 상단 필터(셀렉트 3개)는 세로 스택이 더 자연스러움 */
-  @media (max-width: 576px) {
-    #filterForm {
-      flex-direction: column !important;
-      align-items: stretch !important;
-    }
-    #filterForm > div {
-      flex: 1 1 auto !important;
-      width: 100% !important;
-    }
-    #btnSearch {
-      width: 100%;
-    }
-
-    /* DataTables 검색 input 너무 작아지는 문제 방지 */
-    #manage-grades .dataTables_filter input {
-      width: 12rem;
-      max-width: 100%;
-    }
-  }
-</style>
-
-<link rel="stylesheet" href="{% static 'css/partner/manage_grades.css' %}?v={% now 'U' %}">
 {% endblock %}
 
 {% block content %}
-
 <!-- =========================================================
      권한 체크
 ========================================================= -->
@@ -145,7 +52,7 @@
      data-fetch-parts-url="{% url 'partner:ajax_fetch_parts' %}"
      data-fetch-branches-url="{% url 'partner:ajax_fetch_branches' %}">
 
-  <h3 class="text-center fw-bold mb-4" style="color:#003f7d;">권한관리 페이지</h3>
+  <h3 class="text-center fw-bold mb-4 partner-page-title">권한관리 페이지</h3>
 
   <!----------------------------------------------------------------
      ✅ superuser: 부서 + 지점 선택
@@ -155,7 +62,7 @@
     <form id="filterForm" class="d-flex flex-wrap align-items-end gap-3" method="get">
 
       <!-- 부문 선택 -->
-      <div style="flex:0 0 220px;">
+      <div class="mg-filter-channel">
         <label for="channelSelect" class="form-label fw-semibold">부문</label>
         <select id="channelSelect" name="channel" class="form-select form-select-sm">
           <option value="">불러오는 중...</option>
@@ -163,7 +70,7 @@
       </div>
 
       <!-- 부서 선택  -->
-      <div style="flex:0 0 220px;">
+      <div class="mg-filter-part">
         <label for="partSelect" class="form-label fw-semibold">부서</label>
         <select id="partSelect" name="part" class="form-select form-select-sm" disabled>
           <option value="">부문을 먼저 선택하세요</option>
@@ -171,14 +78,14 @@
       </div>
 
       <!-- 지점 선택 -->
-      <div style="flex:0 0 300px;">
+      <div class="mg-filter-branch">
         <label for="branchSelect" class="form-label fw-semibold">지점</label>
         <select id="branchSelect" name="branch" class="form-select form-select-sm" disabled>
           <option value="">부서를 먼저 선택하세요</option>
         </select>
       </div>
 
-      <div style="flex:0 0 120px;">
+      <div class="mg-filter-action">
         <button type="submit" id="btnSearch" class="btn btn-primary btn-sm px-4" disabled>검색</button>
       </div>
 
@@ -208,7 +115,7 @@
   <div class="card shadow p-3 border-0 rounded-4 mb-5">
     <div class="mg-header-row mb-3">
       <div class="mg-header-left">
-        <h5 class="fw-bold mb-0" style="color:#003f7d;">중간관리자 명단</h5>
+        <h5 class="fw-bold mb-0 partner-page-title-sm">중간관리자 명단</h5>
 
         <button type="button"
                 id="btnOpenAddSubAdmin"
@@ -237,7 +144,7 @@
           <tr>
             <th>부서</th><th>지점</th><th>성명</th><th>사번</th><th>직급</th>
             <th>레벨</th><th>팀A</th><th>팀B</th><th>팀C</th>
-            <th style="width:90px;">삭제</th>
+            <th class="mg-col-delete">삭제</th>
           </tr>
         </thead>
 
@@ -285,7 +192,7 @@
      ✅ 하단: 전체 사용자 목록
      -------------------------------------------------------------->
   <div class="card shadow p-3 border-0 rounded-4">
-    <h5 class="fw-bold mb-3" style="color:#003f7d;">전체설계사 명단</h5>
+    <h5 class="fw-bold mb-3 partner-page-title-sm">전체설계사 명단</h5>
 
     {% if user.grade != 'superuser' and user.grade != 'head' %}
       <div class="alert alert-warning py-2">
@@ -311,7 +218,7 @@
   <!----------------------------------------------------------------
      ✅ Toast
      -------------------------------------------------------------->
-  <div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 1080;">
+  <div class="toast-container position-fixed bottom-0 end-0 p-3 toast-z-1080">
     <div id="statusToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
       <div class="toast-header">
         <strong class="me-auto" id="toastTitle">처리 결과</strong>

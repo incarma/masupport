@@ -1,0 +1,202 @@
+<!-- board/templates/board/worktask_edit.html -->
+<!-- 업무 항목 수정 폼 -->
+{% extends "board/base_board.html" %}
+{% load static %}
+
+{% block title %}{{ task.title }} 수정 — 업무관리{% endblock %}
+
+{% block content %}
+<div class="board-narrow mx-auto">
+
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <h5 class="board-page-title mb-0">업무 수정</h5>
+    <a href="{% url 'board:worktasks:worktask_detail' task.pk %}"
+       class="btn btn-outline-secondary btn-sm">상세로</a>
+  </div>
+
+  {% if error %}
+    <div class="alert alert-danger">{{ error }}</div>
+  {% endif %}
+
+  <form method="post" enctype="multipart/form-data" id="worktaskEditForm">
+    {% csrf_token %}
+
+    <!-- 분류 -->
+    <div class="mb-3">
+      <label for="id_category" class="form-label fw-semibold">
+        업무 분류 <span class="text-danger">*</span>
+      </label>
+      <select name="category" id="id_category" class="form-select" required>
+        {% for cat in categories %}
+          <option value="{{ cat.code }}"
+                  {% if task.category_id == cat.code %}selected{% endif %}>
+            {{ cat.label }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <!-- 업무명 -->
+    <div class="mb-3">
+      <label for="id_title" class="form-label fw-semibold">
+        업무명 <span class="text-danger">*</span>
+      </label>
+      <input type="text" name="title" id="id_title"
+             class="form-control" maxlength="200"
+             value="{{ task.title }}" required>
+    </div>
+
+    <!-- 메모 -->
+    <div class="mb-3">
+      <label for="id_description" class="form-label fw-semibold">메모</label>
+      <textarea name="description" id="id_description"
+                class="form-control" rows="4">{{ task.description }}</textarea>
+    </div>
+
+    <!-- 상태 -->
+    <div class="mb-3">
+      <label for="id_status" class="form-label fw-semibold">상태</label>
+      <select name="status" id="id_status" class="form-select">
+        {% for val, lbl in task.STATUS_CHOICES %}
+          <option value="{{ val }}" {% if task.status == val %}selected{% endif %}>
+            {{ lbl }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <!-- 마감일 -->
+    <div class="mb-3">
+      <label for="id_due_date" class="form-label fw-semibold">마감일</label>
+      <input type="date" name="due_date" id="id_due_date"
+             class="form-control"
+             value="{{ task.due_date|date:'Y-m-d'|default:'' }}">
+    </div>
+
+    <!-- 우선순위 -->
+    <div class="mb-3">
+      <label for="id_priority" class="form-label fw-semibold">우선순위</label>
+      <input type="number" name="priority" id="id_priority"
+             class="form-control" min="1" max="99"
+             value="{{ task.priority }}">
+    </div>
+
+    <!-- 반복 유형 -->
+    <div class="mb-3">
+      <label for="id_recurrence_type" class="form-label fw-semibold">반복 유형</label>
+      <select name="recurrence_type" id="id_recurrence_type" class="form-select">
+        {% for val, lbl in task.RECURRENCE_CHOICES %}
+          <option value="{{ val }}" {% if task.recurrence_type == val %}selected{% endif %}>
+            {{ lbl }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <!-- custom 전용 일자 -->
+    <div class="mb-3 {% if task.recurrence_type != 'custom' %}d-none{% endif %}"
+         id="recurrence-day-group">
+      <label for="id_recurrence_day" class="form-label fw-semibold">
+        반복 일자 (1~28)
+      </label>
+      <input type="number" name="recurrence_day" id="id_recurrence_day"
+             class="form-control" min="1" max="28"
+             value="{{ task.recurrence_day|default:'' }}">
+    </div>
+
+    <!-- 알림 설정 -->
+    <div class="mb-3">
+      <label for="id_notify_days_before" class="form-label fw-semibold">
+        마감 N일 전 이메일 알림
+      </label>
+      <input type="number" name="notify_days_before" id="id_notify_days_before"
+             class="form-control" min="0" max="30"
+             value="{{ task.notify_days_before }}">
+    </div>
+
+    <!-- 관련 인물 -->
+    <div class="mb-3">
+      <label class="form-label fw-semibold">관련 인물</label>
+      <div id="related-users-tags" class="d-flex flex-wrap gap-1 mb-2">
+        {% for u in task.related_users.all %}
+          <span class="worktask-related-user-tag" data-uid="{{ u.id }}">
+            {{ u.name }}<small class="text-muted ms-1">({{ u.id }})</small>
+            <button type="button"
+                    class="btn-close btn-close-sm ms-1 worktask-remove-user"
+                    data-uid="{{ u.id }}" aria-label="제거"></button>
+          </span>
+          <input type="hidden" name="related_users" value="{{ u.id }}"
+                 id="hidden-uid-{{ u.id }}">
+        {% endfor %}
+      </div>
+      <button type="button" class="btn btn-outline-secondary btn-sm"
+              id="btn-search-related-user">
+        + 관련 인물 추가
+      </button>
+      <div id="related-users-hidden-inputs"></div>
+    </div>
+
+    <!-- 기존 첨부파일 + 삭제 체크박스 -->
+    {% if attachments %}
+    <div class="mb-3">
+      <label class="form-label fw-semibold">기존 첨부파일</label>
+      <ul class="list-unstyled">
+        {% for att in attachments %}
+          <li class="d-flex align-items-center gap-2 mb-1">
+            📎
+            <!-- ✅ 다운로드 뷰 경유 — att.file.url 직접 링크 금지 -->
+            <a href="{% url 'board:worktasks:worktask_att_download' att.id %}"
+               class="board-file-link text-truncate">
+              {{ att.original_name }}
+            </a>
+            <label class="text-danger small ms-auto d-flex align-items-center gap-1">
+              <input type="checkbox" name="delete_att_{{ att.id }}" value="1">
+              삭제
+            </label>
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
+    <!-- 추가 첨부파일 -->
+    <div class="mb-3">
+      <label for="id_attachments" class="form-label fw-semibold">첨부파일 추가</label>
+      <input type="file" name="attachments" id="id_attachments"
+             class="form-control" multiple>
+    </div>
+
+    <div class="d-flex gap-2 mt-4">
+      <button type="submit" class="btn btn-primary flex-grow-1"
+              id="btn-edit-submit">저장</button>
+      <a href="{% url 'board:worktasks:worktask_detail' task.pk %}"
+         class="btn btn-outline-secondary">취소</a>
+    </div>
+  </form>
+
+</div>
+
+{% include "includes/search_user_modal.html" %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  (function () {
+    var sel   = document.getElementById("id_recurrence_type");
+    var group = document.getElementById("recurrence-day-group");
+    function toggle() { group.classList.toggle("d-none", sel.value !== "custom"); }
+    sel?.addEventListener("change", toggle);
+    toggle();
+
+    <!-- 기존 관련인물 태그 제거 -->
+    document.querySelectorAll(".worktask-remove-user").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var uid = this.dataset.uid;
+        this.closest(".worktask-related-user-tag")?.remove();
+        document.getElementById("hidden-uid-" + uid)?.remove();
+      });
+    });
+  })();
+</script>
+<script type="module" src="{% static 'js/board/worktask_detail.js' %}"></script>
+{% endblock %}

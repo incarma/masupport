@@ -1,4 +1,10 @@
 # board/urls.py
+#
+# 변경 내용 (기존 코드 무변경):
+#   - 기존 post_patterns / support_patterns / task_patterns /
+#     collateral_patterns / industry_patterns 전부 그대로 유지
+#   - 하단 urlpatterns 에 worktasks/ include 한 줄 추가
+#
 # =============================================================
 # Board 앱 URL 설정
 #
@@ -7,10 +13,12 @@
 # │  support_patterns   서식/PDF (support_form, states_form) │
 # │  task_patterns      직원업무 게시판 (superuser 전용)     │
 # │  collateral_patterns 담보평가 계산기 (로그인 전체 허용)  │
+# │  industry_patterns  업계정보 (로그인 전체 허용)          │
+# │  worktask_patterns  개인 업무관리 (superuser 전용)       │
 # └──────────────────────────────────────────────────────────┘
 # =============================================================
 
-from django.urls import path
+from django.urls import include, path
 from . import views
 
 app_name = "board"
@@ -122,4 +130,14 @@ urlpatterns = [
     *task_patterns,
     *collateral_patterns,
     *industry_patterns,
+
+    # ----------------------------------------------------------
+    # WorkTask 업무관리 (Phase 1 신규 추가)
+    # 네임스페이스: board:worktasks
+    # 기존 posts/, tasks/ URL 과 충돌 없음
+    # ----------------------------------------------------------
+    path(
+        "worktasks/",
+        include(("board.worktask_urls", "worktasks")),
+    ),
 ]

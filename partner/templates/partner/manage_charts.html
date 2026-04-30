@@ -36,7 +36,7 @@
     <div class="alert alert-danger">접근 권한이 없습니다.</div>
   {% endif %}
 
-  <h3 class="text-center fw-bold mb-4" style="color:#003f7d;">편제변경 요청 페이지</h3>
+  <h3 class="text-center fw-bold mb-4 partner-page-title">편제변경 요청 페이지</h3>
 
   <!-- ✅ 상단 컨트롤 바 -->
   <div class="card shadow p-3 border-0 rounded-4 mb-3">
@@ -96,7 +96,7 @@
   <div id="inputSection" class="card shadow p-3 border-0 rounded-4 mb-3" hidden>
 
     <div class="manage-input-head">
-      <h5 class="manage-input-title fw-bold mb-0" style="color:#005BAC;">내용입력</h5>
+      <h5 class="manage-input-title fw-bold mb-0 partner-section-title">내용입력</h5>
 
       <div class="manage-input-actions">
         <button type="button" id="btnAddRow" class="btn btn-primary btn-sm">추가</button>
@@ -175,24 +175,24 @@
   <!-- ✅ 메인시트 -->
   <div class="card shadow p-3 border-0 rounded-4" id="mainSheet" hidden>
     <div class="d-flex justify-content-between align-items-center mb-2">
-      <h5 class="fw-bold mb-0" style="color:#005BAC;">메인시트</h5>
+      <h5 class="fw-bold mb-0 partner-section-title">메인시트</h5>
       <div class="small text-muted" id="sheetNotice"></div>
     </div>
 
     <div class="table-responsive">
       <table class="table table-striped align-middle main-table-fixed" id="mainTable">
         <colgroup>
-          <col style="width: 120px"> <!-- 요청자 -->
-          <col style="width: 120px"> <!-- 대상자 -->
-          <col style="width: 210px"> <!-- 소속(변경전) -->
-          <col style="width: 210px"> <!-- 소속(변경후) -->
-          <col style="width: 120px"> <!-- 직급(변경전) -->
-          <col style="width: 120px"> <!-- 직급(변경후) -->
-          <col style="width: 40px"> <!-- OR -->
-          <col style="width: 260px"> <!-- 비고 -->
-          <col style="width: 120px"> <!-- 요청일자 -->
-          <col style="width: 120px"> <!-- 처리일자 -->
-          <col style="width: 60px"> <!-- 삭제 -->
+          <col class="structure-col-rq">
+          <col class="structure-col-tg">
+          <col class="structure-col-branch">
+          <col class="structure-col-branch">
+          <col class="structure-col-rank">
+          <col class="structure-col-rank">
+          <col class="structure-col-or">
+          <col class="structure-col-memo">
+          <col class="structure-col-date">
+          <col class="structure-col-date">
+          <col class="structure-col-del">
         </colgroup>
 
         <thead class="table-light">

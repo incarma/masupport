@@ -1,0 +1,12 @@
+/* static/css/admin/accounts_customuser.css
+   CustomUser admin change_list 전용 스타일
+   - CSP style-src 'self' 대응
+   - templates/admin/accounts/customuser/change_list.html inline style 제거
+*/
+
+.object-tools {
+  display: flex;
+  gap: .5rem;
+  flex-wrap: wrap;
+  align-items: center;
+}

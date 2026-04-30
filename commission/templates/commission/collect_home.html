@@ -146,7 +146,7 @@
             </div>
 
             <!-- 키워드 검색 — id="collectKeywordInput" 변경 금지 -->
-            <div class="collect-filter-item" style="flex: 1 1 200px; max-width: 280px;">
+            <div class="collect-filter-item collect-filter-item-wide">
               <label for="collectKeywordInput" class="form-label form-label-sm fw-semibold mb-1">검색</label>
               <input type="text"
                     id="collectKeywordInput"
@@ -299,7 +299,7 @@
         </div>
 
         <!-- 피드백 이력 목록 — JS 렌더링, id 변경 금지 -->
-        <div id="feedbackListBody" class="mb-3" style="max-height:300px; overflow-y:auto;">
+        <div id="feedbackListBody" class="mb-3 feedback-list-scroll">
           <div class="text-center text-muted small py-3">
             대상자를 선택하면 피드백 이력이 표시됩니다.
           </div>
@@ -379,8 +379,7 @@
       <div class="modal-body">
         <!-- JS가 렌더링 — id 변경 금지 -->
         <pre id="smsTemplateBody"
-             class="bg-light rounded-3 p-3 small"
-             style="white-space:pre-wrap;word-break:break-word;font-family:inherit;"></pre>
+             class="bg-light rounded-3 p-3 small pre-wrap-break"></pre>
       </div>
 
       <div class="modal-footer">
@@ -475,7 +474,7 @@
 </div>
 
 <!-- 업로드 완료 토스트 — id="uploadToast" 변경 금지 -->
-<div class="position-fixed top-0 end-0 p-3" style="z-index:1080;">
+<div class="position-fixed top-0 end-0 p-3 toast-z-1080">
   <div id="uploadToast"
        class="toast align-items-center text-bg-success border-0"
        role="alert" aria-live="assertive" aria-atomic="true">

@@ -371,3 +371,173 @@ input[name^="premium_"] {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+
+/* ==========================================================
+  4) CSP-safe page/auth helpers
+  - inline style 제거 대응
+========================================================== */
+
+.page-title-primary {
+  color: #003f7d;
+  font-weight: 700;
+}
+
+.max-w-600 {
+  max-width: 600px;
+}
+
+.progress-h-20 {
+  height: 20px;
+}
+
+.progress-h-20 .progress-bar {
+  width: 100%;
+}
+
+.toast-z-1080 {
+  z-index: 1080;
+}
+
+/* Auth/Login */
+.login-card-wrap {
+  max-width: 400px;
+}
+
+.login-title {
+  color: #003f7d;
+  font-weight: 700;
+}
+
+.login-error-alert {
+  font-size: .95rem;
+  line-height: 1.5;
+}
+
+.login-card-wrap input::placeholder {
+  color: #a5a5a5;
+  font-size: .95rem;
+}
+
+.login-card-wrap input:focus::placeholder {
+  color: transparent;
+}
+
+.login-card-wrap .form-control {
+  height: 45px;
+  padding-left: 15px;
+}
+
+.auth-done-wrap {
+  max-width: 720px;
+}
+
+.auth-done-card {
+  border-radius: 14px;
+}
+
+.auth-done-icon {
+  font-size: 2.25rem;
+}
+
+.auth-done-title {
+  font-weight: 800;
+}
+
+.auth-done-desc {
+  font-size: .95rem;
+}
+
+.auth-done-help {
+  font-size: .9rem;
+}
+
+/* ==========================================================
+  CSP strict helpers
+========================================================== */
+
+.max-w-640 {
+  max-width: 640px;
+}
+
+.max-w-720 {
+  max-width: 720px;
+}
+
+.min-w-0 {
+  min-width: 0;
+}
+
+.w-90px { width: 90px; }
+.w-100px { width: 100px; }
+.w-110px { width: 110px; }
+.w-140px { width: 140px; }
+.w-150px { width: 150px; }
+.w-170px { width: 170px; }
+.w-180px { width: 180px; }
+.w-190px { width: 190px; }
+.w-260px { width: 260px; }
+.min-w-220px { min-width: 220px; }
+
+.nowrap {
+  white-space: nowrap;
+}
+
+.fs-0875 {
+  font-size: .875rem;
+}
+
+.fs-12px {
+  font-size: 12px;
+}
+
+.fs-13px {
+  font-size: 13px;
+}
+
+.letter-tight-sm {
+  letter-spacing: -0.2px;
+}
+
+.d-none-force {
+  display: none;
+}
+
+.pre-wrap-break {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: inherit;
+}
+
+.chart-box-260 {
+  height: 260px;
+}
+
+.spinner-4rem {
+  width: 4rem;
+  height: 4rem;
+}
+
+.blank-h-32 {
+  height: 32px;
+}
+
+.table-row-fs-13 td,
+.table-row-fs-13 th {
+  font-size: 13px;
+}
+
+.table-fs-13 {
+  font-size: 13px;
+}
+
+.table-fs-12 {
+  font-size: 12px;
+}
+
+.ellipsis-w-260 {
+  max-width: 260px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

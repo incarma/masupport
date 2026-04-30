@@ -101,14 +101,18 @@ def _is_upload_task_allowed(request: HttpRequest, task_id: str) -> bool:
     user = getattr(request, "user", None)
     if not getattr(user, "is_authenticated", False):
         return False
+    
+    if not task_id:
+        return False
 
     owner_id = cache.get(_task_owner_key(task_id))
     if owner_id:
         return str(owner_id) == str(getattr(user, "pk", ""))
 
-    # 구버전 캐시에 owner가 없는 경우: 관리자급만 fallback 허용
+    # 구버전 캐시에 owner가 없는 경우: superuser만 fallback 허용
+    # accounts 업로드 결과는 사용자 계정/권한 정보가 포함될 수 있어 head까지 열면 안 된다.
     grade = (getattr(user, "grade", "") or "").strip()
-    return bool(getattr(user, "is_superuser", False) or grade in {"superuser", "head"})
+    return bool(getattr(user, "is_superuser", False) or grade == "superuser")
 
 
 def _safe_upload_result_path(raw_path: str | Path) -> Path:
@@ -193,11 +197,11 @@ password_change_done_view = UserPasswordChangeDoneView.as_view()
 def upload_progress_view(request: HttpRequest) -> JsonResponse:
     task_id = (request.GET.get("task_id") or "").strip()
 
-    if not _is_upload_task_allowed(request, task_id):
-        return JsonResponse({"percent": 0, "status": "FORBIDDEN", "error": "권한이 없습니다.", "download_url": ""}, status=403)
-
     if not task_id:
         return JsonResponse({"percent": 0, "status": "PENDING", "error": "", "download_url": ""})
+
+    if not _is_upload_task_allowed(request, task_id):
+        return JsonResponse({"percent": 0, "status": "FORBIDDEN", "error": "권한이 없습니다.", "download_url": ""}, status=403)
 
     percent = cache.get(cache_key(CACHE_PROGRESS_PREFIX, task_id), 0) or 0
     status = cache.get(cache_key(CACHE_STATUS_PREFIX, task_id), "PENDING") or "PENDING"

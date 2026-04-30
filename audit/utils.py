@@ -4,6 +4,7 @@ from __future__ import annotations
 import re
 from ipaddress import ip_address, ip_network
 from urllib.parse import parse_qsl, urlencode
+
 from django.conf import settings
 
 SENSITIVE_KEYS = {
@@ -30,9 +31,6 @@ def is_sensitive_key(key: str) -> bool:
     if not k:
         return False
     return k in SENSITIVE_KEYS or any(fragment in k for fragment in SENSITIVE_KEY_FRAGMENTS)
-
-PHONE_RE = re.compile(r"\b(01[016789])[-.\s]?(\d{3,4})[-.\s]?(\d{4})\b")
-SSN_RE = re.compile(r"\b(\d{6})[-\s]?(\d{7})\b")
 
 
 def mask_value(v: str) -> str:
@@ -84,6 +82,11 @@ def get_client_ip(request) -> str:
 
     remote_addr = (request.META.get("REMOTE_ADDR", "") or "").strip()
 
+    # 운영에서만 proxy header 신뢰를 켜는 것을 기본값으로 둔다.
+    # dev/local 직접 접근에서는 X-Forwarded-For spoofing 방지를 위해 REMOTE_ADDR만 사용한다.
+    if not getattr(settings, "AUDIT_PROXY_HEADER_ENABLED", False):
+        return remote_addr
+
     trusted_cidrs = getattr(settings, "AUDIT_TRUSTED_PROXY_CIDRS", ())
     trusted = False
     try:
@@ -97,6 +100,8 @@ def get_client_ip(request) -> str:
 
     xff = request.META.get("HTTP_X_FORWARDED_FOR", "")
     if xff:
+        # XFF 형식: client, proxy1, proxy2
+        # 신뢰 가능한 proxy가 전달한 값일 때만 가장 왼쪽의 유효 IP를 client IP로 본다.
         for candidate in xff.split(","):
             candidate = candidate.strip()
             try:

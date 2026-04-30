@@ -6,15 +6,15 @@
 {% block title %}로그인{% endblock %}
 
 {% block content %}
-<div class="mx-auto" style="max-width:400px;">
+<div class="mx-auto login-card-wrap">
   <div class="card p-4 shadow">
-    <h3 class="text-center mb-4" style="color:#003f7d; font-weight:700;">로그인</h3>
+    <h3 class="text-center mb-4 login-title">로그인</h3>
 
     <form id="loginForm" method="POST" novalidate>
       {% csrf_token %}
 
       {% if form.non_field_errors %}
-        <div class="alert alert-danger py-2 px-3" role="alert" style="font-size:0.95rem; line-height:1.5;">
+        <div class="alert alert-danger py-2 px-3 login-error-alert" role="alert">
           {% for error in form.non_field_errors %}
             <div>{{ error|linebreaksbr }}</div>
           {% endfor %}
@@ -35,45 +35,4 @@
     </form>
   </div>
 </div>
-
-<style>
-  /* placeholder 스타일 (회색 톤 & 크기 조정) */
-  input::placeholder {
-    color: #a5a5a5;
-    font-size: 0.95rem;
-  }
-
-  /* 포커스 시 */
-  input:focus::placeholder {
-    color: transparent;
-  }
-
-  /* 입력 필드 디자인 */
-  .form-control {
-    border-radius: 10px;
-    border: 1px solid #d2ddec;
-    transition: all 0.25s ease;
-    height: 45px;
-    padding-left: 15px;
-  }
-
-  .form-control:focus {
-    border-color: #005BAC;
-    box-shadow: 0 0 6px rgba(0, 91, 172, 0.4);
-  }
-
-  .btn-primary {
-    background: linear-gradient(135deg, #005BAC 0%, #0074D9 100%);
-    border: none;
-    border-radius: 10px;
-    transition: all 0.3s ease;
-    font-weight: 600;
-  }
-
-  .btn-primary:hover {
-    background: linear-gradient(135deg, #004B93 0%, #0069C2 100%);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 10px rgba(0, 91, 172, 0.4);
-  }
-</style>
 {% endblock %}

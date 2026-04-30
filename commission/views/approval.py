@@ -167,6 +167,7 @@ def approval_upload_excel(request):
             fail_token = store_fail_rows_as_excel(
                 rows=rows,
                 filename=f"upload_fail_{ym}_{part or 'ALL'}_{kind}.xlsx",
+                owner_id=str(getattr(request.user, "pk", "") or ""),
             )
 
         # ✅ AuditLog (success)

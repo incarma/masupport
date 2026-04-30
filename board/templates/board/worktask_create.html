@@ -1,0 +1,152 @@
+<!-- board/templates/board/worktask_create.html -->
+<!-- 업무 항목 등록 폼 -->
+{% extends "board/base_board.html" %}
+{% load static %}
+
+{% block title %}업무 등록 — 업무관리{% endblock %}
+
+{% block content %}
+<div class="board-narrow mx-auto">
+
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <h5 class="board-page-title mb-0">업무 등록</h5>
+    <a href="{% url 'board:worktasks:worktask_list' %}"
+       class="btn btn-outline-secondary btn-sm">목록으로</a>
+  </div>
+
+  {% if error %}
+    <div class="alert alert-danger">{{ error }}</div>
+  {% endif %}
+
+  <form method="post" enctype="multipart/form-data" id="worktaskCreateForm">
+    {% csrf_token %}
+
+    <!-- 분류 -->
+    <div class="mb-3">
+      <label for="id_category" class="form-label fw-semibold">
+        업무 분류 <span class="text-danger">*</span>
+      </label>
+      <select name="category" id="id_category" class="form-select" required>
+        <option value="">— 분류 선택 —</option>
+        {% for cat in categories %}
+          <option value="{{ cat.code }}"
+                  {% if post_data.category == cat.code %}selected{% endif %}>
+            {{ cat.label }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <!-- 업무명 -->
+    <div class="mb-3">
+      <label for="id_title" class="form-label fw-semibold">
+        업무명 <span class="text-danger">*</span>
+      </label>
+      <input type="text" name="title" id="id_title"
+             class="form-control" maxlength="200"
+             value="{{ post_data.title|default:'' }}" required>
+    </div>
+
+    <!-- 메모 (단순 textarea, CKEditor 미사용) -->
+    <div class="mb-3">
+      <label for="id_description" class="form-label fw-semibold">메모</label>
+      <textarea name="description" id="id_description"
+                class="form-control" rows="4">{{ post_data.description|default:'' }}</textarea>
+    </div>
+
+    <!-- 마감일 -->
+    <div class="mb-3">
+      <label for="id_due_date" class="form-label fw-semibold">마감일</label>
+      <input type="date" name="due_date" id="id_due_date"
+             class="form-control"
+             value="{{ post_data.due_date|default:'' }}">
+    </div>
+
+    <!-- 우선순위 -->
+    <div class="mb-3">
+      <label for="id_priority" class="form-label fw-semibold">우선순위</label>
+      <input type="number" name="priority" id="id_priority"
+             class="form-control" min="1" max="99"
+             value="{{ post_data.priority|default:'50' }}">
+      <div class="form-text">숫자가 낮을수록 상단 표시 (기본 50).</div>
+    </div>
+
+    <!-- 반복 유형 -->
+    <div class="mb-3">
+      <label for="id_recurrence_type" class="form-label fw-semibold">반복 유형</label>
+      <select name="recurrence_type" id="id_recurrence_type" class="form-select">
+        <option value="none">반복 없음</option>
+        <option value="monthly_open">매달 월초 (1~10일)</option>
+        <option value="monthly_mid">매달 중순</option>
+        <option value="monthly_end">매달 말</option>
+        <option value="daily">매일</option>
+        <option value="custom">직접 지정</option>
+      </select>
+    </div>
+
+    <!-- custom 전용: 직접 지정 일자 (JS 토글) -->
+    <div class="mb-3 d-none" id="recurrence-day-group">
+      <label for="id_recurrence_day" class="form-label fw-semibold">
+        반복 일자 (1~28)
+      </label>
+      <input type="number" name="recurrence_day" id="id_recurrence_day"
+             class="form-control" min="1" max="28"
+             value="{{ post_data.recurrence_day|default:'' }}">
+    </div>
+
+    <!-- 알림 설정 -->
+    <div class="mb-3">
+      <label for="id_notify_days_before" class="form-label fw-semibold">
+        마감 N일 전 이메일 알림
+      </label>
+      <input type="number" name="notify_days_before" id="id_notify_days_before"
+             class="form-control" min="0" max="30"
+             value="{{ post_data.notify_days_before|default:'3' }}">
+    </div>
+
+    <!-- 관련 인물 (search_user_modal.js SSOT 경유) -->
+    <div class="mb-3">
+      <label class="form-label fw-semibold">관련 인물</label>
+      <div id="related-users-tags" class="d-flex flex-wrap gap-1 mb-2 min-height-32"></div>
+      <button type="button" class="btn btn-outline-secondary btn-sm"
+              id="btn-search-related-user">
+        + 관련 인물 추가
+      </button>
+      <!-- JS 가 동적으로 hidden input 추가 -->
+      <div id="related-users-hidden-inputs"></div>
+    </div>
+
+    <!-- 첨부파일 -->
+    <div class="mb-3">
+      <label for="id_attachments" class="form-label fw-semibold">첨부파일</label>
+      <input type="file" name="attachments" id="id_attachments"
+             class="form-control" multiple>
+    </div>
+
+    <div class="d-flex gap-2 mt-4">
+      <button type="submit" class="btn btn-primary flex-grow-1"
+              id="btn-create-submit">등록</button>
+      <a href="{% url 'board:worktasks:worktask_list' %}"
+         class="btn btn-outline-secondary">취소</a>
+    </div>
+  </form>
+
+</div>
+
+<!-- 사용자 검색 모달 (search_user_modal.js SSOT) -->
+{% include "includes/search_user_modal.html" %}
+{% endblock %}
+
+{% block extra_scripts %}
+<!-- 반복 유형 custom 토글 -->
+<script>
+  (function () {
+    var sel   = document.getElementById("id_recurrence_type");
+    var group = document.getElementById("recurrence-day-group");
+    function toggle() { group.classList.toggle("d-none", sel.value !== "custom"); }
+    sel?.addEventListener("change", toggle);
+    toggle();
+  })();
+</script>
+<script type="module" src="{% static 'js/board/worktask_detail.js' %}"></script>
+{% endblock %}
