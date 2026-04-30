@@ -1,44 +1,23 @@
 {# templates/no_permission_popup.html #}
+{% load static %}
 <!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
   <title>접근 권한 없음</title>
-  <style>
-    body {
-      background: var(--bg-app, #f9fbfd);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      height: 100vh;
-      margin: 0;
-      font-family: "Noto Sans KR", sans-serif;
-    }
-
-    .permission-box {
-      background: #fff;
-      border-radius: 15px;
-      padding: 24px 28px;
-      text-align: center;
-      box-shadow: 0 6px 15px rgba(0,0,0,0.1);
-      max-width: 320px;
-    }
-
-    .permission-box p {
-      margin-bottom: 16px;
-      font-weight: 600;
-    }
-  </style>
+  <link rel="stylesheet" href="{% static 'css/base.css' %}">
 </head>
 <body>
 
 <div class="permission-box">
   <p>접근 권한이 없는 페이지입니다.</p>
-  <button class="btn btn-primary"
-          onclick="location.href='/'">
+  <button type="button"
+          class="btn btn-primary"
+          data-redirect-url="/">
     홈으로 이동
   </button>
 </div>
 
+<script src="{% static 'js/common/redirect_buttons.js' %}?v={% now 'U' %}"></script>
 </body>
 </html>

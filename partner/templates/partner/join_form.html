@@ -8,8 +8,8 @@
 
 {% block content %}
 <div class="container mt-5">
-  <div class="mx-auto" style="max-width: 600px;">
-    <h3 class="mb-4 text-center" style="font-family:'Noto Sans KR', sans-serif; color:#003f7d; font-weight:700;">
+  <div class="mx-auto max-w-600">
+    <h3 class="mb-4 text-center page-title-primary">
       위촉서류 출력 페이지
     </h3>
 
@@ -71,7 +71,7 @@
             {% endif %}
           </div>
           <div class="col-5 col-md-4">
-            <button type="button" class="btn btn-outline-secondary w-100" onclick="execDaumPostcode()">주소 찾기</button>
+            <button type="button" id="btnFindAddress" class="btn btn-outline-secondary w-100">주소 찾기</button>
           </div>
         </div>
 
@@ -112,41 +112,10 @@
     </div>
   </div>
 </div>
+{% endblock %}
 
-<!-- 다음 주소 API -->
+{% block extra_js %}
+{{ block.super }}
 <script src="https://ssl.daumcdn.net/dmaps/map_js_init/postcode.v2.js"></script>
-<script>
-function execDaumPostcode() {
-  new daum.Postcode({
-    oncomplete: function(data) {
-      document.getElementById('postcode').value = data.zonecode;
-      document.getElementById('address').value = data.roadAddress;
-      document.getElementById('address_detail').focus();
-    }
-  }).open();
-}
-</script>
-
-<script>
-const pdfButton = document.getElementById('pdfButton');
-const progressWrapper = document.getElementById('progressWrapper');
-const progressBar = document.getElementById('progressBar');
-
-pdfButton.addEventListener('click', function() {
-  progressWrapper.style.display = 'block';
-  progressBar.style.width = '0%';
-  progressBar.innerText = '0%';
-  
-  let progress = 0;
-  const interval = setInterval(() => {
-    progress += 5;
-    if (progress >= 90) {
-      clearInterval(interval);
-      return;
-    }
-    progressBar.style.width = progress + '%';
-    progressBar.innerText = progress + '%';
-  }, 250);
-});
-</script>
+<script src="{% static 'js/partner/join_form.js' %}?v={% now 'U' %}"></script>
 {% endblock %}

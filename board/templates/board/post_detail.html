@@ -50,7 +50,7 @@
            ================================ -->
       <div class="d-flex flex-column flex-md-row justify-content-between align-items-start gap-2 mb-3">
         <div class="flex-grow-1">
-          <h4 class="fw-bold mb-1 text-primary" style="letter-spacing:-0.2px;">
+          <h4 class="fw-bold mb-1 text-primary letter-tight-sm">
             {{ post.title }}
           </h4>
 
@@ -214,7 +214,7 @@
 
             <form method="post"
                   class="board-detail-actions-form"
-                  onsubmit="return confirm('정말로 이 게시글을 삭제하시겠습니까?');">
+                  data-confirm-submit="정말로 이 게시글을 삭제하시겠습니까?">
               {% csrf_token %}
               <input type="hidden" name="action_type" value="delete_post">
               <button type="submit" class="btn btn-outline-danger w-100">삭제하기</button>
@@ -234,6 +234,7 @@
 
 {% block extra_js %}
 <!-- Comment edit + inline update + status ui -->
+<script src="{% static 'js/common/confirm_submit.js' %}?v={% now 'U' %}"></script>
 <script src="{% static 'js/board/common/status_ui.js' %}?v=20260127"></script>
 <script src="{% static 'js/board/common/comment_edit.js' %}?v=20260104"></script>
 <script src="{% static 'js/board/common/detail_inline_update.js' %}?v=20260104"></script>

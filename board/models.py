@@ -8,6 +8,7 @@ from django.core.validators import MinValueValidator, MaxValueValidator
 from django.db import models
 from django.db import IntegrityError, transaction
 from django.utils import timezone
+from django.conf import settings
 
 from .constants import STATUS_CHOICES_TUPLES
 
@@ -418,3 +419,268 @@ from .models_industry import (  # noqa: E402,F401
     IndustryRecommendation,
     IndustryCollectJobLog,
 )
+
+
+# =============================================================================
+# WorkTask 업무관리 모델 (Phase 1)
+# SSOT 문서: docs/02_apps/worktask.md
+#
+# 보안 원칙 요약:
+#   - owner 필드가 모든 소유자 격리의 기준
+#   - 뷰/템플릿에서 ORM 직접 호출 금지 → services/worktasks.py 경유 필수
+#   - WorkTaskAttachment.file.url 직접 노출 금지 → worktask_att_download 뷰 경유
+# =============================================================================
+
+
+class WorkCategory(models.Model):
+    """
+    업무 분류 마스터.
+
+    관리자가 Django Admin에서 등록·관리한다.
+    is_active=False 이면 등록 폼에서 미노출.
+    code 가 PK이므로 외부에서 코드값으로 직접 참조한다.
+    """
+
+    CODE_CHOICES = [
+        ("commission", "수수료 업무"),
+        ("bond",       "채권·환수"),
+        ("risk",       "리스크관리"),
+        ("biz_dev",    "제휴영업"),
+        ("misc",       "기타"),
+    ]
+
+    code       = models.CharField(max_length=30, primary_key=True,
+                                  choices=CODE_CHOICES, verbose_name="분류 코드")
+    label      = models.CharField(max_length=50, verbose_name="표시명")
+    sort_order = models.PositiveSmallIntegerField(default=0, verbose_name="정렬순서")
+    is_active  = models.BooleanField(default=True, verbose_name="활성")
+
+    class Meta:
+        ordering       = ["sort_order", "code"]
+        verbose_name   = "업무 분류"
+        verbose_name_plural = "업무 분류"
+
+    def __str__(self):
+        return self.label
+
+
+class WorkTask(models.Model):
+    """
+    개인 업무관리 핵심 모델.
+
+    ⚠️ 소유자 격리 원칙 (worktask.md §2):
+        모든 목록/상세 조회는 반드시 services/worktasks.py 경유.
+        뷰에서 WorkTask.objects.* 직접 호출 금지.
+
+    반복 구조:
+        template_task=None + recurrence_type≠none → 반복 원본(템플릿)
+        template_task=<pk>                        → 배치가 자동생성한 자식 레코드
+    """
+ 
+    # -------------------------------------------------------------------------
+    # 반복 유형 상수 (worktask.md §3.2 recurrence_type 상수표)
+    # -------------------------------------------------------------------------
+    RECURRENCE_NONE         = "none"
+    RECURRENCE_MONTHLY_OPEN = "monthly_open"
+    RECURRENCE_MONTHLY_MID  = "monthly_mid"
+    RECURRENCE_MONTHLY_END  = "monthly_end"
+    RECURRENCE_DAILY        = "daily"
+    RECURRENCE_CUSTOM       = "custom"
+
+    RECURRENCE_CHOICES = [
+        (RECURRENCE_NONE,         "반복 없음"),
+        (RECURRENCE_MONTHLY_OPEN, "매달 월초 (1~10일)"),
+        (RECURRENCE_MONTHLY_MID,  "매달 중순"),
+        (RECURRENCE_MONTHLY_END,  "매달 말"),
+        (RECURRENCE_DAILY,        "매일"),
+        (RECURRENCE_CUSTOM,       "직접 지정"),
+    ]
+
+    # -------------------------------------------------------------------------
+    # 상태 상수
+    # -------------------------------------------------------------------------
+    STATUS_PENDING     = "pending"
+    STATUS_IN_PROGRESS = "in_progress"
+    STATUS_DONE        = "done"
+    STATUS_SKIPPED     = "skipped"
+
+    STATUS_CHOICES = [
+        (STATUS_PENDING,     "대기"),
+        (STATUS_IN_PROGRESS, "진행중"),
+        (STATUS_DONE,        "완료"),
+        (STATUS_SKIPPED,     "건너뜀"),
+    ]
+
+    # -------------------------------------------------------------------------
+    # 소유자 / 분류
+    # -------------------------------------------------------------------------
+    owner    = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="worktasks",
+        verbose_name="소유자",
+        db_index=True,
+    )
+    category = models.ForeignKey(
+        WorkCategory,
+        on_delete=models.PROTECT,
+        related_name="worktasks",
+        verbose_name="업무 분류",
+    )
+
+    # -------------------------------------------------------------------------
+    # 내용
+    # -------------------------------------------------------------------------
+    title       = models.CharField(max_length=200, verbose_name="업무명")
+    description = models.TextField(blank=True, default="", verbose_name="메모")
+    # 관련 인물 참조 메모 전용 — 권한 부여 없음 (worktask.md §3.2)
+    related_users = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        blank=True,
+        related_name="related_worktasks",
+        verbose_name="관련 인물",
+    )
+
+    # -------------------------------------------------------------------------
+    # 일정 / 반복
+    # -------------------------------------------------------------------------
+    due_date        = models.DateField(null=True, blank=True, verbose_name="마감일")
+    recurrence_type = models.CharField(
+        max_length=20, choices=RECURRENCE_CHOICES,
+        default=RECURRENCE_NONE, verbose_name="반복 유형",
+    )
+    # custom 유형 전용 — 직접 지정 일자 (1~28)
+    recurrence_day  = models.PositiveSmallIntegerField(
+        null=True, blank=True, verbose_name="반복 일자(custom)",
+    )
+    # 반복 원본 참조 — None=원본(템플릿), 값=자동생성 자식
+    template_task   = models.ForeignKey(
+        "self",
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name="generated_tasks",
+        verbose_name="반복 원본",
+    )
+    # 귀속 월 ("2026-03" 형식) — 중복 생성 방지 키
+    target_ym       = models.CharField(
+        max_length=7, blank=True, default="", verbose_name="귀속 월",
+    )
+
+    # -------------------------------------------------------------------------
+    # 상태 / 우선순위
+    # -------------------------------------------------------------------------
+    status   = models.CharField(
+        max_length=20, choices=STATUS_CHOICES,
+        default=STATUS_PENDING, verbose_name="상태",
+    )
+    priority = models.PositiveSmallIntegerField(default=50, verbose_name="우선순위")
+
+    # -------------------------------------------------------------------------
+    # 알림
+    # -------------------------------------------------------------------------
+    notify_days_before = models.PositiveSmallIntegerField(
+        default=3, verbose_name="알림 D-N일 전",
+    )
+    # True = 이미 발송 완료 → 중복 발송 방지 플래그 (worktask.md §11.3)
+    is_notified = models.BooleanField(
+        default=False, verbose_name="알림 발송 완료",
+    )
+
+    # -------------------------------------------------------------------------
+    # 감사
+    # -------------------------------------------------------------------------
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="등록일시")
+    updated_at = models.DateTimeField(auto_now=True,     verbose_name="수정일시")
+
+    class Meta:
+        ordering = ["priority", "due_date", "-created_at"]
+        verbose_name        = "업무 항목"
+        verbose_name_plural = "업무 항목"
+        indexes = [
+            # 목록 조회 핵심 복합 인덱스 (worktask.md §3.2 DB 인덱스)
+            models.Index(
+                fields=["owner", "status", "due_date"],
+                name="wt_owner_status_due_idx",
+            ),
+            # 반복 자동생성 배치 중복 방지 조회
+            models.Index(
+                fields=["template_task", "target_ym"],
+                name="wt_template_ym_idx",
+            ),
+        ]
+
+    def __str__(self):
+        return f"[{self.category}] {self.title} ({self.owner_id})"
+
+    # -------------------------------------------------------------------------
+    # 프로퍼티 (worktask.md §3.2 주요 프로퍼티)
+    # -------------------------------------------------------------------------
+
+    @property
+    def is_template(self) -> bool:
+        """
+       반복 원본(템플릿) 여부.
+        template_task 가 None 이고 반복 유형이 설정된 경우 True.
+        """
+        return (
+            self.template_task_id is None
+            and self.recurrence_type != self.RECURRENCE_NONE
+        )
+
+    @property
+    def is_overdue(self) -> bool:
+        """
+        마감 초과 여부.
+        due_date 가 오늘 이전이고 완료/건너뜀 상태가 아닌 경우 True.
+        """
+        from django.utils import timezone
+        if not self.due_date:
+            return False
+        return (
+            self.due_date < timezone.localdate()
+            and self.status not in (self.STATUS_DONE, self.STATUS_SKIPPED)
+        )
+
+    def get_status_display_label(self) -> str:
+        """상태 한글 표시명 반환."""
+        return dict(self.STATUS_CHOICES).get(self.status, self.status)
+
+
+class WorkTaskAttachment(models.Model):
+    """
+    WorkTask 첨부파일.
+
+    ⚠️ 보안 정책 (worktask.md §13.1):
+        att.file.url 직접 노출 절대 금지.
+        반드시 worktask_att_download 뷰 경유 → 소유자 검증 → FileResponse.
+
+    original_name: 업로드 시 원본 파일명 저장 → RFC5987 한글 다운로드에 사용.
+    """
+ 
+    task          = models.ForeignKey(
+        WorkTask, on_delete=models.CASCADE,
+        related_name="attachments", verbose_name="업무 항목",
+    )
+    file          = models.FileField(
+        upload_to="worktask_attachments/%Y/%m/", verbose_name="파일",
+    )
+    original_name = models.CharField(
+        max_length=255, verbose_name="원본 파일명",
+        help_text="RFC5987 Content-Disposition 헤더에 사용",
+    )
+    uploaded_by   = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+        verbose_name="업로더",
+    )
+    uploaded_at   = models.DateTimeField(auto_now_add=True, verbose_name="업로드일시")
+
+    class Meta:
+        ordering        = ["-uploaded_at"]
+        verbose_name    = "업무 첨부파일"
+        verbose_name_plural = "업무 첨부파일"
+
+    def __str__(self):
+        return f"{self.original_name} (task={self.task_id})"

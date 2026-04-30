@@ -47,3 +47,5 @@ from .industry_info import (  # noqa: F401
     industry_save_preference,
     industry_mark_click,
 )
+
+from board.views import worktasks  # noqa: F401

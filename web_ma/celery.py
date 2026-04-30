@@ -61,6 +61,7 @@ app.conf.beat_schedule = {
         "schedule": crontab(hour="0,6,12,18", minute=5),
         "args": (),
     },
+
     # ── board: 업계정보 기사 정리 ───────────────────────────────────────────
     # 매일 03:00: 14일 이전 기사 삭제 (북마크된 기사 보존)
     # ✅ 14일 보존: 추천 알고리즘 탐색 범위(14일)와 일치
@@ -69,6 +70,7 @@ app.conf.beat_schedule = {
         "schedule": crontab(hour=3, minute=0),
         "args": _safe_args((14,)),
     },
+
     # ── dash: 매출 집계 ─────────────────────────────────────────────────────
     # 매시간 10분: 집계 갱신(이번달/전월) → SalesDailyAgg 최신화
     "dash-agg-hourly": {
@@ -76,6 +78,7 @@ app.conf.beat_schedule = {
         "schedule": crontab(minute=10),
         "args": (),
     },
+
     # ── dash: 예측 갱신 ─────────────────────────────────────────────────────
     # 매일 02:10: 모델/예측 갱신 → Forecast 생성/업데이트
     "dash-forecast-daily": {
@@ -83,10 +86,29 @@ app.conf.beat_schedule = {
         "schedule": crontab(hour=2, minute=10),
         "args": (),
     },
+
     # 매시간 20분: 집계 갱신 직후 예측도 최신화 (집계 :10 → 예측 :20 순서 보장)
     "dash-forecast-hourly": {
         "task": "dash.tasks.build_sales_forecasts_hourly",
         "schedule": crontab(minute=20),
         "args": (),
+    },
+    
+    # ------------------------------------------------------------------
+    # WorkTask 반복 자동생성 — 매달 1일 00:10
+    # board/tasks.py: generate_monthly_worktasks
+    # ------------------------------------------------------------------
+    "generate-monthly-worktasks": {
+        "task":     "board.tasks.generate_monthly_worktasks",
+        "schedule": crontab(day_of_month="1", hour="0", minute="10"),
+    },
+
+    # ------------------------------------------------------------------
+    # WorkTask 마감 알림 이메일 — 매일 08:00
+    # board/tasks.py: notify_due_worktasks
+    # ------------------------------------------------------------------
+    "notify-due-worktasks": {
+        "task":     "board.tasks.notify_due_worktasks",
+        "schedule": crontab(hour="8", minute="0"),
     },
 }

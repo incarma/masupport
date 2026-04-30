@@ -2,6 +2,7 @@
 
 {% extends "base.html" %}
 {% load static %}
+{% load manual_sanitize %}
 {% block title %}매뉴얼{% endblock %}
 
 <!-- Manual app CSS 로드: base.html은 app_css 블록에서만 앱별 CSS를 로드 -->
@@ -124,7 +125,7 @@
                     </div>
 
                     <div class="manual-block-text manual-block-content">
-                      {{ b.content|safe }}
+                      {{ b.content|sanitize_manual_html }}
                     </div>
                   </div>
 

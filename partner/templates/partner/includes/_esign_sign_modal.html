@@ -22,15 +22,15 @@
 
         <!-- 내역 테이블 (sign.js에서 동적 렌더) -->
         <div class="table-responsive mb-3">
-          <table class="table table-sm table-bordered" style="min-width:700px; font-size:12px;">
+          <table class="table table-sm table-bordered esign-sign-table">
             <thead class="table-light">
               <tr>
-                <th style="width:40px">번호</th>
-                <th style="width:80px">시작월</th>
-                <th style="width:80px">종료월</th>
-                <th style="width:90px">금액</th>
-                <th style="width:100px">공제자</th>
-                <th style="width:100px">지급자</th>
+                <th class="esign-sign-col-no">번호</th>
+                <th class="esign-sign-col-month">시작월</th>
+                <th class="esign-sign-col-month">종료월</th>
+                <th class="esign-sign-col-amount">금액</th>
+                <th class="esign-sign-col-person">공제자</th>
+                <th class="esign-sign-col-person">지급자</th>
                 <th>내용</th>
               </tr>
             </thead>
@@ -42,14 +42,14 @@
 
         <!-- 서명 현황 (sign.js에서 동적 렌더) -->
         <div class="mb-3">
-          <p class="fw-semibold mb-1" style="font-size:13px;">서명 현황</p>
+          <p class="fw-semibold mb-1 esign-sign-label">서명 현황</p>
           <div id="signModalSigners" class="d-flex flex-wrap gap-2"></div>
         </div>
 
         <!-- 동의 체크 — 체크 전 서명하기 버튼 disabled -->
         <div class="form-check border rounded p-3 bg-light">
           <input class="form-check-input" type="checkbox" id="signAgreementCheck">
-          <label class="form-check-label fw-semibold" for="signAgreementCheck" style="font-size:13px;">
+          <label class="form-check-label fw-semibold esign-sign-label" for="signAgreementCheck">
             위 내용을 확인하였으며, 전자서명에 동의합니다.
           </label>
         </div>

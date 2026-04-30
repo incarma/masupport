@@ -1349,3 +1349,32 @@ body {
     clip-path: inset(0 0 0 0) !important;
   }
 }
+
+
+.landing-bg-hero {
+  --hero-bg-image: url("/static/landing/bg/s0-hero-bg.png");
+}
+
+.landing-bg-history {
+  --section-bg-image: url("/static/landing/bg/s1-history-bg.png");
+}
+
+.landing-bg-kosdaq {
+  --section-bg-image: url("/static/landing/bg/s2-kosdaq-bg.png");
+}
+
+.landing-bg-why {
+  --section-bg-image: url("/static/landing/bg/s3-why-bg.png");
+}
+
+.landing-bg-campus {
+  --section-bg-image: url("/static/landing/bg/s4-campus-bg.png");
+}
+
+.landing-bg-guide {
+  --section-bg-image: url("/static/landing/bg/s5-guide-bg.png");
+}
+
+.landing-bg-db {
+  --section-bg-image: url("/static/landing/bg/s6-db-bg.png");
+}

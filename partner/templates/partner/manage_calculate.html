@@ -60,7 +60,7 @@
       <div class="alert alert-danger">접근 권한이 없습니다.</div>
     {% endif %}
 
-    <h3 class="text-center fw-bold mb-4" style="color:#003f7d;">지점효율 요청 페이지</h3>
+    <h3 class="text-center fw-bold mb-4 partner-page-title">지점효율 요청 페이지</h3>
     
     <div class="partner-sheet-wrap">
 
@@ -118,7 +118,7 @@
       <!-- 입력 섹션 -->
       <div id="inputSection" class="card shadow p-3 border-0 rounded-4 mb-3" hidden>
         <div class="manage-input-head">
-          <h5 class="manage-input-title fw-bold mb-0" style="color:#005BAC;">내용입력</h5>
+          <h5 class="manage-input-title fw-bold mb-0 partner-section-title">내용입력</h5>
 
           <!-- 기존 버튼바 그대로 사용 -->
           <div class="manage-input-actions efficiency-actions-bar">
@@ -132,7 +132,7 @@
             </button>
 
             <input type="text" id="confirmFileName" class="form-control form-control-sm"
-                  style="max-width:260px" placeholder="업로드 된 확인서 파일명" readonly>
+                  class="confirm-file-name-input" placeholder="업로드 된 확인서 파일명" readonly>
 
             <input type="hidden" id="confirmGroupId" value="">
             <input type="hidden" id="confirmAttachmentId" value="">
@@ -231,7 +231,7 @@
           </table>
         </div>
 
-        <div class="small fw-bold" style="color:#dc3545;">※ 반드시 확인서를 첨부해야 내용 저장이 가능합니다.</div>
+        <div class="small fw-bold text-danger">※ 반드시 확인서를 첨부해야 내용 저장이 가능합니다.</div>
         <div class="small text-muted">※ 한 번에 최대 10건까지 추가할 수 있습니다.</div>
       </div>
 
@@ -242,7 +242,7 @@
       <!-- ✅ 메인: Accordion(그룹) + 그룹 내부 테이블(행) -->
       <div class="card shadow p-3 border-0 rounded-4" id="mainSheet" hidden>
         <div class="d-flex justify-content-between align-items-center mb-2">
-          <h5 class="fw-bold mb-0" style="color:#005BAC;">메인시트</h5>
+          <h5 class="fw-bold mb-0 partner-section-title">메인시트</h5>
           <div class="small text-muted" id="sheetNotice"></div>
         </div>
       
@@ -287,7 +287,7 @@
             <button type="button" id="btnConfirmUploadDo" class="btn btn-primary">업로드</button>
           </div>
 
-          <div id="confirmUploadMsg" class="mt-3 small" style="display:none;"></div>
+          <div id="confirmUploadMsg" class="mt-3 small d-none"></div>
         </div>
       </div>
     </div>

@@ -1,0 +1,186 @@
+<!-- board/templates/board/worktask_detail.html -->
+<!-- ============================================================
+   WorkTask 상세 페이지
+
+   Boot 패턴: id="worktaskDetailBoot" data-* 로 URL 주입.
+   첨부 링크: ❌ att.file.url 금지 / ✅ worktask_att_download 뷰 경유
+   XSS: {{ task.description|safe }} 사용 금지
+============================================================ -->
+{% extends "board/base_board.html" %}
+{% load static %}
+
+{% block title %}{{ task.title }} — 업무관리{% endblock %}
+
+{% block content %}
+
+<!-- ── Boot 루트 ──────────────────────────────────────────── -->
+<div id="worktaskDetailBoot"
+     data-pk="{{ task.pk }}"
+     data-done-url="{% url 'board:worktasks:worktask_done' task.pk %}"
+     data-skip-url="{% url 'board:worktasks:worktask_skip' task.pk %}">
+
+  <!-- ── 브레드크럼 + 수정 버튼 ──────────────────────────── -->
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <nav aria-label="breadcrumb">
+      <ol class="breadcrumb mb-0">
+        <li class="breadcrumb-item">
+          <a href="{% url 'board:worktasks:worktask_list' %}">업무관리</a>
+        </li>
+        <li class="breadcrumb-item active" aria-current="page">상세</li>
+      </ol>
+    </nav>
+    <a href="{% url 'board:worktasks:worktask_edit' task.pk %}"
+       class="btn btn-outline-primary btn-sm">수정</a>
+  </div>
+
+  <div class="board-narrow mx-auto">
+
+    <!-- ── 기본 정보 카드 ──────────────────────────────────── -->
+    <div class="card mb-3">
+      <div class="card-body">
+
+        <!-- 분류 · 상태 · 우선순위 · 반복 뱃지 -->
+        <div class="d-flex flex-wrap gap-2 mb-2 align-items-center">
+          <span class="badge bg-secondary">{{ task.category.label }}</span>
+
+          <span class="worktask-badge status-badge"
+                data-status="{{ task.status }}"
+                id="detail-status-badge">
+            {{ task.get_status_display_label }}
+          </span>
+
+          <span class="badge bg-light text-dark border">P{{ task.priority }}</span>
+
+          {% if task.is_template %}
+            <span class="worktask-template-badge" title="반복 원본">↺ 반복 원본</span>
+          {% endif %}
+          {% if task.template_task %}
+            <span class="badge bg-light text-muted border small">
+              자동생성 · {{ task.target_ym }}
+            </span>
+          {% endif %}
+        </div>
+
+        <!-- 업무명 -->
+        <h5 class="fw-bold mb-2 {% if task.is_overdue %}text-danger{% endif %}">
+          {% if task.is_overdue %}⚠️ {% endif %}{{ task.title }}
+        </h5>
+
+        <!-- 마감일 + D-day -->
+        {% if task.due_date %}
+        <p class="mb-1 small">
+          <strong>마감일:</strong>
+          <span {% if task.is_overdue %}class="text-danger fw-bold"{% endif %}>
+            {{ task.due_date|date:"Y년 m월 d일" }}
+          </span>
+          <span id="detail-dday" class="ms-2 text-muted"></span>
+        </p>
+        {% endif %}
+
+        <!-- 알림 설정 -->
+        <p class="mb-0 small text-muted">
+          마감 {{ task.notify_days_before }}일 전 이메일 알림
+          {% if task.is_notified %}
+            <span class="badge bg-success ms-1">발송 완료</span>
+          {% endif %}
+        </p>
+      </div>
+    </div>
+
+    <!-- ── 메모 ────────────────────────────────────────────── -->
+    {% if task.description %}
+    <div class="card mb-3">
+      <div class="card-header small fw-bold">메모</div>
+      <div class="card-body">
+        <!-- ❌ |safe 금지 — XSS 방지 (worktask.md §13.3) -->
+        <div class="board-detail-content">{{ task.description }}</div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- ── 관련 인물 ───────────────────────────────────────── -->
+    {% if related_users %}
+    <div class="card mb-3">
+      <div class="card-header small fw-bold">관련 인물</div>
+      <div class="card-body">
+        <div class="d-flex flex-wrap gap-2">
+          {% for u in related_users %}
+            <span class="worktask-related-user-tag">
+              {{ u.name }}<small class="text-muted ms-1">({{ u.id }})</small>
+            </span>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- ── 첨부파일 ────────────────────────────────────────── -->
+    <div class="card mb-3">
+      <div class="card-header small fw-bold">첨부파일 ({{ attachments|length }})</div>
+      <div class="card-body">
+        {% if attachments %}
+          <ul class="list-unstyled mb-0">
+            {% for att in attachments %}
+              <li class="d-flex align-items-center gap-2 mb-1">
+                📎
+                <!-- ✅ 반드시 다운로드 뷰 경유 (worktask.md §13.1) -->
+                <a href="{% url 'board:worktasks:worktask_att_download' att.id %}"
+                   class="board-file-link text-truncate">
+                  {{ att.original_name }}
+                </a>
+                <small class="text-muted ms-auto">{{ att.uploaded_at|date:"m/d H:i" }}</small>
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <span class="text-muted small">첨부파일 없음</span>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- ── 인라인 상태 변경 버튼 ───────────────────────────── -->
+    {% if task.status != 'done' and task.status != 'skipped' %}
+    <div class="d-flex gap-2 mb-3" id="detail-action-btns">
+      <button id="btn-detail-done"
+              class="btn btn-success flex-grow-1"
+              data-pk="{{ task.pk }}">
+        ✓ 완료 처리
+      </button>
+      <button id="btn-detail-skip"
+              class="btn btn-outline-secondary flex-grow-1"
+              data-pk="{{ task.pk }}">
+        ↷ 건너뜀
+      </button>
+    </div>
+    {% endif %}
+
+    <!-- ── 감사 정보 ───────────────────────────────────────── -->
+    <p class="text-muted small text-end">
+      등록: {{ task.created_at|date:"Y-m-d H:i" }}
+      &nbsp;|&nbsp;
+      수정: {{ task.updated_at|date:"Y-m-d H:i" }}
+    </p>
+
+  </div><!-- /board-narrow -->
+</div><!-- /worktaskDetailBoot -->
+
+<!-- D-day 인라인 계산 (서버에서 처리, JS 의존 없이도 표시) -->
+{% if task.due_date %}
+<script>
+  (function () {
+    var due   = new Date("{{ task.due_date|date:'Y-m-d' }}");
+    var today = new Date(); today.setHours(0, 0, 0, 0);
+    var diff  = Math.round((due - today) / 86400000);
+    var el    = document.getElementById("detail-dday");
+    if (!el) return;
+    if      (diff > 0)  el.textContent = "D-" + diff;
+    else if (diff === 0) el.textContent = "D-day";
+    else                el.textContent = "D+" + Math.abs(diff) + " 초과";
+  })();
+</script>
+{% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script type="module" src="{% static 'js/board/worktask_detail.js' %}"></script>
+{% endblock %}

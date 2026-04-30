@@ -31,7 +31,7 @@
        data-can-process-date="{{ can_process_date|yesno:'true,false' }}">
 
     <!-- 페이지 헤더 -->
-    <h3 class="text-center fw-bold mb-4" style="color:#003f7d;">지점효율</h3>
+    <h3 class="text-center fw-bold mb-4 partner-page-title">지점효율</h3>
 
     <!-- 컨트롤 폼 -->
     <div class="card shadow p-3 border-0 rounded-4 mb-3">
@@ -77,7 +77,7 @@
     {% if can_input %}
     <div id="inputSection" class="card shadow p-3 border-0 rounded-4 mb-3">
       <div class="manage-input-head mb-2">
-        <h5 class="manage-input-title fw-bold mb-0" style="color:#005BAC;">내용입력</h5>
+        <h5 class="manage-input-title fw-bold mb-0 partner-section-title">내용입력</h5>
         <div class="manage-input-actions ms-auto">
           <button type="button" id="btnAddRow"    class="btn btn-primary btn-sm">추가</button>
           <button type="button" id="btnClearRows" class="btn btn-outline-secondary btn-sm">초기화</button>
@@ -87,15 +87,15 @@
       <div class="table-responsive">
         <table id="inputTable" class="table table-sm table-bordered mb-0">
           <colgroup>
-            <col style="width:140px"> <!-- 소속 -->
-            <col style="width:120px"> <!-- 시작월도 -->
-            <col style="width:120px"> <!-- 종료월도 -->
-            <col style="width:100px"> <!-- 구분 -->
-            <col style="width:140px"> <!-- 금액 -->
-            <col style="width:200px"> <!-- 공제자 -->
-            <col style="width:200px"> <!-- 지급자 -->
-            <col style="width:380px"> <!-- 내용 -->
-            <col style="width:70px">  <!-- 삭제 -->
+            <col class="esign-col-affiliation">
+            <col class="esign-col-month">
+            <col class="esign-col-month">
+            <col class="esign-col-category">
+            <col class="esign-col-amount">
+            <col class="esign-col-person">
+            <col class="esign-col-person">
+            <col class="esign-col-content">
+            <col class="esign-col-remove">
           </colgroup>
           <thead class="table-light">
             <tr>
@@ -124,7 +124,7 @@
     <!-- 아코디언 영역 (조회 결과) -->
     <div id="mainSheet" class="card shadow p-3 border-0 rounded-4">
       <div class="d-flex justify-content-between align-items-center mb-2">
-        <h5 class="fw-bold mb-0" style="color:#005BAC;">메인시트</h5>
+        <h5 class="fw-bold mb-0 partner-section-title">메인시트</h5>
         <div class="small text-muted" id="sheetNotice"></div>
       </div>
       <div id="esignLoadingMsg" class="text-center text-muted py-4" hidden>

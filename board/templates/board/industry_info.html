@@ -70,12 +70,12 @@
             <div>
               <strong>북마크한 기사</strong>
               {% if bookmark_count %}
-                <span class="text-muted fw-normal ms-2" style="font-size:0.875rem;">총 {{ bookmark_count }}건</span>
+                <span class="text-muted fw-normal ms-2 fs-0875">총 {{ bookmark_count }}건</span>
               {% endif %}
             </div>
             <!-- per_page 드랍다운 -->
             <div class="industry-perpage-wrap">
-              <select class="form-select form-select-sm industry-perpage-select" style="width:auto;">
+              <select class="form-select form-select-sm industry-perpage-select w-auto">
                 {% for choice in per_page_choices %}
                   <option value="{{ choice }}" {% if per_page == choice %}selected{% endif %}>
                     {{ choice }}개씩 보기
@@ -96,7 +96,7 @@
             <div
               id="industryEmptyState"
               class="industry-empty-state"
-              {% if latest_articles %}style="display:none"{% endif %}
+              {% if latest_articles %}hidden{% endif %}
             >
               <span class="empty-icon">☆</span>
               <p>북마크한 기사가 없습니다.</p>
@@ -148,7 +148,7 @@
             <strong>최신 업계 뉴스</strong>
             <!-- per_page 드랍다운 -->
             <div class="industry-perpage-wrap">
-              <select class="form-select form-select-sm industry-perpage-select" style="width:auto;">
+              <select class="form-select form-select-sm industry-perpage-select w-auto">
                 {% for choice in per_page_choices %}
                   <option value="{{ choice }}" {% if per_page == choice %}selected{% endif %}>
                     {{ choice }}개씩 보기

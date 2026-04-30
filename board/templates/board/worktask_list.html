@@ -1,0 +1,192 @@
+<!-- board/templates/board/worktask_list.html -->
+<!-- ============================================================
+   WorkTask 목록 페이지
+
+   Boot 패턴 (worktask.md §7.2):
+     id="worktaskListBoot" 에 data-* 로 URL 주입.
+     JS(worktask_list.js)는 이 dataset 만 읽는다.
+
+   CSS 스코프:
+     base_board.html 이 .board-scope 를 wrapping 하므로
+     .board-scope .worktask-* 규칙이 자동 적용된다.
+============================================================ -->
+{% extends "board/base_board.html" %}
+{% load static %}
+
+{% block title %}업무관리{% endblock %}
+
+{% block content %}
+
+<!-- ── Boot 루트 ──────────────────────────────────────────── -->
+<!-- JS 는 이 엘리먼트의 dataset 만 읽는다 (Boot 패턴 SSOT)   -->
+<!-- done-url / skip-url 의 "0" 은 JS 에서 실제 pk 로 치환    -->
+<div id="worktaskListBoot"
+     data-done-url="{% url 'board:worktasks:worktask_done' 0 %}"
+     data-skip-url="{% url 'board:worktasks:worktask_skip' 0 %}"
+     data-notify-url="{% url 'board:worktasks:worktask_notify_check' %}">
+
+  <!-- ── 페이지 헤더 ─────────────────────────────────────── -->
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <h4 class="board-page-title mb-0">📋 업무관리</h4>
+    <a href="{% url 'board:worktasks:worktask_create' %}"
+       class="btn btn-primary btn-sm">+ 업무 등록</a>
+  </div>
+
+  <!-- ── 월 탭 ───────────────────────────────────────────── -->
+  <div class="d-flex gap-2 mb-3">
+    <a href="?ym={{ prev_ym }}{% if status %}&status={{ status }}{% endif %}{% if category %}&category={{ category }}{% endif %}"
+       class="btn btn-sm btn-outline-secondary">
+      ◀ {{ prev_ym }}
+    </a>
+    <span class="btn btn-sm btn-primary fw-bold flex-grow-1 text-center pe-none">
+      {{ ym }}
+    </span>
+    <a href="?ym={{ next_ym }}{% if status %}&status={{ status }}{% endif %}{% if category %}&category={{ category }}{% endif %}"
+       class="btn btn-sm btn-outline-secondary">
+      {{ next_ym }} ▶
+    </a>
+  </div>
+
+  <!-- ── 필터 폼 ─────────────────────────────────────────── -->
+  <form method="get" class="row g-2 mb-3 align-items-end">
+    <input type="hidden" name="ym" value="{{ ym }}">
+
+    <div class="col-auto">
+      <select name="status" class="form-select form-select-sm">
+        <option value="">전체 상태</option>
+        {% for val, lbl in status_choices %}
+          <option value="{{ val }}" {% if status == val %}selected{% endif %}>{{ lbl }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="col-auto">
+      <select name="category" class="form-select form-select-sm">
+        <option value="">전체 분류</option>
+        {% for cat in categories %}
+          <option value="{{ cat.code }}" {% if category == cat.code %}selected{% endif %}>
+            {{ cat.label }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="col-auto">
+      <button type="submit" class="btn btn-outline-secondary btn-sm">검색</button>
+      <a href="?ym={{ ym }}" class="btn btn-link btn-sm text-secondary">초기화</a>
+    </div>
+  </form>
+
+  <!-- ── 마감 임박 알림 배너 (JS 가 notify-check API 로 채움) -->
+  <div id="worktask-notify-banner" class="alert alert-warning py-2 d-none" role="alert">
+    <span id="worktask-notify-text"></span>
+  </div>
+
+  <!-- ── 목록 테이블 ─────────────────────────────────────── -->
+  {% if page_obj.object_list %}
+  <div class="table-responsive">
+    <table class="table table-hover align-middle board-post-table">
+      <thead class="table-light">
+        <tr>
+          <th class="worktask-col-category">분류</th>
+          <th>업무명</th>
+          <th class="text-center worktask-col-priority">우선순위</th>
+          <th class="worktask-col-due">마감일</th>
+          <th class="worktask-col-status">상태</th>
+          <th class="worktask-col-actions">액션</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for task in page_obj %}
+        <tr class="worktask-row
+                   {% if task.status == 'done' or task.status == 'skipped' %}worktask-done{% endif %}
+                   {% if task.is_overdue %}worktask-overdue{% endif %}"
+            data-pk="{{ task.pk }}"
+            data-status="{{ task.status }}">
+
+          <!-- 분류 + 반복 원본 뱃지 -->
+          <td>
+            <span class="badge bg-secondary">{{ task.category.label }}</span>
+            {% if task.is_template %}
+              <span class="worktask-template-badge ms-1" title="반복 원본">↺</span>
+            {% endif %}
+          </td>
+
+          <!-- 업무명 → 상세 링크 -->
+          <td class="board-col-title">
+            <a href="{% url 'board:worktasks:worktask_detail' task.pk %}"
+               class="text-decoration-none text-dark fw-semibold">
+              {{ task.title }}
+            </a>
+            {% if task.attachments.count %}
+              <span class="text-muted ms-1" title="첨부 {{ task.attachments.count }}개">📎</span>
+            {% endif %}
+          </td>
+
+          <!-- 우선순위 -->
+          <td class="text-center">
+            <span class="badge bg-light text-dark border">P{{ task.priority }}</span>
+          </td>
+
+          <!-- 마감일 + D-day (JS 로 채움) -->
+          <td>
+            {% if task.due_date %}
+              <span {% if task.is_overdue %}class="text-danger fw-bold"{% endif %}>
+                {{ task.due_date|date:"m/d" }}
+              </span>
+              <small class="text-muted ms-1" id="dday-{{ task.pk }}"></small>
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+
+          <!-- 상태 badge -->
+          <td>
+            <span class="worktask-badge status-badge"
+                  data-status="{{ task.status }}"
+                  id="status-badge-{{ task.pk }}">
+              {{ task.get_status_display_label }}
+            </span>
+          </td>
+
+          <!-- 완료/건너뜀 버튼 (AJAX) -->
+          <td>
+            {% if task.status != 'done' and task.status != 'skipped' %}
+              <button class="btn btn-success btn-sm worktask-done-btn"
+                      data-pk="{{ task.pk }}" title="완료">✓</button>
+              <button class="btn btn-outline-secondary btn-sm worktask-skip-btn ms-1"
+                      data-pk="{{ task.pk }}" title="건너뜀">↷</button>
+            {% else %}
+              <span class="text-muted small">처리됨</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% include "board/includes/pagination.html" with page_obj=page_obj %}
+
+  {% else %}
+  <div class="text-center text-muted py-5">
+    <p class="fs-5">이번 달 업무 항목이 없습니다.</p>
+    <a href="{% url 'board:worktasks:worktask_create' %}" class="btn btn-primary">
+      첫 업무 등록하기
+    </a>
+  </div>
+  {% endif %}
+
+</div><!-- /worktaskListBoot -->
+
+<!-- D-day 계산용 숨김 데이터 (JS 가 읽음) -->
+<script>
+  window.__worktaskDueDates = {
+    {% for task in page_obj %}{% if task.due_date %}"{{ task.pk }}": "{{ task.due_date|date:'Y-m-d' }}"{% if not forloop.last %},{% endif %}{% endif %}{% endfor %}
+  };
+</script>
+{% endblock %}
+
+{% block extra_scripts %}
+<script type="module" src="{% static 'js/board/worktask_list.js' %}"></script>
+{% endblock %}

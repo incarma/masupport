@@ -3,7 +3,7 @@
 {% load static %}
 
 {% block content %}
-<div class="container mt-4" style="max-width: 640px;">
+<div class="container mt-4 max-w-640">
 
   <h3 class="fw-bold mb-4 text-center">사용자 엑셀 업로드</h3>
 
@@ -52,8 +52,8 @@
         <span id="progressStatusText" class="small text-muted">대기 중...</span>
       </div>
 
-      <div class="progress" style="height: 20px;">
-        <div id="progressBar" class="progress-bar" style="width: 0%;">0%</div>
+      <div class="progress progress-h-20">
+        <div id="progressBar" class="progress-bar">0%</div>
       </div>
 
       <div id="progressErrorText" class="text-danger mt-2"></div>

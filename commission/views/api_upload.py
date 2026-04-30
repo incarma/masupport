@@ -33,7 +33,7 @@ def _get_uploaded_n(result: dict) -> int:
     return int(result.get("updated") or result.get("inserted_or_updated") or 0)
 
 
-def _build_fail_excel_token(*, part: str, upload_type: str, result: dict) -> tuple[str, list]:
+def _build_fail_excel_token(*, request, part: str, upload_type: str, result: dict) -> tuple[str, list]:
     """
     handler 결과에 missing_sample이 있으면 fail excel token을 생성한다.
     - missing_sample: ["1234567", "2345678", ...] 형태(상위 일부 샘플)
@@ -46,6 +46,7 @@ def _build_fail_excel_token(*, part: str, upload_type: str, result: dict) -> tup
     token = store_fail_rows_as_excel(
         rows=rows,
         filename=f"upload_fail_{part}_{upload_type}.xlsx",
+        owner_id=str(getattr(request.user, "pk", "") or ""),
     )
     return token, missing_sample
 
@@ -118,6 +119,7 @@ def upload_excel(request):
 
         # 실패 목록 엑셀(token) 생성 (missing_sample 기반)
         fail_token, missing_sample = _build_fail_excel_token(
+            request=request,
             part=part,
             upload_type=upload_type,
             result=result,

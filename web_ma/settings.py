@@ -394,6 +394,12 @@ UPLOAD_TEMP_DIR = Path(config("UPLOAD_TEMP_DIR", default=str(MEDIA_ROOT / "uploa
 # =============================================================================
 # 11-0) Audit / Request logging safety
 # =============================================================================
+AUDIT_PROXY_HEADER_ENABLED = config(
+    "AUDIT_PROXY_HEADER_ENABLED",
+    default=IS_PROD,
+    cast=bool,
+)
+
 AUDIT_TRUSTED_PROXY_CIDRS = config(
     "AUDIT_TRUSTED_PROXY_CIDRS",
     default="127.0.0.1/32,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16",
@@ -674,8 +680,8 @@ CONTENT_SECURITY_POLICY = config(
     "CONTENT_SECURITY_POLICY",
     default=(
         "default-src 'self'; "
-        "script-src 'self'; "
-        "style-src 'self' 'unsafe-inline'; "
+        "script-src 'self' https://ssl.daumcdn.net; "
+        "style-src 'self'; "
         "img-src 'self' data: https:; "
         "font-src 'self' data:; "
         "connect-src 'self'; "
