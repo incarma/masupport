@@ -191,14 +191,14 @@
   function showWarnById(warnId, msg) {
     const warnEl = document.getElementById(warnId);
     if (!warnEl) return;
-    warnEl.style.display = "block";
+    warnEl.classList.remove("d-none");
     warnEl.textContent = msg;
   }
 
   function hideWarnById(warnId) {
     const warnEl = document.getElementById(warnId);
     if (!warnEl) return;
-    el.classList.add("d-none");
+    warnEl.classList.add("d-none");
     warnEl.textContent = "";
   }
 
