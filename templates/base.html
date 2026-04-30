@@ -88,7 +88,8 @@
                   <li><a class="dropdown-item" href="{% url 'board:collateral' %}">근저당조회</a></li>
                 {% endif %}
                 {% if user.grade == 'superuser' %}
-                  <li><a class="dropdown-item" href="{% url 'board:task_list' %}">직원업무</a></li>
+                  <li><a class="dropdown-item" href="{% url 'board:worktasks:worktask_list' %}">업무관리</a></li>
+                  <li><a class="dropdown-item" href="{% url 'board:task_list' %}">직원업무게시판</a></li>
                 {% endif %}
               </ul>
             </li>
@@ -247,7 +248,8 @@
                   <a class="d-block py-2" href="{% url 'board:collateral' %}">근저당조회</a>
                 {% endif %}
                 {% if user.grade == 'superuser' %}
-                  <a class="d-block py-2" href="{% url 'board:task_list' %}">직원업무</a>
+                  <a class="d-block py-2" href="{% url 'board:worktasks:worktask_list' %}">업무관리</a>
+                  <a class="d-block py-2" href="{% url 'board:task_list' %}">직원업무게시판</a>
                 {% endif %}
               </div>
             </div>

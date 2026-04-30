@@ -24,7 +24,7 @@
     <!-- 분류 -->
     <div class="mb-3">
       <label for="id_category" class="form-label fw-semibold">
-        업무 분류 <span class="text-danger">*</span>
+        구분 <span class="text-danger">*</span>
       </label>
       <select name="category" id="id_category" class="form-select" required>
         {% for cat in categories %}
@@ -65,6 +65,14 @@
       </select>
     </div>
 
+    <!-- 시작일 -->
+    <div class="mb-3">
+      <label for="id_start_date" class="form-label fw-semibold">시작일</label>
+      <input type="date" name="start_date" id="id_start_date"
+             class="form-control"
+             value="{{ task.start_date|date:'Y-m-d'|default:'' }}">
+    </div>
+    
     <!-- 마감일 -->
     <div class="mb-3">
       <label for="id_due_date" class="form-label fw-semibold">마감일</label>
@@ -129,7 +137,8 @@
                  id="hidden-uid-{{ u.id }}">
         {% endfor %}
       </div>
-      <button type="button" class="btn btn-outline-secondary btn-sm"
+      <button type="button"
+              class="btn btn-outline-secondary btn-sm btnOpenSearch"
               id="btn-search-related-user">
         + 관련 인물 추가
       </button>
@@ -176,27 +185,9 @@
 
 </div>
 
-{% include "includes/search_user_modal.html" %}
+{% include "components/search_user_modal.html" %}
 {% endblock %}
 
 {% block extra_scripts %}
-<script>
-  (function () {
-    var sel   = document.getElementById("id_recurrence_type");
-    var group = document.getElementById("recurrence-day-group");
-    function toggle() { group.classList.toggle("d-none", sel.value !== "custom"); }
-    sel?.addEventListener("change", toggle);
-    toggle();
-
-    <!-- 기존 관련인물 태그 제거 -->
-    document.querySelectorAll(".worktask-remove-user").forEach(function (btn) {
-      btn.addEventListener("click", function () {
-        var uid = this.dataset.uid;
-        this.closest(".worktask-related-user-tag")?.remove();
-        document.getElementById("hidden-uid-" + uid)?.remove();
-      });
-    });
-  })();
-</script>
-<script type="module" src="{% static 'js/board/worktask_detail.js' %}"></script>
+<script type="module" src="{% static 'js/board/worktask_form.js' %}"></script>
 {% endblock %}

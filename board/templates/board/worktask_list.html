@@ -134,7 +134,8 @@
               <span {% if task.is_overdue %}class="text-danger fw-bold"{% endif %}>
                 {{ task.due_date|date:"m/d" }}
               </span>
-              <small class="text-muted ms-1" id="dday-{{ task.pk }}"></small>
+              <small class="text-muted ms-1"
+                     data-dday="{{ task.due_date|date:'Y-m-d' }}"></small>
             {% else %}
               <span class="text-muted">—</span>
             {% endif %}
@@ -179,12 +180,6 @@
 
 </div><!-- /worktaskListBoot -->
 
-<!-- D-day 계산용 숨김 데이터 (JS 가 읽음) -->
-<script>
-  window.__worktaskDueDates = {
-    {% for task in page_obj %}{% if task.due_date %}"{{ task.pk }}": "{{ task.due_date|date:'Y-m-d' }}"{% if not forloop.last %},{% endif %}{% endif %}{% endfor %}
-  };
-</script>
 {% endblock %}
 
 {% block extra_scripts %}

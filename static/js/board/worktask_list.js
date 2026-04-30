@@ -143,13 +143,13 @@ function _updateRowStatus(pk, status, statusDisplay) {
 // D-day 렌더링
 // =============================================================================
 function _renderDdays() {
-  const dueDates = window.__worktaskDueDates || {};
   const today    = new Date();
   today.setHours(0, 0, 0, 0);
 
-  Object.entries(dueDates).forEach(([pk, dueDateStr]) => {
-    const el = document.getElementById(`dday-${pk}`);
-    if (!el || !dueDateStr) return;
+  // data-dday 속성에서 직접 읽음 (인라인 스크립트 의존 제거)
+  document.querySelectorAll("[data-dday]").forEach((el) => {
+    const dueDateStr = el.dataset.dday;
+    if (!dueDateStr) return;
 
     const due  = new Date(dueDateStr);
     due.setHours(0, 0, 0, 0);

@@ -1,0 +1,37 @@
+[
+  {
+    "model": "board.workcategory",
+    "pk": "fee_bond",
+    "fields": { "label": "수수료/채권", "sort_order": 10, "is_active": true }
+  },
+  {
+    "model": "board.workcategory",
+    "pk": "risk_retention",
+    "fields": { "label": "리스크/유지율", "sort_order": 20, "is_active": true }
+  },
+  {
+    "model": "board.workcategory",
+    "pk": "solicitation",
+    "fields": { "label": "위해촉", "sort_order": 30, "is_active": true }
+  },
+  {
+    "model": "board.workcategory",
+    "pk": "it_system",
+    "fields": { "label": "전산", "sort_order": 40, "is_active": true }
+  },
+  {
+    "model": "board.workcategory",
+    "pk": "meeting",
+    "fields": { "label": "회의/미팅", "sort_order": 50, "is_active": true }
+  },
+  {
+    "model": "board.workcategory",
+    "pk": "lease",
+    "fields": { "label": "임대차", "sort_order": 60, "is_active": true }
+  },
+  {
+    "model": "board.workcategory",
+    "pk": "sales_recruit",
+    "fields": { "label": "영업/리쿠르팅", "sort_order": 70, "is_active": true }
+  }
+]

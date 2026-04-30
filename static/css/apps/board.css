@@ -939,7 +939,7 @@
 }
 
 /* ==========================================================
- 9) Industry Info — 북마크/탭 UI
+ 11) Industry Info — 북마크/탭 UI
 ========================================================== */
 .board-scope .industry-tab-bar{
   display: flex;
@@ -1009,7 +1009,7 @@
 }
 
 /* ==========================================================
-  CSP strict helpers - Board
+  CSP strict helpers - Board (기존)
 ========================================================== */
 
 .board-scope .worktask-col-category { width: 90px; }
@@ -1035,3 +1035,95 @@
 .board-scope .task-col-requester { width: 10%; }
 .board-scope .task-col-handler { width: 10%; }
 .board-scope .task-col-status { width: 12%; }
+
+
+/* ==========================================================
+ 12) WorkTask 업무관리 (Phase 1 신규 추가)
+     No-Leak Policy (worktask.md §10.2):
+       모든 selector 는 반드시 .board-scope 하위.
+       base_board.html 이 .board-scope 로 자동 wrapping.
+
+     ✅ 추가 위치: 파일 맨 끝 (기존 CSP helpers 블록 다음)
+========================================================== */
+
+/* ----- 마감 초과 행 강조 -------------------------------- */
+.board-scope .worktask-overdue{
+  background-color: #fff5f5;
+}
+.board-scope .worktask-overdue td{
+  color: #842029;
+  font-weight: 600;
+}
+
+/* ----- 완료/건너뜀 행 흐림 처리 ------------------------ */
+.board-scope .worktask-done{
+  opacity: 0.55;
+}
+.board-scope .worktask-done td{
+  text-decoration: line-through;
+  color: #6c757d;
+}
+/* 완료 행의 링크는 line-through 제외 */
+.board-scope .worktask-done td a{
+  text-decoration: none;
+}
+
+/* ----- WorkTask 전용 상태 badge
+         기존 .status-badge 의 한글 data-status 값(접수/진행중/완료 등)과
+         구분되는 영문 status 값 사용: pending/in_progress/done/skipped    */
+.board-scope .worktask-badge{
+  display: inline-block;
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-weight: 700;
+  font-size: 0.82rem;
+  border: 1px solid transparent;
+}
+.board-scope .worktask-badge[data-status="pending"]{
+  background: #e7f1ff;
+  border-color: #9ec5fe;
+  color: #084298;
+}
+.board-scope .worktask-badge[data-status="in_progress"]{
+  background: #fff3cd;
+  border-color: #ffecb5;
+  color: #664d03;
+}
+.board-scope .worktask-badge[data-status="done"]{
+  background: #d1e7dd;
+  border-color: #a3cfbb;
+  color: #0f5132;
+}
+.board-scope .worktask-badge[data-status="skipped"]{
+  background: #e2e3e5;
+  border-color: #d3d6d8;
+  color: #41464b;
+}
+
+/* ----- 반복 원본 badge ---------------------------------- */
+.board-scope .worktask-template-badge{
+  display: inline-block;
+  font-size: 0.7rem;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #cff4fc;
+  color: #055160;
+  border: 1px solid #b6effb;
+}
+
+/* ----- 관련인물 태그 ------------------------------------ */
+.board-scope .worktask-related-user-tag{
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.8rem;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  color: #212529;
+}
+.board-scope .worktask-related-user-tag .btn-close{
+  width: 0.5em;
+  height: 0.5em;
+}
