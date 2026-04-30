@@ -49,6 +49,22 @@ urlpatterns = [
     path("<int:pk>/skip/", wt_views.worktask_skip, name="worktask_skip"),
 
     # ------------------------------------------------------------------
+    # AJAX: 삭제 처리 (POST only)
+    # ⚠️ 소유자 격리: get_user_task → owner != request.user 이면 404
+    # ------------------------------------------------------------------
+    path("<int:pk>/delete/", wt_views.worktask_delete, name="worktask_delete"),
+
+    # ------------------------------------------------------------------
+    # AJAX: 상태 해제 — 완료/건너뜀 → 대기(pending) 복원 (POST only)
+    # ------------------------------------------------------------------
+    path("<int:pk>/reset/", wt_views.worktask_reset, name="worktask_reset"),
+
+    # ------------------------------------------------------------------
+    # AJAX: 인라인 필드 업데이트 — 목록 셀 편집 (POST only)
+    # ------------------------------------------------------------------
+    path("<int:pk>/inline-update/", wt_views.worktask_inline_update, name="worktask_inline_update"),
+
+    # ------------------------------------------------------------------
     # 첨부파일 보안 다운로드
     # ❌ att.file.url 직접 노출 금지
     # ✅ 이 URL 경유 → 소유자 검증 → FileResponse (worktask.md §13.1)

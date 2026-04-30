@@ -22,14 +22,8 @@
 
   <!-- ── 브레드크럼 + 수정 버튼 ──────────────────────────── -->
   <div class="d-flex align-items-center justify-content-between mb-3">
-    <nav aria-label="breadcrumb">
-      <ol class="breadcrumb mb-0">
-        <li class="breadcrumb-item">
-          <a href="{% url 'board:worktasks:worktask_list' %}">업무관리</a>
-        </li>
-        <li class="breadcrumb-item active" aria-current="page">상세</li>
-      </ol>
-    </nav>
+    <a href="{% url 'board:worktasks:worktask_list' %}"
+       class="btn btn-outline-secondary btn-sm">← 목록으로</a>
     <a href="{% url 'board:worktasks:worktask_edit' task.pk %}"
        class="btn btn-outline-primary btn-sm">수정</a>
   </div>
@@ -50,7 +44,13 @@
             {{ task.get_status_display_label }}
           </span>
 
-          <span class="badge bg-light text-dark border">P{{ task.priority }}</span>
+          {% if task.priority == 'high' %}
+            <span class="badge bg-danger">우선순위: 상</span>
+          {% elif task.priority == 'mid' %}
+            <span class="badge bg-warning text-dark">우선순위: 중</span>
+          {% else %}
+            <span class="badge bg-secondary">우선순위: 하</span>
+          {% endif %}
 
           {% if task.is_template %}
             <span class="worktask-template-badge" title="반복 원본">↺ 반복 원본</span>
@@ -67,6 +67,13 @@
           {% if task.is_overdue %}⚠️ {% endif %}{{ task.title }}
         </h5>
 
+        {% if task.start_date %}
+        <p class="mb-1 small">
+          <strong>시작일:</strong>
+          {{ task.start_date|date:"Y년 m월 d일" }}
+        </p>
+        {% endif %}
+        
         <!-- 마감일 + D-day -->
         {% if task.due_date %}
         <p class="mb-1 small">
@@ -157,6 +164,29 @@
     </div>
     {% endif %}
 
+    <!-- ── 상태 해제 버튼 (완료/건너뜀 상태일 때만 표시) ── -->
+    {% if task.status == 'done' or task.status == 'skipped' %}
+    <div class="d-flex gap-2 mb-3" id="detail-reset-btns">
+      <button id="btn-detail-reset"
+              class="btn btn-outline-secondary flex-grow-1"
+              data-pk="{{ task.pk }}"
+              data-reset-url="{% url 'board:worktasks:worktask_reset' task.pk %}">
+        ↩ 대기로 복원
+      </button>
+    </div>
+    {% endif %}
+
+    <!-- ── 삭제 버튼 ──────────────────────────────────────── -->
+    <div class="d-flex justify-content-end mb-3">
+      <button class="btn btn-outline-danger btn-sm worktask-delete-btn"
+              data-pk="{{ task.pk }}"
+              data-title="{{ task.title|escapejs }}"
+              data-delete-url="{% url 'board:worktasks:worktask_delete' task.pk %}"
+              data-redirect-url="{% url 'board:worktasks:worktask_list' %}">
+        🗑 삭제
+      </button>
+    </div>    
+    
     <!-- ── 감사 정보 ───────────────────────────────────────── -->
     <p class="text-muted small text-end">
       등록: {{ task.created_at|date:"Y-m-d H:i" }}
@@ -169,6 +199,6 @@
 
 {% endblock %}
 
-{% block extra_scripts %}
+{% block extra_js %}
 <script type="module" src="{% static 'js/board/worktask_detail.js' %}"></script>
 {% endblock %}

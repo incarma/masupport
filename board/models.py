@@ -582,7 +582,26 @@ class WorkTask(models.Model):
         max_length=20, choices=STATUS_CHOICES,
         default=STATUS_PENDING, verbose_name="상태",
     )
-    priority = models.PositiveSmallIntegerField(default=50, verbose_name="우선순위")
+
+    # -------------------------------------------------------------------------
+    # 우선순위 상수
+    # -------------------------------------------------------------------------
+    PRIORITY_HIGH = "high"
+    PRIORITY_MID  = "mid"
+    PRIORITY_LOW  = "low"
+
+    PRIORITY_CHOICES = [
+        (PRIORITY_HIGH, "상"),
+        (PRIORITY_MID,  "중"),
+        (PRIORITY_LOW,  "하"),
+    ]
+
+    priority = models.CharField(
+        max_length=10,
+        choices=PRIORITY_CHOICES,
+        default=PRIORITY_MID,
+        verbose_name="우선순위",
+    )
 
     # -------------------------------------------------------------------------
     # 알림
