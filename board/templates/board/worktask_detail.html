@@ -1,3 +1,4 @@
+{% extends "board/base_board.html" %}
 <!-- board/templates/board/worktask_detail.html -->
 <!-- ============================================================
    WorkTask 상세 페이지
@@ -6,7 +7,7 @@
    첨부 링크: ❌ att.file.url 금지 / ✅ worktask_att_download 뷰 경유
    XSS: {{ task.description|safe }} 사용 금지
 ============================================================ -->
-{% extends "board/base_board.html" %}
+
 {% load static %}
 
 {% block title %}{{ task.title }} — 업무관리{% endblock %}
@@ -73,7 +74,9 @@
           <span {% if task.is_overdue %}class="text-danger fw-bold"{% endif %}>
             {{ task.due_date|date:"Y년 m월 d일" }}
           </span>
-          <span id="detail-dday" class="ms-2 text-muted"></span>
+          <span id="detail-dday"
+              class="ms-2 text-muted"
+              data-due="{{ task.due_date|date:'Y-m-d' }}"></span>
         </p>
         {% endif %}
 
@@ -164,21 +167,6 @@
   </div><!-- /board-narrow -->
 </div><!-- /worktaskDetailBoot -->
 
-<!-- D-day 인라인 계산 (서버에서 처리, JS 의존 없이도 표시) -->
-{% if task.due_date %}
-<script>
-  (function () {
-    var due   = new Date("{{ task.due_date|date:'Y-m-d' }}");
-    var today = new Date(); today.setHours(0, 0, 0, 0);
-    var diff  = Math.round((due - today) / 86400000);
-    var el    = document.getElementById("detail-dday");
-    if (!el) return;
-    if      (diff > 0)  el.textContent = "D-" + diff;
-    else if (diff === 0) el.textContent = "D-day";
-    else                el.textContent = "D+" + Math.abs(diff) + " 초과";
-  })();
-</script>
-{% endif %}
 {% endblock %}
 
 {% block extra_scripts %}

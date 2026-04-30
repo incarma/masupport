@@ -24,7 +24,7 @@
     <!-- 분류 -->
     <div class="mb-3">
       <label for="id_category" class="form-label fw-semibold">
-        업무 분류 <span class="text-danger">*</span>
+        구분 <span class="text-danger">*</span>
       </label>
       <select name="category" id="id_category" class="form-select" required>
         <option value="">— 분류 선택 —</option>
@@ -52,6 +52,14 @@
       <label for="id_description" class="form-label fw-semibold">메모</label>
       <textarea name="description" id="id_description"
                 class="form-control" rows="4">{{ post_data.description|default:'' }}</textarea>
+    </div>
+
+    <!-- 시작일 -->
+    <div class="mb-3">
+      <label for="id_start_date" class="form-label fw-semibold">시작일</label>
+      <input type="date" name="start_date" id="id_start_date"
+             class="form-control"
+             value="{{ post_data.start_date|default:'' }}">
     </div>
 
     <!-- 마감일 -->
@@ -108,8 +116,10 @@
     <div class="mb-3">
       <label class="form-label fw-semibold">관련 인물</label>
       <div id="related-users-tags" class="d-flex flex-wrap gap-1 mb-2 min-height-32"></div>
-      <button type="button" class="btn btn-outline-secondary btn-sm"
-              id="btn-search-related-user">
+      <button type="button"
+              class="btn btn-outline-secondary btn-sm btnOpenSearch"
+              id="btn-search-related-user"
+              data-target-row="related-users-row">
         + 관련 인물 추가
       </button>
       <!-- JS 가 동적으로 hidden input 추가 -->
@@ -134,19 +144,9 @@
 </div>
 
 <!-- 사용자 검색 모달 (search_user_modal.js SSOT) -->
-{% include "includes/search_user_modal.html" %}
+{% include "components/search_user_modal.html" with search_url="/board/search-user/" %}
 {% endblock %}
 
 {% block extra_scripts %}
-<!-- 반복 유형 custom 토글 -->
-<script>
-  (function () {
-    var sel   = document.getElementById("id_recurrence_type");
-    var group = document.getElementById("recurrence-day-group");
-    function toggle() { group.classList.toggle("d-none", sel.value !== "custom"); }
-    sel?.addEventListener("change", toggle);
-    toggle();
-  })();
-</script>
-<script type="module" src="{% static 'js/board/worktask_detail.js' %}"></script>
+<script type="module" src="{% static 'js/board/worktask_form.js' %}"></script>
 {% endblock %}

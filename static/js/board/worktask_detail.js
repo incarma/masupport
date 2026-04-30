@@ -5,6 +5,7 @@
  *
  * 역할:
  *   - 상세: 인라인 완료/건너뜀 AJAX + badge 즉시 갱신
+ *   - 상세: D-day 렌더링 (CSP 대응 — 인라인 스크립트 대체)
  *   - 등록/수정: 관련 인물 검색 모달 연동 + 태그 UI 관리
  *   - 폼 중복 제출 방지
  *
@@ -50,13 +51,11 @@ import { getCSRFToken } from "../common/manage/csrf.js";
       const data = await _safeJson(res);
 
       if (data.ok) {
-        // 상태 badge 갱신
         const badge = document.getElementById("detail-status-badge");
         if (badge) {
           badge.dataset.status = data.status;
           badge.textContent    = data.status_display;
         }
-        // 버튼 그룹 제거 (완료/건너뜀 후 재처리 불필요)
         document.getElementById("detail-action-btns")?.remove();
       } else {
         alert(data.error || "처리 중 오류가 발생했습니다.");
@@ -84,35 +83,27 @@ import { getCSRFToken } from "../common/manage/csrf.js";
 // [2] 등록/수정 폼 — 관련 인물 검색 모달 연동
 // =============================================================================
 (function _initRelatedUserSearch() {
-  const searchBtn     = document.getElementById("btn-search-related-user");
-  if (!searchBtn) return; // 등록/수정 폼이 아니면 종료
+  const searchBtn = document.getElementById("btn-search-related-user");
+  if (!searchBtn) return;
 
-  const tagsEl        = document.getElementById("related-users-tags");
-  const hiddenEl      = document.getElementById("related-users-hidden-inputs");
+  const tagsEl   = document.getElementById("related-users-tags");
+  const hiddenEl = document.getElementById("related-users-hidden-inputs");
   if (!tagsEl || !hiddenEl) return;
 
-  // 이미 선택된 uid 집합 (중복 추가 방지)
   const selected = new Set(
     Array.from(hiddenEl.querySelectorAll("input[name='related_users']"))
       .map((el) => el.value)
   );
-  // 수정 폼 초기 태그에서도 수집
   tagsEl.querySelectorAll("[data-uid]").forEach((el) => selected.add(el.dataset.uid));
 
-  /**
-   * search_user_modal.js 가 발행하는 "userSelected" 이벤트 수신.
-   * SSOT: accounts/search_api.py 경유한 결과만 사용.
-   * ⚠️ 프론트에서 범위 직접 필터링 금지.
-   */
   window.addEventListener("userSelected", function (e) {
     const user = e.detail;
     if (!user?.id) return;
 
     const uid = String(user.id);
-    if (selected.has(uid)) return; // 중복 추가 방지
+    if (selected.has(uid)) return;
     selected.add(uid);
 
-    // 태그 생성
     const tag = document.createElement("span");
     tag.className   = "worktask-related-user-tag";
     tag.dataset.uid = uid;
@@ -125,7 +116,6 @@ import { getCSRFToken } from "../common/manage/csrf.js";
     `;
     tagsEl.appendChild(tag);
 
-    // hidden input 추가
     const hidden = Object.assign(document.createElement("input"), {
       type:  "hidden",
       name:  "related_users",
@@ -134,7 +124,6 @@ import { getCSRFToken } from "../common/manage/csrf.js";
     });
     hiddenEl.appendChild(hidden);
 
-    // 제거 버튼 이벤트
     tag.querySelector(".worktask-remove-user").addEventListener("click", function () {
       const removeUid = this.dataset.uid;
       selected.delete(removeUid);
@@ -143,15 +132,9 @@ import { getCSRFToken } from "../common/manage/csrf.js";
     });
   });
 
-  // 검색 모달 열기
-  searchBtn.addEventListener("click", () => {
-    const modalEl = document.getElementById("searchUserModal");
-    if (!modalEl) { console.warn("[worktask_detail] searchUserModal not found"); return; }
-    const modal =
-      window.bootstrap?.Modal?.getInstance?.(modalEl) ||
-      new window.bootstrap.Modal(modalEl);
-    modal.show();
-  });
+  // ✅ 모달 오픈은 search_user_modal.js SSOT에 완전 위임.
+  // 버튼의 .btnOpenSearch 클래스 → search_user_modal.js document 캡처 핸들러가 처리.
+  // worktask_detail.js 에서 modal.show() 직접 호출 금지.
 })();
 
 
@@ -170,6 +153,26 @@ import { getCSRFToken } from "../common/manage/csrf.js";
       if (btn) { btn.disabled = true; btn.textContent = "저장 중..."; }
     });
   });
+})();
+
+
+// =============================================================================
+// [4] D-day 렌더링 — CSP 대응 (인라인 스크립트 대체)
+//     worktask_detail.html 의 data-due 속성에서 날짜를 읽는다.
+// =============================================================================
+(function _initDday() {
+  const el = document.getElementById("detail-dday");
+  if (!el || !el.dataset.due) return;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const due = new Date(el.dataset.due);
+  due.setHours(0, 0, 0, 0);
+  const diff = Math.round((due - today) / 86400000);
+
+  if      (diff > 0)  el.textContent = `D-${diff}`;
+  else if (diff === 0) el.textContent = "D-day";
+  else                el.textContent = `D+${Math.abs(diff)} 초과`;
 })();
 
 

@@ -345,20 +345,25 @@ def _extract_post_data(request) -> dict:
     uid_list = post.getlist("related_users")
     related  = list(CustomUser.objects.filter(pk__in=uid_list)) if uid_list else []
 
-    # 마감일 안전 파싱
-    raw_date = post.get("due_date", "").strip()
-    due_date = None
-    if raw_date:
+    # 날짜 안전 파싱 헬퍼
+    def _parse_date(key: str):
+        raw = post.get(key, "").strip()
+        if not raw:
+            return None
         try:
-            y, m, d = map(int, raw_date.split("-"))
-            due_date = date(y, m, d)
+            y, m, d = map(int, raw.split("-"))
+            return date(y, m, d)
         except (ValueError, TypeError):
-            due_date = None
+            return None
+
+    start_date = _parse_date("start_date")
+    due_date   = _parse_date("due_date")
 
     return {
         "category_id":         post.get("category", "").strip() or None,
         "title":               post.get("title", "").strip(),
         "description":         post.get("description", "").strip(),
+        "start_date":          start_date,
         "due_date":            due_date,
         "recurrence_type":     post.get("recurrence_type", WorkTask.RECURRENCE_NONE),
         "recurrence_day":      _int_or("recurrence_day", None),

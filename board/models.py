@@ -440,13 +440,21 @@ class WorkCategory(models.Model):
     is_active=False 이면 등록 폼에서 미노출.
     code 가 PK이므로 외부에서 코드값으로 직접 참조한다.
     """
-
+    # ── 추가: worktask_create 폼에서 사용하는 구분 코드 7종 ──
     CODE_CHOICES = [
-        ("commission", "수수료 업무"),
-        ("bond",       "채권·환수"),
-        ("risk",       "리스크관리"),
-        ("biz_dev",    "제휴영업"),
-        ("misc",       "기타"),
+        ("commission",    "수수료 업무"),
+        ("bond",          "채권·환수"),
+        ("risk",          "리스크관리"),
+        ("biz_dev",       "제휴영업"),
+        ("misc",          "기타"),
+        # 운영 등록 7종 (workcategory_initial.json fixture)
+        ("fee_bond",      "수수료/채권"),
+        ("risk_retention","리스크/유지율"),
+        ("solicitation",  "위해촉"),
+        ("it_system",     "전산"),
+        ("meeting",       "회의/미팅"),
+        ("lease",         "임대차"),
+        ("sales_recruit", "영업/리쿠르팅"),
     ]
 
     code       = models.CharField(max_length=30, primary_key=True,
@@ -544,6 +552,7 @@ class WorkTask(models.Model):
     # -------------------------------------------------------------------------
     # 일정 / 반복
     # -------------------------------------------------------------------------
+    start_date      = models.DateField(null=True, blank=True, verbose_name="시작일")
     due_date        = models.DateField(null=True, blank=True, verbose_name="마감일")
     recurrence_type = models.CharField(
         max_length=20, choices=RECURRENCE_CHOICES,
