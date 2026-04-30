@@ -34,6 +34,7 @@ import { getCSRFToken } from "../common/manage/csrf.js";
 
   const doneBtn = document.getElementById("btn-detail-done");
   const skipBtn = document.getElementById("btn-detail-skip");
+  const resetBtn = document.getElementById("btn-detail-reset");
 
   async function _handleChange(btn, url) {
     if (btn.dataset.submitting === "1") return;
@@ -56,7 +57,13 @@ import { getCSRFToken } from "../common/manage/csrf.js";
           badge.dataset.status = data.status;
           badge.textContent    = data.status_display;
         }
-        document.getElementById("detail-action-btns")?.remove();
+        // 상태에 따라 버튼 영역 갱신
+        if (data.status === "done" || data.status === "skipped") {
+          document.getElementById("detail-action-btns")?.remove();
+        } else {
+          // 대기로 복원 시 페이지 새로고침으로 버튼 구조 복원
+          location.reload();
+        }
       } else {
         alert(data.error || "처리 중 오류가 발생했습니다.");
         btn.dataset.submitting = "";
@@ -76,6 +83,10 @@ import { getCSRFToken } from "../common/manage/csrf.js";
   skipBtn?.addEventListener("click", () =>
     _handleChange(skipBtn, boot.dataset.skipUrl)
   );
+  resetBtn?.addEventListener("click", () => {
+    const url = resetBtn.dataset.resetUrl;
+    if (url) _handleChange(resetBtn, url);
+  });
 })();
 
 
@@ -175,6 +186,57 @@ import { getCSRFToken } from "../common/manage/csrf.js";
   else                el.textContent = `D+${Math.abs(diff)} 초과`;
 })();
 
+// =============================================================================
+// [5] 상세 페이지 — 삭제 버튼
+// =============================================================================
+(function _initDeleteBtn() {
+  const btn = document.querySelector(".worktask-delete-btn");
+  if (!btn) return;
+
+  btn.addEventListener("click", async function () {
+    if (this.dataset.submitting === "1") return;
+
+    const title = this.dataset.title || "이 업무";
+    if (!confirm(`"${title}" 을(를) 삭제하시겠습니까?\n삭제 후 복구할 수 없습니다.`)) return;
+
+    this.dataset.submitting = "1";
+    this.disabled = true;
+
+    const url         = this.dataset.deleteUrl;
+    const redirectUrl = this.dataset.redirectUrl;
+
+    if (!url) {
+      alert("삭제 URL이 없습니다.");
+      this.dataset.submitting = "";
+      this.disabled = false;
+      return;
+    }
+
+    try {
+      const res    = await fetch(url, {
+        method:  "POST",
+        headers: {
+          "X-CSRFToken":      getCSRFToken(),
+          "X-Requested-With": "XMLHttpRequest",
+        },
+      });
+      const data = await _safeJson(res);
+
+      if (data.ok) {
+        location.href = redirectUrl || data.redirect_url || "/board/worktasks/";
+      } else {
+        alert(data.error || "삭제 중 오류가 발생했습니다.");
+        this.dataset.submitting = "";
+        this.disabled = false;
+      }
+    } catch (e) {
+      console.error("[worktask_detail] delete error:", e);
+      alert("네트워크 오류가 발생했습니다.");
+      this.dataset.submitting = "";
+      this.disabled = false;
+    }
+  });
+})();
 
 // =============================================================================
 // 유틸

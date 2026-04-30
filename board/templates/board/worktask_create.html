@@ -73,10 +73,11 @@
     <!-- 우선순위 -->
     <div class="mb-3">
       <label for="id_priority" class="form-label fw-semibold">우선순위</label>
-      <input type="number" name="priority" id="id_priority"
-             class="form-control" min="1" max="99"
-             value="{{ post_data.priority|default:'50' }}">
-      <div class="form-text">숫자가 낮을수록 상단 표시 (기본 50).</div>
+      <select name="priority" id="id_priority" class="form-select">
+        <option value="high" {% if post_data.priority == 'high' %}selected{% endif %}>상</option>
+        <option value="mid"  {% if post_data.priority == 'mid' or not post_data.priority %}selected{% endif %}>중</option>
+        <option value="low"  {% if post_data.priority == 'low' %}selected{% endif %}>하</option>
+      </select>
     </div>
 
     <!-- 반복 유형 -->
@@ -119,7 +120,8 @@
       <button type="button"
               class="btn btn-outline-secondary btn-sm btnOpenSearch"
               id="btn-search-related-user"
-              data-target-row="related-users-row">
+              data-bs-toggle="modal"
+              data-bs-target="#searchUserModal">
         + 관련 인물 추가
       </button>
       <!-- JS 가 동적으로 hidden input 추가 -->
@@ -147,6 +149,7 @@
 {% include "components/search_user_modal.html" with search_url="/board/search-user/" %}
 {% endblock %}
 
-{% block extra_scripts %}
-<script type="module" src="{% static 'js/board/worktask_form.js' %}"></script>
+{% block extra_js %}
+<script src="{% static 'js/board/worktask_form.js' %}"></script>
+<script type="module" src="{% static 'js/board/worktask_detail.js' %}"></script>
 {% endblock %}

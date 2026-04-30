@@ -86,10 +86,13 @@ def worktask_list(request):
     ym       = request.GET.get("ym",       _today_ym())
     status   = request.GET.get("status",   "")
     category = request.GET.get("category", "")
+    keyword  = request.GET.get("keyword",  "")
 
     # 서비스 경유 (소유자 격리 보장)
     qs = wt_svc.get_user_queryset(request.user)
-    qs = wt_svc.apply_filters(qs, {"ym": ym, "status": status, "category": category})
+    qs = wt_svc.apply_filters(qs, {
+        "ym": ym, "status": status, "category": category, "keyword": keyword
+    })
     qs = qs.order_by("priority", "due_date", "-created_at")
 
     paginator = Paginator(qs, 20)
@@ -108,6 +111,7 @@ def worktask_list(request):
         "category":      category,
         "categories":    categories,
         "status_choices": status_choices,
+        "keyword": keyword,
     })
 
 
@@ -322,6 +326,109 @@ def worktask_notify_check(request):
 
 
 # =============================================================================
+# AJAX: 상태 해제 (완료/건너뜀 → 대기)
+# =============================================================================
+
+@require_POST
+@grade_required("superuser")
+def worktask_reset(request, pk: int):
+    """
+    완료/건너뜀 상태를 대기(pending)로 초기화 AJAX (POST).
+    성공: {"ok": true, "status": "pending", "status_display": "대기"}
+    """
+    task = wt_svc.get_user_task(request.user, pk)
+    wt_svc.mark_pending(task)
+    return _ok(status=task.status, status_display=task.get_status_display_label())
+
+
+# =============================================================================
+# AJAX: 인라인 필드 업데이트 (목록 셀 편집)
+# =============================================================================
+
+@require_POST
+@grade_required("superuser")
+def worktask_inline_update(request, pk: int):
+    """
+    목록 페이지 인라인 셀 편집 AJAX (POST).
+
+    POST body (JSON):
+        field : "category" | "priority" | "start_date" | "due_date"
+        value : 새 값 (문자열)
+
+    성공: {"ok": true, "field": ..., "value": ..., "display": ...}
+    """
+    import json
+    from datetime import date as _date
+
+    task = wt_svc.get_user_task(request.user, pk)
+
+    try:
+        body  = json.loads(request.body)
+        field = body.get("field", "").strip()
+        value = body.get("value", "")
+    except (json.JSONDecodeError, AttributeError):
+        return _err("잘못된 요청입니다.")
+
+    ALLOWED_FIELDS = {"category", "priority", "start_date", "due_date"}
+    if field not in ALLOWED_FIELDS:
+        return _err(f"수정 불가 필드: {field}")
+
+    # 필드별 값 변환 및 검증
+    if field == "category":
+        from board.models import WorkCategory
+        try:
+            cat = WorkCategory.objects.get(code=value, is_active=True)
+        except WorkCategory.DoesNotExist:
+            return _err("존재하지 않는 분류입니다.")
+        task.category = cat
+        task.save(update_fields=["category", "updated_at"])
+        return _ok(field=field, value=cat.code, display=cat.label)
+
+    elif field == "priority":
+        if value not in (WorkTask.PRIORITY_HIGH, WorkTask.PRIORITY_MID, WorkTask.PRIORITY_LOW):
+            return _err("잘못된 우선순위 값입니다.")
+        task.priority = value
+        task.save(update_fields=["priority", "updated_at"])
+        display = dict(WorkTask.PRIORITY_CHOICES).get(value, value)
+        return _ok(field=field, value=value, display=display)
+
+    elif field in ("start_date", "due_date"):
+        if value:
+            try:
+                y, m, d = map(int, value.split("-"))
+                parsed = _date(y, m, d)
+            except (ValueError, TypeError):
+                return _err("날짜 형식이 올바르지 않습니다. (YYYY-MM-DD)")
+        else:
+            parsed = None
+        setattr(task, field, parsed)
+        task.save(update_fields=[field, "updated_at"])
+        display = parsed.strftime("%m/%d") if parsed else "—"
+        return _ok(field=field, value=value, display=display)
+
+    return _err("처리할 수 없는 요청입니다.")
+
+
+# =============================================================================
+# AJAX: 삭제 처리
+# =============================================================================
+
+@require_POST
+@grade_required("superuser")
+def worktask_delete(request, pk: int):
+    """
+    WorkTask 삭제 AJAX (POST).
+
+    소유자 격리: get_user_task → owner != request.user 이면 404.
+    성공 시 목록 redirect URL 반환.
+    """
+    task = wt_svc.get_user_task(request.user, pk)
+    task.delete()
+    logger.info("WorkTask deleted: pk=%s owner=%s", pk, request.user.pk)
+    return _ok(redirect_url=f"/board/worktasks/")
+
+
+# =============================================================================
 # 내부 헬퍼 — POST 데이터 추출
 # =============================================================================
 
@@ -369,6 +476,7 @@ def _extract_post_data(request) -> dict:
         "recurrence_day":      _int_or("recurrence_day", None),
         "status":              post.get("status", WorkTask.STATUS_PENDING),
         "priority":            _int_or("priority", 50),
+        "priority":            post.get("priority", WorkTask.PRIORITY_MID),
         "notify_days_before":  _int_or("notify_days_before", 3),
         "related_users":       related,
     }

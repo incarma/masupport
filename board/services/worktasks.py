@@ -83,6 +83,7 @@ def apply_filters(qs: "QuerySet[WorkTask]", params: dict) -> "QuerySet[WorkTask]
     ym       = (params.get("ym")       or "").strip()
     status   = (params.get("status")   or "").strip()
     category = (params.get("category") or "").strip()
+    keyword  = (params.get("keyword")  or "").strip()
 
     # -- 귀속월 필터 --
     if ym:
@@ -112,6 +113,12 @@ def apply_filters(qs: "QuerySet[WorkTask]", params: dict) -> "QuerySet[WorkTask]
     if category:
         qs = qs.filter(category_id=category)
 
+    # -- 키워드 필터 --
+    if keyword:
+        qs = qs.filter(
+            Q(title__icontains=keyword) | Q(description__icontains=keyword)
+        )    
+    
     return qs
 
 
@@ -183,6 +190,14 @@ def mark_skipped(task: WorkTask) -> WorkTask:
     task.status = WorkTask.STATUS_SKIPPED
     task.save(update_fields=["status", "updated_at"])
     logger.info("WorkTask skipped: pk=%s owner=%s", task.pk, task.owner_id)
+    return task
+
+
+def mark_pending(task: WorkTask) -> WorkTask:
+    """대기 상태로 초기화 (완료/건너뜀 해제). status → pending."""
+    task.status = WorkTask.STATUS_PENDING
+    task.save(update_fields=["status", "updated_at"])
+    logger.info("WorkTask reset to pending: pk=%s owner=%s", task.pk, task.owner_id)
     return task
 
 
