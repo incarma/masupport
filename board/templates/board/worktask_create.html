@@ -1,152 +1,207 @@
-<!-- board/templates/board/worktask_create.html -->
-<!-- 업무 항목 등록 폼 -->
 {% extends "board/base_board.html" %}
 {% load static %}
 
 {% block title %}업무 등록 — 업무관리{% endblock %}
 
 {% block content %}
+
+<!-- ── 페이지 제목 ──────────────────────────────────────────── -->
+<h3 class="fw-bold text-center mb-4 board-page-title">업무 등록</h3>
+
 <div class="board-narrow mx-auto">
 
-  <div class="d-flex align-items-center justify-content-between mb-3">
-    <h5 class="board-page-title mb-0">업무 등록</h5>
-    <a href="{% url 'board:worktasks:worktask_list' %}"
-       class="btn btn-outline-secondary btn-sm">목록으로</a>
-  </div>
-
   {% if error %}
-    <div class="alert alert-danger">{{ error }}</div>
+    <div class="alert alert-danger mb-3">{{ error }}</div>
   {% endif %}
 
-  <form method="post" enctype="multipart/form-data" id="worktaskCreateForm">
-    {% csrf_token %}
+  <div class="card shadow border-0 rounded-4">
+    <div class="card-body p-4">
 
-    <!-- 분류 -->
-    <div class="mb-3">
-      <label for="id_category" class="form-label fw-semibold">
-        구분 <span class="text-danger">*</span>
-      </label>
-      <select name="category" id="id_category" class="form-select" required>
-        <option value="">— 분류 선택 —</option>
-        {% for cat in categories %}
-          <option value="{{ cat.code }}"
-                  {% if post_data.category == cat.code %}selected{% endif %}>
-            {{ cat.label }}
-          </option>
-        {% endfor %}
-      </select>
+      <form method="post" enctype="multipart/form-data" id="worktaskCreateForm">
+        {% csrf_token %}
+
+        <!-- ── 기본 정보 ───────────────────────────────────── -->
+        <div class="mb-3">
+          <label for="id_category" class="form-label fw-semibold mb-1">
+            분류 <span class="text-danger">*</span>
+          </label>
+          <select name="category" id="id_category" class="form-select" required>
+            <option value="">— 분류 선택 —</option>
+            {% for cat in categories %}
+              <option value="{{ cat.code }}"
+                      {% if post_data.category == cat.code %}selected{% endif %}>
+                {{ cat.label }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="mb-3">
+          <label for="id_title" class="form-label fw-semibold mb-1">
+            업무명 <span class="text-danger">*</span>
+          </label>
+          <input type="text" name="title" id="id_title"
+                 class="form-control" maxlength="200"
+                 value="{{ post_data.title|default:'' }}" required>
+        </div>
+
+        <div class="mb-4">
+          <label for="id_description" class="form-label fw-semibold mb-1">메모</label>
+          <textarea name="description" id="id_description"
+                    class="form-control" rows="4">{{ post_data.description|default:'' }}</textarea>
+        </div>
+
+        <!-- ── 일정 및 우선순위 ──────────────────────────── -->
+        <hr class="my-3">
+        <p class="fw-semibold mb-3 small board-section-title-primary">일정 및 우선순위</p>
+
+        <div class="row g-3 mb-3">
+          <div class="col-md-4">
+            <label for="id_start_date" class="form-label fw-semibold mb-1">시작일</label>
+            <input type="date" name="start_date" id="id_start_date"
+                   class="form-control"
+                   value="{{ post_data.start_date|default:'' }}">
+          </div>
+          <div class="col-md-4">
+            <label for="id_due_date" class="form-label fw-semibold mb-1">마감일</label>
+            <input type="date" name="due_date" id="id_due_date"
+                   class="form-control"
+                   value="{{ post_data.due_date|default:'' }}">
+          </div>
+          <div class="col-md-4">
+            <label for="id_priority" class="form-label fw-semibold mb-1">우선순위</label>
+            <select name="priority" id="id_priority" class="form-select">
+              <option value="high" {% if post_data.priority == 'high' %}selected{% endif %}>상</option>
+              <option value="mid"  {% if post_data.priority == 'mid' or not post_data.priority %}selected{% endif %}>중</option>
+              <option value="low"  {% if post_data.priority == 'low' %}selected{% endif %}>하</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- ── 반복 설정 ──────────────────────────────────── -->
+        <hr class="my-3">
+        <p class="fw-semibold mb-3 small board-section-title-primary">반복 설정</p>
+
+        <div class="mb-3">
+          <label for="id_recurrence_type" class="form-label fw-semibold mb-1">반복 유형</label>
+          <select name="recurrence_type" id="id_recurrence_type" class="form-select">
+            <option value="none">반복 없음</option>
+            <option value="monthly_open">매달 월초 (1~10일)</option>
+            <option value="monthly_mid">매달 중순</option>
+            <option value="monthly_end">매달 말</option>
+            <option value="daily">매일</option>
+            <option value="custom">직접 지정</option>
+          </select>
+        </div>
+
+        <!-- custom 전용: 직접 지정 일자 (JS 토글) -->
+        <div class="mb-3 d-none" id="recurrence-day-group">
+          <label for="id_recurrence_day" class="form-label fw-semibold mb-1">
+            반복 일자 (1~28)
+          </label>
+          <input type="number" name="recurrence_day" id="id_recurrence_day"
+                 class="form-control" min="1" max="28"
+                 value="{{ post_data.recurrence_day|default:'' }}">
+        </div>
+
+        <!-- ── 알림 설정 ──────────────────────────────────── -->
+        <hr class="my-3">
+        <p class="fw-semibold mb-3 small board-section-title-primary">알림 설정</p>
+
+        <div class="mb-3">
+          <label for="id_notify_days_before" class="form-label fw-semibold mb-1">
+            마감 N일 전 이메일 알림
+          </label>
+          <div class="d-flex align-items-center gap-2">
+            <input type="number" name="notify_days_before" id="id_notify_days_before"
+                   class="form-control worktask-notify-days-input" min="0" max="30"
+                   value="{{ post_data.notify_days_before|default:'3' }}">
+            <span class="text-muted small">일 전 (0 = 알림 없음)</span>
+          </div>
+        </div>
+
+        <!-- ── 지점 / 대상 ─────────────────────────────── -->
+        <hr class="my-3">
+        <div class="row g-3 mb-3">
+          <div class="col-md-6">
+            <p class="fw-semibold mb-2 small board-section-title-primary">지점</p>
+            <div id="family-branches-tags" class="d-flex flex-wrap gap-1 mb-2 min-height-32"></div>
+            <button type="button"
+                    class="btn btn-outline-secondary btn-sm"
+                    id="btn-add-family-branch"
+                   data-bs-toggle="modal"
+                    data-bs-target="#worktaskFamilyBranchModal">
+              + 지점 추가
+            </button>
+            <div id="family-branches-hidden-inputs"></div>
+          </div>
+
+          <div class="col-md-6">
+            <p class="fw-semibold mb-2 small board-section-title-primary">대상</p>
+           <div id="related-users-tags" class="d-flex flex-wrap gap-1 mb-2 min-height-32"></div>
+            <button type="button"
+                    class="btn btn-outline-secondary btn-sm btnOpenSearch"
+                    id="btn-search-related-user"
+                    data-bs-toggle="modal"
+                    data-bs-target="#searchUserModal">
+              + 대상 추가
+            </button>
+            <div id="related-users-hidden-inputs"></div>
+          </div>
+        </div>
+
+        <!-- ── 첨부파일 ───────────────────────────────────── -->
+        <hr class="my-3">
+        <p class="fw-semibold mb-3 small board-section-title-primary">첨부파일</p>
+
+        <div class="mb-4">
+          <input type="file" name="attachments" id="id_attachments"
+                 class="form-control" multiple>
+        </div>
+
+        <!-- ── 제출 버튼 ──────────────────────────────────── -->
+        <div class="d-flex gap-2 mt-2">
+          <button type="submit" class="btn btn-primary flex-grow-1"
+                  id="btn-create-submit">등록</button>
+          <a href="{% url 'board:worktasks:worktask_list' %}"
+             class="btn btn-outline-secondary">취소</a>
+        </div>
+
+      </form>
+    </div><!-- /card-body -->
+  </div><!-- /card -->
+
+</div><!-- /board-narrow -->
+
+<!-- 사용자 검색 모달 -->
+{% include "components/search_user_modal.html" with search_url="/board/search-user/" %}
+
+<!-- 지점 선택 모달 -->
+<div class="modal fade" id="worktaskFamilyBranchModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+   <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">지점 추가</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="닫기"></button>
+      </div>
+      <div class="modal-body">
+        <label for="worktaskFamilyBranchSelect" class="form-label fw-semibold">지점 선택</label>
+        <select id="worktaskFamilyBranchSelect" class="form-select">
+          <option value="">— 지점 선택 —</option>
+         {% for branch in branch_options %}
+            <option value="{{ branch }}">{{ branch }}</option>
+          {% endfor %}
+        </select>
+        <div class="form-text">현재 사용 가능한 지점 목록 중 선택합니다. 여러 개 추가할 수 있습니다.</div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">닫기</button>
+        <button type="button" class="btn btn-primary" id="btn-confirm-family-branch">추가</button>
+      </div>
     </div>
-
-    <!-- 업무명 -->
-    <div class="mb-3">
-      <label for="id_title" class="form-label fw-semibold">
-        업무명 <span class="text-danger">*</span>
-      </label>
-      <input type="text" name="title" id="id_title"
-             class="form-control" maxlength="200"
-             value="{{ post_data.title|default:'' }}" required>
-    </div>
-
-    <!-- 메모 (단순 textarea, CKEditor 미사용) -->
-    <div class="mb-3">
-      <label for="id_description" class="form-label fw-semibold">메모</label>
-      <textarea name="description" id="id_description"
-                class="form-control" rows="4">{{ post_data.description|default:'' }}</textarea>
-    </div>
-
-    <!-- 시작일 -->
-    <div class="mb-3">
-      <label for="id_start_date" class="form-label fw-semibold">시작일</label>
-      <input type="date" name="start_date" id="id_start_date"
-             class="form-control"
-             value="{{ post_data.start_date|default:'' }}">
-    </div>
-
-    <!-- 마감일 -->
-    <div class="mb-3">
-      <label for="id_due_date" class="form-label fw-semibold">마감일</label>
-      <input type="date" name="due_date" id="id_due_date"
-             class="form-control"
-             value="{{ post_data.due_date|default:'' }}">
-    </div>
-
-    <!-- 우선순위 -->
-    <div class="mb-3">
-      <label for="id_priority" class="form-label fw-semibold">우선순위</label>
-      <select name="priority" id="id_priority" class="form-select">
-        <option value="high" {% if post_data.priority == 'high' %}selected{% endif %}>상</option>
-        <option value="mid"  {% if post_data.priority == 'mid' or not post_data.priority %}selected{% endif %}>중</option>
-        <option value="low"  {% if post_data.priority == 'low' %}selected{% endif %}>하</option>
-      </select>
-    </div>
-
-    <!-- 반복 유형 -->
-    <div class="mb-3">
-      <label for="id_recurrence_type" class="form-label fw-semibold">반복 유형</label>
-      <select name="recurrence_type" id="id_recurrence_type" class="form-select">
-        <option value="none">반복 없음</option>
-        <option value="monthly_open">매달 월초 (1~10일)</option>
-        <option value="monthly_mid">매달 중순</option>
-        <option value="monthly_end">매달 말</option>
-        <option value="daily">매일</option>
-        <option value="custom">직접 지정</option>
-      </select>
-    </div>
-
-    <!-- custom 전용: 직접 지정 일자 (JS 토글) -->
-    <div class="mb-3 d-none" id="recurrence-day-group">
-      <label for="id_recurrence_day" class="form-label fw-semibold">
-        반복 일자 (1~28)
-      </label>
-      <input type="number" name="recurrence_day" id="id_recurrence_day"
-             class="form-control" min="1" max="28"
-             value="{{ post_data.recurrence_day|default:'' }}">
-    </div>
-
-    <!-- 알림 설정 -->
-    <div class="mb-3">
-      <label for="id_notify_days_before" class="form-label fw-semibold">
-        마감 N일 전 이메일 알림
-      </label>
-      <input type="number" name="notify_days_before" id="id_notify_days_before"
-             class="form-control" min="0" max="30"
-             value="{{ post_data.notify_days_before|default:'3' }}">
-    </div>
-
-    <!-- 관련 인물 (search_user_modal.js SSOT 경유) -->
-    <div class="mb-3">
-      <label class="form-label fw-semibold">관련 인물</label>
-      <div id="related-users-tags" class="d-flex flex-wrap gap-1 mb-2 min-height-32"></div>
-      <button type="button"
-              class="btn btn-outline-secondary btn-sm btnOpenSearch"
-              id="btn-search-related-user"
-              data-bs-toggle="modal"
-              data-bs-target="#searchUserModal">
-        + 관련 인물 추가
-      </button>
-      <!-- JS 가 동적으로 hidden input 추가 -->
-      <div id="related-users-hidden-inputs"></div>
-    </div>
-
-    <!-- 첨부파일 -->
-    <div class="mb-3">
-      <label for="id_attachments" class="form-label fw-semibold">첨부파일</label>
-      <input type="file" name="attachments" id="id_attachments"
-             class="form-control" multiple>
-    </div>
-
-    <div class="d-flex gap-2 mt-4">
-      <button type="submit" class="btn btn-primary flex-grow-1"
-              id="btn-create-submit">등록</button>
-      <a href="{% url 'board:worktasks:worktask_list' %}"
-         class="btn btn-outline-secondary">취소</a>
-    </div>
-  </form>
-
+  </div>
 </div>
 
-<!-- 사용자 검색 모달 (search_user_modal.js SSOT) -->
-{% include "components/search_user_modal.html" with search_url="/board/search-user/" %}
 {% endblock %}
 
 {% block extra_js %}

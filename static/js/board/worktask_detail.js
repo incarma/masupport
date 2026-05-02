@@ -4,7 +4,7 @@
  * WorkTask 상세 / 등록 / 수정 페이지 공용 JS.
  *
  * 역할:
- *   - 상세: 인라인 완료/건너뜀 AJAX + badge 즉시 갱신
+ *   - 상세: D-day 렌더링 / 삭제 처리
  *   - 상세: D-day 렌더링 (CSP 대응 — 인라인 스크립트 대체)
  *   - 등록/수정: 관련 인물 검색 모달 연동 + 태그 UI 관리
  *   - 폼 중복 제출 방지
@@ -25,73 +25,7 @@
 import { getCSRFToken } from "../common/manage/csrf.js";
 
 // =============================================================================
-// [1] 상세 페이지 — 인라인 상태 변경
-// =============================================================================
-(function _initDetailPage() {
-  const boot = document.getElementById("worktaskDetailBoot");
-  if (!boot || boot.dataset.inited === "1") return;
-  boot.dataset.inited = "1";
-
-  const doneBtn = document.getElementById("btn-detail-done");
-  const skipBtn = document.getElementById("btn-detail-skip");
-  const resetBtn = document.getElementById("btn-detail-reset");
-
-  async function _handleChange(btn, url) {
-    if (btn.dataset.submitting === "1") return;
-    btn.dataset.submitting = "1";
-    btn.disabled = true;
-
-    try {
-      const res  = await fetch(url, {
-        method:  "POST",
-        headers: {
-          "X-CSRFToken":      getCSRFToken(),
-          "X-Requested-With": "XMLHttpRequest",
-        },
-      });
-      const data = await _safeJson(res);
-
-      if (data.ok) {
-        const badge = document.getElementById("detail-status-badge");
-        if (badge) {
-          badge.dataset.status = data.status;
-          badge.textContent    = data.status_display;
-        }
-        // 상태에 따라 버튼 영역 갱신
-        if (data.status === "done" || data.status === "skipped") {
-          document.getElementById("detail-action-btns")?.remove();
-        } else {
-          // 대기로 복원 시 페이지 새로고침으로 버튼 구조 복원
-          location.reload();
-        }
-      } else {
-        alert(data.error || "처리 중 오류가 발생했습니다.");
-        btn.dataset.submitting = "";
-        btn.disabled = false;
-      }
-    } catch (e) {
-      console.error("[worktask_detail] status change error:", e);
-      alert("네트워크 오류가 발생했습니다.");
-      btn.dataset.submitting = "";
-      btn.disabled = false;
-    }
-  }
-
-  doneBtn?.addEventListener("click", () =>
-    _handleChange(doneBtn, boot.dataset.doneUrl)
-  );
-  skipBtn?.addEventListener("click", () =>
-    _handleChange(skipBtn, boot.dataset.skipUrl)
-  );
-  resetBtn?.addEventListener("click", () => {
-    const url = resetBtn.dataset.resetUrl;
-    if (url) _handleChange(resetBtn, url);
-  });
-})();
-
-
-// =============================================================================
-// [2] 등록/수정 폼 — 관련 인물 검색 모달 연동
+// [1] 등록/수정 폼 — 관련 인물 검색 모달 연동
 // =============================================================================
 (function _initRelatedUserSearch() {
   const searchBtn = document.getElementById("btn-search-related-user");
@@ -150,7 +84,7 @@ import { getCSRFToken } from "../common/manage/csrf.js";
 
 
 // =============================================================================
-// [3] 폼 중복 제출 방지
+// [2] 폼 중복 제출 방지
 // =============================================================================
 (function _initFormSubmitLock() {
   ["worktaskCreateForm", "worktaskEditForm"].forEach((id) => {
@@ -168,7 +102,7 @@ import { getCSRFToken } from "../common/manage/csrf.js";
 
 
 // =============================================================================
-// [4] D-day 렌더링 — CSP 대응 (인라인 스크립트 대체)
+// [3] D-day 렌더링 — CSP 대응 (인라인 스크립트 대체)
 //     worktask_detail.html 의 data-due 속성에서 날짜를 읽는다.
 // =============================================================================
 (function _initDday() {
@@ -187,7 +121,7 @@ import { getCSRFToken } from "../common/manage/csrf.js";
 })();
 
 // =============================================================================
-// [5] 상세 페이지 — 삭제 버튼
+// [4] 상세 페이지 — 삭제 버튼
 // =============================================================================
 (function _initDeleteBtn() {
   const btn = document.querySelector(".worktask-delete-btn");

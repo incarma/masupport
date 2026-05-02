@@ -79,6 +79,14 @@
   color: #6c757d;
 }
 
+.board-scope .board-section-title-primary{
+  color: #003f7d;
+}
+
+.board-scope .worktask-notify-days-input{
+  max-width: 120px;
+}
+
 
 /* ==========================================================
  3) Post List Table: 말줄임/줄바꿈 정책
@@ -1012,11 +1020,28 @@
   CSP strict helpers - Board (기존)
 ========================================================== */
 
-.board-scope .worktask-col-category { width: 90px; }
-.board-scope .worktask-col-priority { width: 70px; }
-.board-scope .worktask-col-due { width: 110px; }
-.board-scope .worktask-col-status { width: 90px; }
-.board-scope .worktask-col-actions { width: 100px; }
+.board-scope .worktask-col-category { width: 96px; }
+.board-scope .worktask-col-title { width: 320px; }
+.board-scope .worktask-col-family { width: 190px; }
+.board-scope .worktask-col-target { width: 190px; }
+.board-scope .worktask-col-priority { width: 78px; }
+.board-scope .worktask-col-due { width: 96px; }
+.board-scope .worktask-col-status { width: 92px; }
+.board-scope .worktask-col-actions { width: 64px; }
+
+/* 지점효율 페이지와 동일한 86vw 와이드 폭 */
+.board-scope .worktask-list-wide{
+  width: 86vw;
+  max-width: none;
+  margin-left: calc(-43vw + 50%);
+}
+
+@media (max-width: 576px){
+  .board-scope .worktask-list-wide{
+    width: 100%;
+    margin-left: 0;
+  }
+}
 
 .board-scope .post-col-receipt { width: 9%; }
 .board-scope .post-col-date { width: 10%; }
@@ -1071,7 +1096,8 @@
 /* ----- WorkTask 전용 상태 badge
          기존 .status-badge 의 한글 data-status 값(접수/진행중/완료 등)과
          구분되는 영문 status 값 사용: pending/in_progress/done/skipped    */
-.board-scope .worktask-badge{
+.board-scope .worktask-badge,
+.board-scope .worktask-priority-badge{
   display: inline-block;
   border-radius: 999px;
   padding: 2px 10px;
@@ -1079,25 +1105,40 @@
   font-size: 0.82rem;
   border: 1px solid transparent;
 }
+
+.board-scope .worktask-category-text,
+.board-scope .worktask-cell-display{
+  color: #212529;
+}
+
 .board-scope .worktask-badge[data-status="pending"]{
   background: #e7f1ff;
   border-color: #9ec5fe;
   color: #084298;
 }
+
 .board-scope .worktask-badge[data-status="in_progress"]{
-  background: #fff3cd;
-  border-color: #ffecb5;
-  color: #664d03;
+  background: #f8d7da;
+  border-color: #f1aeb5;
+  color: #842029;
 }
+
 .board-scope .worktask-badge[data-status="done"]{
   background: #d1e7dd;
   border-color: #a3cfbb;
   color: #0f5132;
 }
+
 .board-scope .worktask-badge[data-status="skipped"]{
   background: #e2e3e5;
   border-color: #d3d6d8;
   color: #41464b;
+}
+
+.board-scope .worktask-status-select{
+  min-width: 92px;
+  border-radius: 999px;
+  font-weight: 700;
 }
 
 /* ----- 반복 원본 badge ---------------------------------- */
@@ -1123,7 +1164,144 @@
   border: 1px solid #dee2e6;
   color: #212529;
 }
+
 .board-scope .worktask-related-user-tag .btn-close{
   width: 0.5em;
   height: 0.5em;
+}
+
+/* ----- WorkTask 목록 테이블: nowrap + 모바일 좌우 스크롤 ---- */
+.board-scope .worktask-table-scroll{
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.board-scope .worktask-table{
+  table-layout: fixed;
+  min-width: 1180px;
+}
+
+.board-scope .worktask-table th,
+.board-scope .worktask-table td{
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.board-scope .worktask-cell-edit{
+  cursor: pointer;
+}
+
+.board-scope .worktask-table .board-col-title a{
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.board-scope .worktask-family-cell,
+.board-scope .worktask-target-cell{
+  overflow: hidden;
+}
+
+.board-scope .worktask-family-list,
+.board-scope .worktask-target-list{
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 4px;
+  overflow: hidden;
+}
+
+.board-scope .worktask-family-branch-badge,
+.board-scope .worktask-target-tag{
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  max-width: 120px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid #d7e3f1;
+  background: #f6faff;
+  color: #12385f;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.board-scope .worktask-target-tag small{
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.board-scope .worktask-actions-cell{
+  white-space: nowrap;
+  text-align: center;
+}
+
+.board-scope .worktask-action-btn{
+  min-width: 30px;
+  height: 30px;
+  padding: 2px 7px;
+  line-height: 1;
+}
+
+/* WorkTask 목록에서는 분류를 단순 텍스트로 표시한다. */
+.board-scope .worktask-table .worktask-category-badge{
+  background: transparent;
+  border: 0;
+  color: #212529;
+  padding: 0;
+  border-radius: 0;
+  font-weight: 400;
+}
+
+/* 상세 상단 메타 배지 전용 */
+.board-scope #worktaskDetailBoot .worktask-category-badge{
+  display: inline-block;
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-weight: 700;
+  font-size: 0.82rem;
+  border: 1px solid #cbd5e1;
+  background: #f1f5f9;
+  color: #334155;
+}
+
+.board-scope #worktaskDetailBoot .worktask-family-branch-badge{
+  color: #212529;
+}
+
+/* ----- WorkTask 영업가족 태그 ----------------------------- */
+.board-scope .worktask-family-branch-tag{
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.8rem;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  color: #3730a3;
+}
+
+.board-scope .worktask-family-branch-tag .btn-close{
+  width: 0.5em;
+  height: 0.5em;
+}
+
+.board-scope .worktask-priority-badge[data-priority="high"]{
+  background: #f8d7da;
+  border-color: #f1aeb5;
+  color: #842029;
+}
+
+.board-scope .worktask-priority-badge[data-priority="mid"]{
+  background: #fff3cd;
+  border-color: #ffecb5;
+  color: #664d03;
+}
+
+.board-scope .worktask-priority-badge[data-priority="low"]{
+  background: #e7f1ff;
+  border-color: #9ec5fe;
+  color: #084298;
 }

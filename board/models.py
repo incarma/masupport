@@ -516,7 +516,7 @@ class WorkTask(models.Model):
         (STATUS_PENDING,     "대기"),
         (STATUS_IN_PROGRESS, "진행중"),
         (STATUS_DONE,        "완료"),
-        (STATUS_SKIPPED,     "건너뜀"),
+        (STATUS_SKIPPED,     "보류"),
     ]
 
     # -------------------------------------------------------------------------
@@ -612,6 +612,14 @@ class WorkTask(models.Model):
     # True = 이미 발송 완료 → 중복 발송 방지 플래그 (worktask.md §11.3)
     is_notified = models.BooleanField(
         default=False, verbose_name="알림 발송 완료",
+    )
+
+    family_branches = models.JSONField(
+        "영업가족",
+        default=list,  # callable 유지 (OK)
+        blank=True,
+        null=False,
+        help_text="업무관리에서 선택한 영업가족 지점명 목록",
     )
 
     # -------------------------------------------------------------------------

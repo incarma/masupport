@@ -6,204 +6,245 @@
 {% block content %}
 
 <div id="worktaskListBoot"
-     data-done-url="{% url 'board:worktasks:worktask_done' 0 %}"
-     data-skip-url="{% url 'board:worktasks:worktask_skip' 0 %}"
-     data-reset-url="{% url 'board:worktasks:worktask_reset' 0 %}"
+     class="worktask-list-wide"
      data-delete-url="{% url 'board:worktasks:worktask_delete' 0 %}"
      data-inline-url="{% url 'board:worktasks:worktask_inline_update' 0 %}"
      data-notify-url="{% url 'board:worktasks:worktask_notify_check' %}">
 
-  <!-- ── 페이지 헤더 ─────────────────────────────────────── -->
-  <div class="d-flex align-items-center justify-content-between mb-3">
-    <h4 class="board-page-title mb-0">📋 업무관리</h4>
-    <a href="{% url 'board:worktasks:worktask_create' %}"
-       class="btn btn-primary btn-sm">+ 업무 등록</a>
+  <!-- ── 페이지 제목 ──────────────────────────────────────── -->
+  <h3 class="fw-bold text-center mb-4 board-page-title">업무관리</h3>
+
+  <!-- ── 월 네비게이션 + 등록 버튼 ───────────────────────── -->
+  <div class="card shadow p-3 border-0 rounded-4 mb-3">
+    <div class="d-flex align-items-center justify-content-between gap-2 flex-wrap">
+      <div class="d-flex align-items-center gap-2">
+        <a href="?ym={{ prev_ym }}{% if status %}&status={{ status }}{% endif %}{% if category %}&category={{ category }}{% endif %}{% if keyword %}&keyword={{ keyword }}{% endif %}"
+           class="btn btn-sm btn-outline-secondary">◀ {{ prev_ym }}</a>
+        <span class="btn btn-sm btn-primary fw-bold pe-none px-4">{{ ym }}</span>
+        <a href="?ym={{ next_ym }}{% if status %}&status={{ status }}{% endif %}{% if category %}&category={{ category }}{% endif %}{% if keyword %}&keyword={{ keyword }}{% endif %}"
+           class="btn btn-sm btn-outline-secondary">{{ next_ym }} ▶</a>
+      </div>
+      <a href="{% url 'board:worktasks:worktask_create' %}"
+         class="btn btn-primary btn-sm">+ 업무 등록</a>
+    </div>
   </div>
 
-  <!-- ── 월 탭 ───────────────────────────────────────────── -->
-  <div class="d-flex gap-2 mb-3">
-    <a href="?ym={{ prev_ym }}{% if status %}&status={{ status }}{% endif %}{% if category %}&category={{ category }}{% endif %}{% if keyword %}&keyword={{ keyword }}{% endif %}"
-       class="btn btn-sm btn-outline-secondary">◀ {{ prev_ym }}</a>
-    <span class="btn btn-sm btn-primary fw-bold flex-grow-1 text-center pe-none">{{ ym }}</span>
-    <a href="?ym={{ next_ym }}{% if status %}&status={{ status }}{% endif %}{% if category %}&category={{ category }}{% endif %}{% if keyword %}&keyword={{ keyword }}{% endif %}"
-       class="btn btn-sm btn-outline-secondary">{{ next_ym }} ▶</a>
+  <!-- ── 필터 카드 ────────────────────────────────────────── -->
+  <div class="card shadow p-3 border-0 rounded-4 mb-3">
+    <form method="get" class="row g-2 align-items-end">
+      <input type="hidden" name="ym" value="{{ ym }}">
+
+      <div class="col-auto">
+        <label class="form-label mb-1 fw-semibold small">상태</label>
+        <select name="status" class="form-select form-select-sm">
+          <option value="">전체 상태</option>
+          {% for val, lbl in status_choices %}
+            <option value="{{ val }}" {% if status == val %}selected{% endif %}>{{ lbl }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="col-auto">
+        <label class="form-label mb-1 fw-semibold small">분류</label>
+        <select name="category" class="form-select form-select-sm">
+          <option value="">전체 분류</option>
+          {% for cat in categories %}
+            <option value="{{ cat.code }}" {% if category == cat.code %}selected{% endif %}>
+              {{ cat.label }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="col-auto">
+        <label class="form-label mb-1 fw-semibold small">검색</label>
+        <input type="text" name="keyword" class="form-control form-control-sm"
+               placeholder="업무명 검색" value="{{ keyword|default:'' }}">
+      </div>
+
+      <div class="col-auto d-flex gap-2">
+        <button type="submit" class="btn btn-primary btn-sm">조회</button>
+        <a href="?ym={{ ym }}" class="btn btn-outline-secondary btn-sm">초기화</a>
+      </div>
+    </form>
   </div>
-
-  <!-- ── 필터 폼 ─────────────────────────────────────────── -->
-  <form method="get" class="row g-2 mb-3 align-items-end">
-    <input type="hidden" name="ym" value="{{ ym }}">
-
-    <div class="col-auto">
-      <select name="status" class="form-select form-select-sm">
-        <option value="">전체 상태</option>
-        {% for val, lbl in status_choices %}
-          <option value="{{ val }}" {% if status == val %}selected{% endif %}>{{ lbl }}</option>
-        {% endfor %}
-      </select>
-    </div>
-
-    <div class="col-auto">
-      <select name="category" class="form-select form-select-sm">
-        <option value="">전체 분류</option>
-        {% for cat in categories %}
-          <option value="{{ cat.code }}" {% if category == cat.code %}selected{% endif %}>
-            {{ cat.label }}
-          </option>
-        {% endfor %}
-      </select>
-    </div>
-
-    <!-- ── 키워드 검색 ── -->
-    <div class="col-auto">
-      <input type="text" name="keyword" class="form-control form-control-sm"
-             placeholder="업무명 검색" value="{{ keyword|default:'' }}">
-    </div>
-
-    <div class="col-auto">
-      <button type="submit" class="btn btn-outline-secondary btn-sm">검색</button>
-      <a href="?ym={{ ym }}" class="btn btn-link btn-sm text-secondary">초기화</a>
-    </div>
-  </form>
 
   <!-- ── 마감 임박 알림 배너 ──────────────────────────────── -->
   <div id="worktask-notify-banner" class="alert alert-warning py-2 d-none" role="alert">
     <span id="worktask-notify-text"></span>
   </div>
 
-  <!-- ── 목록 테이블 ─────────────────────────────────────── -->
+  <!-- ── 목록 ─────────────────────────────────────────────── -->
   {% if page_obj.object_list %}
-  <div class="table-responsive">
-    <table class="table table-hover align-middle board-post-table">
-      <thead class="table-light">
-        <tr>
-          <th class="worktask-col-category">분류</th>
-          <th>업무명</th>
-          <th class="text-center worktask-col-priority">우선순위</th>
-          <th class="worktask-col-due">시작일</th>
-          <th class="worktask-col-due">마감일</th>
-          <th class="worktask-col-status">상태</th>
-          <th class="worktask-col-actions">액션</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for task in page_obj %}
-        <tr class="worktask-row
-                   {% if task.status == 'done' or task.status == 'skipped' %}worktask-done{% endif %}
-                   {% if task.is_overdue %}worktask-overdue{% endif %}"
-            data-pk="{{ task.pk }}"
-            data-status="{{ task.status }}">
+  <div class="card shadow border-0 rounded-4 overflow-hidden mb-3">
+    <div class="table-responsive worktask-table-scroll">
+      <table class="table table-hover align-middle mb-0 board-post-table worktask-table">
+        <colgroup>
+          <col class="worktask-col-category">
+          <col class="worktask-col-title">
+          <col class="worktask-col-family">
+          <col class="worktask-col-target">
+          <col class="worktask-col-priority">
+          <col class="worktask-col-due">
+          <col class="worktask-col-due">
+          <col class="worktask-col-status">
+          <col class="worktask-col-actions">
+        </colgroup>
+        <thead class="table-light">
+          <tr>
+            <th>분류</th>
+            <th>업무명</th>
+            <th>지점</th>
+            <th>대상</th>
+            <th class="text-center">우선순위</th>
+            <th>시작일</th>
+            <th>마감일</th>
+            <th>상태</th>
+            <th class="text-center">삭제</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for task in page_obj %}
+          <tr class="worktask-row
+                     {% if task.status == 'done' or task.status == 'skipped' %}worktask-done{% endif %}
+                     {% if task.is_overdue %}worktask-overdue{% endif %}"
+              data-pk="{{ task.pk }}"
+              data-status="{{ task.status }}">
 
-          <!-- 분류 — 인라인 편집 가능 -->
-          <td class="worktask-cell-edit"
-              data-field="category"
-              data-value="{{ task.category_id }}"
-              data-pk="{{ task.pk }}">
-            <span class="worktask-cell-display">
-              <span class="badge bg-secondary">{{ task.category.label }}</span>
-              {% if task.is_template %}
-                <span class="worktask-template-badge ms-1" title="반복 원본">↺</span>
+            <!-- 분류 — 단순 텍스트 표시 -->
+            <td class="worktask-cell-edit"
+                data-field="category"
+                data-value="{{ task.category_id }}"
+                data-pk="{{ task.pk }}">
+              <span class="worktask-cell-display">
+                {{ task.category.label|default:"-" }}
+                {% if task.is_template %}
+                  <span class="worktask-template-badge ms-1" title="반복 원본">↺</span>
+                {% endif %}
+              </span>
+            </td>
+
+            <!-- 업무명 -->
+            <td class="board-col-title">
+              <a href="{% url 'board:worktasks:worktask_detail' task.pk %}"
+                 class="text-decoration-none text-dark fw-semibold">
+                {{ task.title }}
+              </a>
+              {% if task.attachments.count %}
+                <span class="text-muted ms-1" title="첨부 {{ task.attachments.count }}개">📎</span>
               {% endif %}
-            </span>
-          </td>
+            </td>
 
-          <!-- 업무명 -->
-          <td class="board-col-title">
-            <a href="{% url 'board:worktasks:worktask_detail' task.pk %}"
-               class="text-decoration-none text-dark fw-semibold">
-              {{ task.title }}
-            </a>
-            {% if task.attachments.count %}
-              <span class="text-muted ms-1" title="첨부 {{ task.attachments.count }}개">📎</span>
-            {% endif %}
-          </td>
+            <!-- 지점 -->
+            <td class="worktask-family-cell">
+              <div class="worktask-family-list">
+                {% for branch in task.family_branches %}
+                  <span class="worktask-family-branch-badge">{{ branch }}</span>
+                {% empty %}
+                  <span class="text-muted">-</span>
+                {% endfor %}
+              </div>
+            </td>
 
-          <!-- 우선순위 — 인라인 편집 가능 -->
-          <td class="text-center worktask-cell-edit"
-              data-field="priority"
-              data-value="{{ task.priority }}"
-              data-pk="{{ task.pk }}">
-            <span class="worktask-cell-display">
-              {% if task.priority == 'high' %}
-                <span class="badge bg-danger">상</span>
-              {% elif task.priority == 'mid' %}
-                <span class="badge bg-warning text-dark">중</span>
-              {% else %}
-                <span class="badge bg-secondary">하</span>
-              {% endif %}
-            </span>
-          </td>
+            <!-- 대상 -->
+            <td class="worktask-target-cell">
+              <div class="worktask-target-list">
+                {% for u in task.related_users.all %}
+                  <span class="worktask-target-tag">
+                    {{ u.name }}<small class="text-muted ms-1">({{ u.id }})</small>
+                  </span>
+                {% empty %}
+                  <span class="text-muted">-</span>
+                {% endfor %}
+              </div>
+            </td>
 
-          <!-- 시작일 — 인라인 편집 가능 -->
-          <td class="worktask-cell-edit"
-              data-field="start_date"
-              data-value="{{ task.start_date|date:'Y-m-d'|default:'' }}"
-              data-pk="{{ task.pk }}">
-            <span class="worktask-cell-display">
-              {% if task.start_date %}
-                {{ task.start_date|date:"m/d" }}
-              {% else %}
-                <span class="text-muted">—</span>
-              {% endif %}
-            </span>
-          </td>
+            <!-- 우선순위 — 인라인 편집 가능 -->
+            <td class="text-center worktask-cell-edit"
+                data-field="priority"
+                data-value="{{ task.priority }}"
+                data-pk="{{ task.pk }}">
+              <span class="worktask-cell-display">
+                {% if task.priority == 'high' %}
+                  <span class="badge worktask-priority-badge" data-priority="high">상</span>
+                {% elif task.priority == 'mid' %}
+                  <span class="badge worktask-priority-badge" data-priority="mid">중</span>
+                {% else %}
+                  <span class="badge worktask-priority-badge" data-priority="low">하</span>
+                {% endif %}
+              </span>
+            </td>
 
-          <!-- 마감일 — 인라인 편집 가능 -->
-          <td class="worktask-cell-edit"
-              data-field="due_date"
-              data-value="{{ task.due_date|date:'Y-m-d'|default:'' }}"
-              data-pk="{{ task.pk }}">
-            <span class="worktask-cell-display">
-              {% if task.due_date %}
-                <span {% if task.is_overdue %}class="text-danger fw-bold"{% endif %}>
-                  {{ task.due_date|date:"m/d" }}
+            <!-- 시작일 — 인라인 편집 가능 -->
+            <td class="worktask-cell-edit"
+                data-field="start_date"
+                data-value="{{ task.start_date|date:'Y-m-d'|default:'' }}"
+                data-pk="{{ task.pk }}">
+              <span class="worktask-cell-display">
+                {% if task.start_date %}
+                  {{ task.start_date|date:"m/d" }}
+                {% else %}
+                  <span class="text-muted">-</span>
+                {% endif %}
+              </span>
+            </td>
+
+            <!-- 마감일 — 인라인 편집 가능 -->
+            <td class="worktask-cell-edit"
+                data-field="due_date"
+                data-value="{{ task.due_date|date:'Y-m-d'|default:'' }}"
+                data-pk="{{ task.pk }}">
+              <span class="worktask-cell-display">
+                {% if task.due_date %}
+                  <span {% if task.is_overdue %}class="text-danger fw-bold"{% endif %}>
+                    {{ task.due_date|date:"m/d" }}
+                  </span>
+                  <small class="text-muted ms-1"
+                         data-dday="{{ task.due_date|date:'Y-m-d' }}"></small>
+                {% else %}
+                  <span class="text-muted">-</span>
+                {% endif %}
+              </span>
+            </td>
+
+            <!-- 상태 — 사용자가 직접 수정 -->
+            <td class="worktask-cell-edit"
+                data-field="status"
+                data-value="{{ task.status }}"
+                data-pk="{{ task.pk }}">
+              <span class="worktask-cell-display">
+                <span class="worktask-badge status-badge"
+                      data-status="{{ task.status }}"
+                      id="status-badge-{{ task.pk }}">
+                  {{ task.get_status_display_label }}
                 </span>
-                <small class="text-muted ms-1"
-                       data-dday="{{ task.due_date|date:'Y-m-d' }}"></small>
-              {% else %}
-                <span class="text-muted">—</span>
-              {% endif %}
-            </span>
-          </td>
+              </span>
+            </td>
 
-          <!-- 상태 badge -->
-          <td>
-            <span class="worktask-badge status-badge"
-                  data-status="{{ task.status }}"
-                  id="status-badge-{{ task.pk }}">
-              {{ task.get_status_display_label }}
-            </span>
-          </td>
-
-          <!-- 액션 버튼 -->
-          <td>
-            {% if task.status != 'done' and task.status != 'skipped' %}
-              <button class="btn btn-success btn-sm worktask-done-btn"
-                      data-pk="{{ task.pk }}" title="완료">✓</button>
-              <button class="btn btn-outline-secondary btn-sm worktask-skip-btn ms-1"
-                      data-pk="{{ task.pk }}" title="건너뜀">↷</button>
-            {% else %}
-              <button class="btn btn-outline-secondary btn-sm worktask-reset-btn"
-                      data-pk="{{ task.pk }}" title="대기로 복원">↩</button>
-            {% endif %}
-            <button class="btn btn-outline-danger btn-sm worktask-delete-btn ms-1"
-                    data-pk="{{ task.pk }}"
-                    data-title="{{ task.title|escapejs }}"
-                    title="삭제">🗑</button>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+            <!-- 삭제 버튼만 유지 -->
+            <td class="text-center worktask-actions-cell">
+              <button class="btn btn-outline-danger btn-sm worktask-action-btn worktask-delete-btn"
+                      data-pk="{{ task.pk }}"
+                      data-title="{{ task.title|escapejs }}"
+                      title="삭제">🗑</button>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
 
   {% include "board/includes/pagination.html" with page_obj=page_obj %}
 
   {% else %}
-  <div class="text-center text-muted py-5">
-    <p class="fs-5">이번 달 업무 항목이 없습니다.</p>
-    <a href="{% url 'board:worktasks:worktask_create' %}" class="btn btn-primary">
-      첫 업무 등록하기
-    </a>
+  <div class="card shadow border-0 rounded-4">
+    <div class="card-body text-center text-muted py-5">
+      <p class="fs-5 mb-3">이번 달 업무 항목이 없습니다.</p>
+      <a href="{% url 'board:worktasks:worktask_create' %}" class="btn btn-primary">
+        + 첫 업무 등록하기
+      </a>
+    </div>
   </div>
   {% endif %}
 
@@ -211,7 +252,27 @@
 
 <!-- 인라인 편집용 분류 옵션 데이터 -->
 <script id="worktask-category-options" type="application/json">
-  [{% for cat in categories %}{"code":"{{ cat.code }}","label":"{{ cat.label }}"}{% if not forloop.last %},{% endif %}{% endfor %}]
+  [
+    {% for cat in categories %}
+      {
+        "code":"{{ cat.code|escapejs }}",
+        "label":"{{ cat.label|escapejs }}",
+        "order":"{{ cat.sort_order|default:forloop.counter }}"
+      }{% if not forloop.last %},{% endif %}
+    {% endfor %}
+  ]
+</script>
+
+<!-- 인라인 편집용 상태 옵션 데이터 -->
+<script id="worktask-status-options" type="application/json">
+  [
+    {% for val, lbl in status_choices %}
+      {
+        "value":"{{ val|escapejs }}",
+        "label":"{{ lbl|escapejs }}"
+      }{% if not forloop.last %},{% endif %}
+    {% endfor %}
+  ]
 </script>
 
 {% endblock %}
