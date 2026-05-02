@@ -1,14 +1,9 @@
 {% extends "board/base_board.html" %}
-<!-- board/templates/board/worktask_detail.html -->
-<!-- ============================================================
-   WorkTask 상세 페이지
-
-   Boot 패턴: id="worktaskDetailBoot" data-* 로 URL 주입.
-   첨부 링크: ❌ att.file.url 금지 / ✅ worktask_att_download 뷰 경유
-   XSS: {{ task.description|safe }} 사용 금지
-============================================================ -->
-
 {% load static %}
+{# board/templates/board/worktask_detail.html
+   Boot 패턴: id="worktaskDetailBoot" data-* 로 URL 주입.
+   첨부 링크: att.file.url 직접 노출 금지 / worktask_att_download 뷰 경유
+   XSS: task.description|safe 사용 금지 #}
 
 {% block title %}{{ task.title }} — 업무관리{% endblock %}
 
@@ -20,36 +15,43 @@
      data-done-url="{% url 'board:worktasks:worktask_done' task.pk %}"
      data-skip-url="{% url 'board:worktasks:worktask_skip' task.pk %}">
 
-  <!-- ── 브레드크럼 + 수정 버튼 ──────────────────────────── -->
-  <div class="d-flex align-items-center justify-content-between mb-3">
-    <a href="{% url 'board:worktasks:worktask_list' %}"
-       class="btn btn-outline-secondary btn-sm">← 목록으로</a>
-    <a href="{% url 'board:worktasks:worktask_edit' task.pk %}"
-       class="btn btn-outline-primary btn-sm">수정</a>
-  </div>
+  <!-- ── 페이지 제목 ──────────────────────────────────────── -->
+  <h3 class="fw-bold text-center mb-4 board-page-title">업무 상세</h3>
 
   <div class="board-narrow mx-auto">
 
-    <!-- ── 기본 정보 카드 ──────────────────────────────────── -->
-    <div class="card mb-3">
-      <div class="card-body">
+    <!-- ── 상단 내비 버튼 ─────────────────────────────────── -->
+    <div class="d-flex align-items-center justify-content-between mb-3">
+      <a href="{% url 'board:worktasks:worktask_list' %}"
+         class="btn btn-outline-secondary btn-sm">← 목록으로</a>
+      <a href="{% url 'board:worktasks:worktask_edit' task.pk %}"
+         class="btn btn-outline-primary btn-sm">수정</a>
+    </div>
 
-        <!-- 분류 · 상태 · 우선순위 · 반복 뱃지 -->
-        <div class="d-flex flex-wrap gap-2 mb-2 align-items-center">
-          <span class="badge bg-secondary">{{ task.category.label }}</span>
+    <!-- ── 기본 정보 카드 ────────────────────────────────── -->
+    <div class="card shadow border-0 rounded-4 mb-3">
+      <div class="card-body p-4">
+
+        <!-- 뱃지 그룹 -->
+        <div class="d-flex flex-wrap gap-2 mb-3 align-items-center">
+          <span class="worktask-category-badge"
+                data-category="{{ task.category_id }}"
+                data-category-label="{{ task.category.label }}">
+            분류 : {{ task.category.label|default:"-" }}
+          </span>
 
           <span class="worktask-badge status-badge"
                 data-status="{{ task.status }}"
                 id="detail-status-badge">
-            {{ task.get_status_display_label }}
+            상태 : {{ task.get_status_display_label }}
           </span>
 
           {% if task.priority == 'high' %}
-            <span class="badge bg-danger">우선순위: 상</span>
+            <span class="worktask-priority-badge" data-priority="high">우선순위: 상</span>
           {% elif task.priority == 'mid' %}
-            <span class="badge bg-warning text-dark">우선순위: 중</span>
+            <span class="worktask-priority-badge" data-priority="mid">우선순위: 중</span>
           {% else %}
-            <span class="badge bg-secondary">우선순위: 하</span>
+            <span class="worktask-priority-badge" data-priority="low">우선순위: 하</span>
           {% endif %}
 
           {% if task.is_template %}
@@ -63,82 +65,101 @@
         </div>
 
         <!-- 업무명 -->
-        <h5 class="fw-bold mb-2 {% if task.is_overdue %}text-danger{% endif %}">
+        <h5 class="fw-bold mb-3 {% if task.is_overdue %}text-danger{% endif %}">
           {% if task.is_overdue %}⚠️ {% endif %}{{ task.title }}
         </h5>
 
-        {% if task.start_date %}
-        <p class="mb-1 small">
-          <strong>시작일:</strong>
-          {{ task.start_date|date:"Y년 m월 d일" }}
-        </p>
-        {% endif %}
-        
-        <!-- 마감일 + D-day -->
-        {% if task.due_date %}
-        <p class="mb-1 small">
-          <strong>마감일:</strong>
-          <span {% if task.is_overdue %}class="text-danger fw-bold"{% endif %}>
-            {{ task.due_date|date:"Y년 m월 d일" }}
-          </span>
-          <span id="detail-dday"
-              class="ms-2 text-muted"
-              data-due="{{ task.due_date|date:'Y-m-d' }}"></span>
-        </p>
+        {% if task.description %}
+          <div class="board-detail-content mb-3">{{ task.description }}</div>
         {% endif %}
 
-        <!-- 알림 설정 -->
-        <p class="mb-0 small text-muted">
-          마감 {{ task.notify_days_before }}일 전 이메일 알림
-          {% if task.is_notified %}
-            <span class="badge bg-success ms-1">발송 완료</span>
-          {% endif %}
-        </p>
-      </div>
-    </div>
-
-    <!-- ── 메모 ────────────────────────────────────────────── -->
-    {% if task.description %}
-    <div class="card mb-3">
-      <div class="card-header small fw-bold">메모</div>
-      <div class="card-body">
-        <!-- ❌ |safe 금지 — XSS 방지 (worktask.md §13.3) -->
-        <div class="board-detail-content">{{ task.description }}</div>
-      </div>
-    </div>
-    {% endif %}
-
-    <!-- ── 관련 인물 ───────────────────────────────────────── -->
-    {% if related_users %}
-    <div class="card mb-3">
-      <div class="card-header small fw-bold">관련 인물</div>
-      <div class="card-body">
-        <div class="d-flex flex-wrap gap-2">
-          {% for u in related_users %}
-            <span class="worktask-related-user-tag">
-              {{ u.name }}<small class="text-muted ms-1">({{ u.id }})</small>
+        <!-- 일정 정보 -->
+        <div class="d-flex flex-wrap gap-3">
+          <div>
+            <span class="text-muted small fw-semibold">시작일</span><br>
+            <span class="fw-semibold">
+              {% if task.start_date %}{{ task.start_date|date:"Y년 m월 d일" }}{% else %}-{% endif %}
             </span>
-          {% endfor %}
+          </div>
+
+          <div>
+            <span class="text-muted small fw-semibold">마감일</span><br>
+            {% if task.due_date %}
+              <span class="fw-semibold {% if task.is_overdue %}text-danger{% endif %}">
+                {{ task.due_date|date:"Y년 m월 d일" }}
+              </span>
+              <span id="detail-dday"
+                    class="ms-1 text-muted small"
+                    data-due="{{ task.due_date|date:'Y-m-d' }}"></span>
+            {% else %}
+              <span class="fw-semibold">-</span>
+            {% endif %}
+          </div>
+
+          <div>
+            <span class="text-muted small fw-semibold">알림</span><br>
+            <span class="small">마감 {{ task.notify_days_before }}일 전
+              {% if task.is_notified %}
+                <span class="badge bg-success ms-1">발송 완료</span>
+              {% endif %}
+            </span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ── 지점 / 대상 ───────────────────────────────── -->
+    <div class="card shadow border-0 rounded-4 mb-3">
+      <div class="card-body p-4">
+        <div class="row g-4">
+          <div class="col-md-6">
+            <div class="fw-semibold small mb-2">지점</div>
+            <div class="d-flex flex-wrap gap-2">
+              {% for branch in task.family_branches %}
+                <span class="worktask-family-branch-badge">{{ branch }}</span>
+              {% empty %}
+                <span class="text-muted small">-</span>
+              {% endfor %}
+            </div>
+          </div>
+
+          <div class="col-md-6">
+            <div class="fw-semibold small mb-2">대상</div>
+            <div class="d-flex flex-wrap gap-2">
+              {% for u in related_users %}
+                <span class="worktask-related-user-tag">
+                  {{ u.name }}<small class="text-muted ms-1">({{ u.id }})</small>
+                </span>
+              {% empty %}
+                <span class="text-muted small">-</span>
+              {% endfor %}
+            </div>
+          </div>
         </div>
       </div>
     </div>
-    {% endif %}
 
-    <!-- ── 첨부파일 ────────────────────────────────────────── -->
-    <div class="card mb-3">
-      <div class="card-header small fw-bold">첨부파일 ({{ attachments|length }})</div>
-      <div class="card-body">
+    <!-- ── 첨부파일 ──────────────────────────────────────── -->
+    <div class="card shadow border-0 rounded-4 mb-3">
+      <div class="card-header bg-white border-0 pb-0 pt-3 px-4">
+        <span class="fw-semibold small board-section-title-primary">
+          첨부파일
+          {% if attachments %}<span class="badge bg-secondary ms-1">{{ attachments|length }}</span>{% endif %}
+        </span>
+      </div>
+      <div class="card-body px-4 pb-4 pt-2">
         {% if attachments %}
           <ul class="list-unstyled mb-0">
             {% for att in attachments %}
-              <li class="d-flex align-items-center gap-2 mb-1">
-                📎
-                <!-- ✅ 반드시 다운로드 뷰 경유 (worktask.md §13.1) -->
+              <li class="d-flex align-items-center gap-2 mb-2">
+                <span class="text-muted">📎</span>
+                {# 반드시 다운로드 뷰 경유 — att.file.url 직접 링크 금지 #}
                 <a href="{% url 'board:worktasks:worktask_att_download' att.id %}"
                    class="board-file-link text-truncate">
                   {{ att.original_name }}
                 </a>
-                <small class="text-muted ms-auto">{{ att.uploaded_at|date:"m/d H:i" }}</small>
+                <small class="text-muted ms-auto flex-shrink-0">{{ att.uploaded_at|date:"m/d H:i" }}</small>
               </li>
             {% endfor %}
           </ul>
@@ -148,36 +169,13 @@
       </div>
     </div>
 
-    <!-- ── 인라인 상태 변경 버튼 ───────────────────────────── -->
-    {% if task.status != 'done' and task.status != 'skipped' %}
-    <div class="d-flex gap-2 mb-3" id="detail-action-btns">
-      <button id="btn-detail-done"
-              class="btn btn-success flex-grow-1"
-              data-pk="{{ task.pk }}">
-        ✓ 완료 처리
-      </button>
-      <button id="btn-detail-skip"
-              class="btn btn-outline-secondary flex-grow-1"
-              data-pk="{{ task.pk }}">
-        ↷ 건너뜀
-      </button>
-    </div>
-    {% endif %}
-
-    <!-- ── 상태 해제 버튼 (완료/건너뜀 상태일 때만 표시) ── -->
-    {% if task.status == 'done' or task.status == 'skipped' %}
-    <div class="d-flex gap-2 mb-3" id="detail-reset-btns">
-      <button id="btn-detail-reset"
-              class="btn btn-outline-secondary flex-grow-1"
-              data-pk="{{ task.pk }}"
-              data-reset-url="{% url 'board:worktasks:worktask_reset' task.pk %}">
-        ↩ 대기로 복원
-      </button>
-    </div>
-    {% endif %}
-
-    <!-- ── 삭제 버튼 ──────────────────────────────────────── -->
-    <div class="d-flex justify-content-end mb-3">
+    <!-- ── 하단 영역: 삭제 + 감사 정보 ─────────────────── -->
+    <div class="d-flex align-items-center justify-content-between mb-2">
+      <p class="text-muted small mb-0">
+        등록: {{ task.created_at|date:"Y-m-d H:i" }}
+        &nbsp;·&nbsp;
+        수정: {{ task.updated_at|date:"Y-m-d H:i" }}
+      </p>
       <button class="btn btn-outline-danger btn-sm worktask-delete-btn"
               data-pk="{{ task.pk }}"
               data-title="{{ task.title|escapejs }}"
@@ -185,14 +183,7 @@
               data-redirect-url="{% url 'board:worktasks:worktask_list' %}">
         🗑 삭제
       </button>
-    </div>    
-    
-    <!-- ── 감사 정보 ───────────────────────────────────────── -->
-    <p class="text-muted small text-end">
-      등록: {{ task.created_at|date:"Y-m-d H:i" }}
-      &nbsp;|&nbsp;
-      수정: {{ task.updated_at|date:"Y-m-d H:i" }}
-    </p>
+    </div>
 
   </div><!-- /board-narrow -->
 </div><!-- /worktaskDetailBoot -->

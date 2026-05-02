@@ -1,195 +1,265 @@
-<!-- board/templates/board/worktask_edit.html -->
-<!-- 업무 항목 수정 폼 -->
 {% extends "board/base_board.html" %}
 {% load static %}
+{# board/templates/board/worktask_edit.html — 업무 항목 수정 폼 #}
 
 {% block title %}{{ task.title }} 수정 — 업무관리{% endblock %}
 
 {% block content %}
+
+<!-- ── 페이지 제목 ──────────────────────────────────────────── -->
+<h3 class="fw-bold text-center mb-4 board-page-title">업무 수정</h3>
+
 <div class="board-narrow mx-auto">
 
-  <div class="d-flex align-items-center justify-content-between mb-3">
-    <h5 class="board-page-title mb-0">업무 수정</h5>
-    <a href="{% url 'board:worktasks:worktask_detail' task.pk %}"
-       class="btn btn-outline-secondary btn-sm">상세로</a>
-  </div>
-
   {% if error %}
-    <div class="alert alert-danger">{{ error }}</div>
+    <div class="alert alert-danger mb-3">{{ error }}</div>
   {% endif %}
 
-  <form method="post" enctype="multipart/form-data" id="worktaskEditForm">
-    {% csrf_token %}
+  <div class="card shadow border-0 rounded-4">
+    <div class="card-body p-4">
 
-    <!-- 분류 -->
-    <div class="mb-3">
-      <label for="id_category" class="form-label fw-semibold">
-        구분 <span class="text-danger">*</span>
-      </label>
-      <select name="category" id="id_category" class="form-select" required>
-        {% for cat in categories %}
-          <option value="{{ cat.code }}"
-                  {% if task.category_id == cat.code %}selected{% endif %}>
-            {{ cat.label }}
-          </option>
-        {% endfor %}
-      </select>
-    </div>
+      <form method="post" enctype="multipart/form-data" id="worktaskEditForm">
+        {% csrf_token %}
 
-    <!-- 업무명 -->
-    <div class="mb-3">
-      <label for="id_title" class="form-label fw-semibold">
-        업무명 <span class="text-danger">*</span>
-      </label>
-      <input type="text" name="title" id="id_title"
-             class="form-control" maxlength="200"
-             value="{{ task.title }}" required>
-    </div>
+        <!-- ── 기본 정보 ───────────────────────────────────── -->
+        <div class="mb-3">
+          <label for="id_category" class="form-label fw-semibold mb-1">
+            분류 <span class="text-danger">*</span>
+          </label>
+          <select name="category" id="id_category" class="form-select" required>
+            {% for cat in categories %}
+              <option value="{{ cat.code }}"
+                      {% if task.category_id == cat.code %}selected{% endif %}>
+                {{ cat.label }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
 
-    <!-- 메모 -->
-    <div class="mb-3">
-      <label for="id_description" class="form-label fw-semibold">메모</label>
-      <textarea name="description" id="id_description"
-                class="form-control" rows="4">{{ task.description }}</textarea>
-    </div>
+        <div class="mb-3">
+          <label for="id_title" class="form-label fw-semibold mb-1">
+            업무명 <span class="text-danger">*</span>
+          </label>
+          <input type="text" name="title" id="id_title"
+                 class="form-control" maxlength="200"
+                 value="{{ task.title }}" required>
+        </div>
 
-    <!-- 상태 -->
-    <div class="mb-3">
-      <label for="id_status" class="form-label fw-semibold">상태</label>
-      <select name="status" id="id_status" class="form-select">
-        {% for val, lbl in task.STATUS_CHOICES %}
-          <option value="{{ val }}" {% if task.status == val %}selected{% endif %}>
-            {{ lbl }}
-          </option>
-        {% endfor %}
-      </select>
-    </div>
+        <div class="mb-4">
+          <label for="id_description" class="form-label fw-semibold mb-1">메모</label>
+          <textarea name="description" id="id_description"
+                    class="form-control" rows="4">{{ task.description }}</textarea>
+        </div>
 
-    <!-- 시작일 -->
-    <div class="mb-3">
-      <label for="id_start_date" class="form-label fw-semibold">시작일</label>
-      <input type="date" name="start_date" id="id_start_date"
-             class="form-control"
-             value="{{ task.start_date|date:'Y-m-d'|default:'' }}">
-    </div>
-    
-    <!-- 마감일 -->
-    <div class="mb-3">
-      <label for="id_due_date" class="form-label fw-semibold">마감일</label>
-      <input type="date" name="due_date" id="id_due_date"
-             class="form-control"
-             value="{{ task.due_date|date:'Y-m-d'|default:'' }}">
-    </div>
+        <!-- ── 상태 ───────────────────────────────────────── -->
+        <div class="mb-4">
+          <label for="id_status" class="form-label fw-semibold mb-1">상태</label>
+          <select name="status" id="id_status" class="form-select">
+            {% for val, lbl in task.STATUS_CHOICES %}
+              <option value="{{ val }}" {% if task.status == val %}selected{% endif %}>
+                {{ lbl }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
 
-    <!-- 우선순위 -->
-    <div class="mb-3">
-      <label for="id_priority" class="form-label fw-semibold">우선순위</label>
-      <select name="priority" id="id_priority" class="form-select">
-        <option value="high" {% if post_data.priority == 'high' %}selected{% endif %}>상</option>
-        <option value="mid"  {% if post_data.priority == 'mid' or not post_data.priority %}selected{% endif %}>중</option>
-        <option value="low"  {% if post_data.priority == 'low' %}selected{% endif %}>하</option>
-      </select>
-    </div>
+        <!-- ── 일정 및 우선순위 ──────────────────────────── -->
+        <hr class="my-3">
+        <p class="fw-semibold mb-3 small board-section-title-primary">일정 및 우선순위</p>
 
-    <!-- 반복 유형 -->
-    <div class="mb-3">
-      <label for="id_recurrence_type" class="form-label fw-semibold">반복 유형</label>
-      <select name="recurrence_type" id="id_recurrence_type" class="form-select">
-        {% for val, lbl in task.RECURRENCE_CHOICES %}
-          <option value="{{ val }}" {% if task.recurrence_type == val %}selected{% endif %}>
-            {{ lbl }}
-          </option>
-        {% endfor %}
-      </select>
-    </div>
+        <div class="row g-3 mb-3">
+          <div class="col-md-4">
+            <label for="id_start_date" class="form-label fw-semibold mb-1">시작일</label>
+            <input type="date" name="start_date" id="id_start_date"
+                   class="form-control"
+                   value="{{ task.start_date|date:'Y-m-d'|default:'' }}">
+          </div>
+          <div class="col-md-4">
+            <label for="id_due_date" class="form-label fw-semibold mb-1">마감일</label>
+            <input type="date" name="due_date" id="id_due_date"
+                   class="form-control"
+                   value="{{ task.due_date|date:'Y-m-d'|default:'' }}">
+          </div>
+          <div class="col-md-4">
+            <label for="id_priority" class="form-label fw-semibold mb-1">우선순위</label>
+            <select name="priority" id="id_priority" class="form-select">
+              <option value="high" {% if task.priority == 'high' %}selected{% endif %}>상</option>
+              <option value="mid"  {% if task.priority == 'mid' %}selected{% endif %}>중</option>
+              <option value="low"  {% if task.priority == 'low' %}selected{% endif %}>하</option>
+            </select>
+          </div>
+        </div>
 
-    <!-- custom 전용 일자 -->
-    <div class="mb-3 {% if task.recurrence_type != 'custom' %}d-none{% endif %}"
-         id="recurrence-day-group">
-      <label for="id_recurrence_day" class="form-label fw-semibold">
-        반복 일자 (1~28)
-      </label>
-      <input type="number" name="recurrence_day" id="id_recurrence_day"
-             class="form-control" min="1" max="28"
-             value="{{ task.recurrence_day|default:'' }}">
-    </div>
+        <!-- ── 반복 설정 ──────────────────────────────────── -->
+        <hr class="my-3">
+        <p class="fw-semibold mb-3 small board-section-title-primary">반복 설정</p>
 
-    <!-- 알림 설정 -->
-    <div class="mb-3">
-      <label for="id_notify_days_before" class="form-label fw-semibold">
-        마감 N일 전 이메일 알림
-      </label>
-      <input type="number" name="notify_days_before" id="id_notify_days_before"
-             class="form-control" min="0" max="30"
-             value="{{ task.notify_days_before }}">
-    </div>
+        <div class="mb-3">
+          <label for="id_recurrence_type" class="form-label fw-semibold mb-1">반복 유형</label>
+          <select name="recurrence_type" id="id_recurrence_type" class="form-select">
+            {% for val, lbl in task.RECURRENCE_CHOICES %}
+              <option value="{{ val }}" {% if task.recurrence_type == val %}selected{% endif %}>
+                {{ lbl }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
 
-    <!-- 관련 인물 -->
-    <div class="mb-3">
-      <label class="form-label fw-semibold">관련 인물</label>
-      <div id="related-users-tags" class="d-flex flex-wrap gap-1 mb-2">
-        {% for u in task.related_users.all %}
-          <span class="worktask-related-user-tag" data-uid="{{ u.id }}">
-            {{ u.name }}<small class="text-muted ms-1">({{ u.id }})</small>
+        <!-- custom 전용 일자 -->
+        <div class="mb-3 {% if task.recurrence_type != 'custom' %}d-none{% endif %}"
+             id="recurrence-day-group">
+          <label for="id_recurrence_day" class="form-label fw-semibold mb-1">
+            반복 일자 (1~28)
+          </label>
+          <input type="number" name="recurrence_day" id="id_recurrence_day"
+                 class="form-control" min="1" max="28"
+                 value="{{ task.recurrence_day|default:'' }}">
+        </div>
+
+        <!-- ── 알림 설정 ──────────────────────────────────── -->
+        <hr class="my-3">
+        <p class="fw-semibold mb-3 small board-section-title-primary">알림 설정</p>
+
+        <div class="mb-3">
+          <label for="id_notify_days_before" class="form-label fw-semibold mb-1">
+            마감 N일 전 이메일 알림
+          </label>
+          <div class="d-flex align-items-center gap-2">
+            <input type="number" name="notify_days_before" id="id_notify_days_before"
+                   class="form-control worktask-notify-days-input" min="0" max="30"
+                   value="{{ task.notify_days_before }}">
+            <span class="text-muted small">일 전 (0 = 알림 없음)</span>
+          </div>
+        </div>
+
+        <!-- ── 지점 / 대상 ─────────────────────────────── -->
+        <hr class="my-3">
+        <div class="row g-3 mb-3">
+          <div class="col-md-6">
+           <p class="fw-semibold mb-2 small board-section-title-primary">지점</p>
+            <div id="family-branches-tags" class="d-flex flex-wrap gap-1 mb-2 min-height-32">
+              {% for branch in task.family_branches %}
+                <span class="worktask-family-branch-tag" data-branch="{{ branch }}">
+                  {{ branch }}
+                  <button type="button"
+                          class="btn-close btn-close-sm ms-1 worktask-remove-family-branch"
+                          data-branch="{{ branch }}" aria-label="제거"></button>
+                </span>
+                <input type="hidden" name="family_branches" value="{{ branch }}"
+                       id="hidden-family-branch-{{ forloop.counter }}">
+              {% endfor %}
+            </div>
             <button type="button"
-                    class="btn-close btn-close-sm ms-1 worktask-remove-user"
-                    data-uid="{{ u.id }}" aria-label="제거"></button>
-          </span>
-          <input type="hidden" name="related_users" value="{{ u.id }}"
-                 id="hidden-uid-{{ u.id }}">
-        {% endfor %}
-      </div>
-      <button type="button"
-              class="btn btn-outline-secondary btn-sm btnOpenSearch"
-              id="btn-search-related-user"
-              data-bs-toggle="modal"
-              data-bs-target="#searchUserModal">
-        + 관련 인물 추가
-      </button>
-      <div id="related-users-hidden-inputs"></div>
-    </div>
+                    class="btn btn-outline-secondary btn-sm"
+                    id="btn-add-family-branch"
+                    data-bs-toggle="modal"
+                    data-bs-target="#worktaskFamilyBranchModal">
+              + 지점 추가
+            </button>
+            <div id="family-branches-hidden-inputs"></div>
+          </div>
 
-    <!-- 기존 첨부파일 + 삭제 체크박스 -->
-    {% if attachments %}
-    <div class="mb-3">
-      <label class="form-label fw-semibold">기존 첨부파일</label>
-      <ul class="list-unstyled">
-        {% for att in attachments %}
-          <li class="d-flex align-items-center gap-2 mb-1">
-            📎
-            <!-- ✅ 다운로드 뷰 경유 — att.file.url 직접 링크 금지 -->
-            <a href="{% url 'board:worktasks:worktask_att_download' att.id %}"
-               class="board-file-link text-truncate">
-              {{ att.original_name }}
-            </a>
-            <label class="text-danger small ms-auto d-flex align-items-center gap-1">
-              <input type="checkbox" name="delete_att_{{ att.id }}" value="1">
-              삭제
-            </label>
-          </li>
-        {% endfor %}
-      </ul>
-    </div>
-    {% endif %}
+          <div class="col-md-6">
+            <p class="fw-semibold mb-2 small board-section-title-primary">대상</p>
+            <div id="related-users-tags" class="d-flex flex-wrap gap-1 mb-2">
+            {% for u in task.related_users.all %}
+              <span class="worktask-related-user-tag" data-uid="{{ u.id }}">
+                {{ u.name }}<small class="text-muted ms-1">({{ u.id }})</small>
+                <button type="button"
+                        class="btn-close btn-close-sm ms-1 worktask-remove-user"
+                        data-uid="{{ u.id }}" aria-label="제거"></button>
+              </span>
+              <input type="hidden" name="related_users" value="{{ u.id }}"
+                     id="hidden-uid-{{ u.id }}">
+            {% endfor %}
+          </div>
+          <button type="button"
+                    class="btn btn-outline-secondary btn-sm btnOpenSearch"
+                    id="btn-search-related-user"
+                    data-bs-toggle="modal"
+                    data-bs-target="#searchUserModal">
+              + 대상 추가
+            </button>
+            <div id="related-users-hidden-inputs"></div>
+          </div>
+        </div>
 
-    <!-- 추가 첨부파일 -->
-    <div class="mb-3">
-      <label for="id_attachments" class="form-label fw-semibold">첨부파일 추가</label>
-      <input type="file" name="attachments" id="id_attachments"
-             class="form-control" multiple>
-    </div>
+        <!-- ── 기존 첨부파일 ──────────────────────────────── -->
+        {% if attachments %}
+        <hr class="my-3">
+        <p class="fw-semibold mb-3 small board-section-title-primary">기존 첨부파일</p>
 
-    <div class="d-flex gap-2 mt-4">
-      <button type="submit" class="btn btn-primary flex-grow-1"
-              id="btn-edit-submit">저장</button>
-      <a href="{% url 'board:worktasks:worktask_detail' task.pk %}"
-         class="btn btn-outline-secondary">취소</a>
-    </div>
-  </form>
+        <div class="mb-3">
+          <ul class="list-unstyled mb-0">
+            {% for att in attachments %}
+              <li class="d-flex align-items-center gap-2 mb-2">
+                <span class="text-muted">📎</span>
+                {# 다운로드 뷰 경유 — att.file.url 직접 링크 금지 #}
+                <a href="{% url 'board:worktasks:worktask_att_download' att.id %}"
+                   class="board-file-link text-truncate">
+                  {{ att.original_name }}
+                </a>
+                <label class="text-danger small ms-auto d-flex align-items-center gap-1 flex-shrink-0">
+                  <input type="checkbox" name="delete_att_{{ att.id }}" value="1">
+                  삭제
+                </label>
+              </li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% endif %}
 
-</div>
+        <!-- ── 첨부파일 추가 ──────────────────────────────── -->
+        <hr class="my-3">
+        <p class="fw-semibold mb-3 small board-section-title-primary">첨부파일 추가</p>
+
+        <div class="mb-4">
+          <input type="file" name="attachments" id="id_attachments"
+                 class="form-control" multiple>
+        </div>
+
+        <!-- ── 제출 버튼 ──────────────────────────────────── -->
+        <div class="d-flex gap-2 mt-2">
+          <button type="submit" class="btn btn-primary flex-grow-1"
+                  id="btn-edit-submit">저장</button>
+          <a href="{% url 'board:worktasks:worktask_detail' task.pk %}"
+             class="btn btn-outline-secondary">취소</a>
+        </div>
+
+      </form>
+    </div><!-- /card-body -->
+  </div><!-- /card -->
+
+</div><!-- /board-narrow -->
 
 {% include "components/search_user_modal.html" %}
+
+<!-- 지점 선택 모달 -->
+<div class="modal fade" id="worktaskFamilyBranchModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">지점 추가</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="닫기"></button>
+      </div>
+      <div class="modal-body">
+        <label for="worktaskFamilyBranchSelect" class="form-label fw-semibold">지점 선택</label>
+        <select id="worktaskFamilyBranchSelect" class="form-select">
+          <option value="">— 지점 선택 —</option>
+          {% for branch in branch_options %}
+            <option value="{{ branch }}">{{ branch }}</option>
+          {% endfor %}
+        </select>
+        <div class="form-text">현재 사용 가능한 지점 목록 중 선택합니다. 여러 개 추가할 수 있습니다.</div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">닫기</button>
+        <button type="button" class="btn btn-primary" id="btn-confirm-family-branch">추가</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block extra_js %}

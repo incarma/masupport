@@ -28,12 +28,41 @@ from django.http import (
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
+from django.db.models.functions import Trim
 
 from accounts.decorators import grade_required
+from accounts.models import CustomUser
 from board.models import WorkCategory, WorkTask, WorkTaskAttachment
 from board.services import worktasks as wt_svc
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# 지점 옵션 유틸
+# =============================================================================
+
+def _get_worktask_branch_options(request) -> list[str]:
+    """
+    WorkTask 지점 선택 옵션.
+    - superuser: 활성 사용자 CustomUser.branch 전체 distinct
+    - 그 외: 본인 branch만 노출
+    """
+    user = request.user
+
+    if getattr(user, "grade", "") == "superuser":
+        return list(
+            CustomUser.objects
+            .filter(is_active=True)
+            .annotate(branch_name=Trim("branch"))
+            .exclude(branch_name="")
+            .values_list("branch_name", flat=True)
+            .distinct()
+            .order_by("branch_name")
+        )
+
+    branch = (getattr(user, "branch", "") or "").strip()
+    return [branch] if branch else []
 
 
 # =============================================================================
@@ -138,11 +167,15 @@ def worktask_create(request):
             logger.exception("WorkTask 생성 실패: user=%s", request.user.pk)
             return render(request, "board/worktask_create.html", {
                 "categories": categories,
+                "branch_options": _get_worktask_branch_options(request),
                 "error":      "저장 중 오류가 발생했습니다. 다시 시도해 주세요.",
                 "post_data":  request.POST,
             })
 
-    return render(request, "board/worktask_create.html", {"categories": categories})
+    return render(request, "board/worktask_create.html", {
+        "categories": categories,
+        "branch_options": _get_worktask_branch_options(request),
+    })
 
 
 # =============================================================================
@@ -202,6 +235,7 @@ def worktask_edit(request, pk: int):
                 "task":       task,
                 "categories": categories,
                 "attachments": task.attachments.all(),
+                "branch_options": _get_worktask_branch_options(request),
                 "error":      "저장 중 오류가 발생했습니다. 다시 시도해 주세요.",
             })
 
@@ -209,6 +243,7 @@ def worktask_edit(request, pk: int):
         "task":        task,
         "categories":  categories,
         "attachments": task.attachments.all(),
+        "branch_options": _get_worktask_branch_options(request),
     })
 
 
@@ -352,7 +387,7 @@ def worktask_inline_update(request, pk: int):
     목록 페이지 인라인 셀 편집 AJAX (POST).
 
     POST body (JSON):
-        field : "category" | "priority" | "start_date" | "due_date"
+        field : "category" | "priority" | "start_date" | "due_date" | "status"
         value : 새 값 (문자열)
 
     성공: {"ok": true, "field": ..., "value": ..., "display": ...}
@@ -369,7 +404,7 @@ def worktask_inline_update(request, pk: int):
     except (json.JSONDecodeError, AttributeError):
         return _err("잘못된 요청입니다.")
 
-    ALLOWED_FIELDS = {"category", "priority", "start_date", "due_date"}
+    ALLOWED_FIELDS = {"category", "priority", "start_date", "due_date", "status"}
     if field not in ALLOWED_FIELDS:
         return _err(f"수정 불가 필드: {field}")
 
@@ -391,6 +426,14 @@ def worktask_inline_update(request, pk: int):
         task.save(update_fields=["priority", "updated_at"])
         display = dict(WorkTask.PRIORITY_CHOICES).get(value, value)
         return _ok(field=field, value=value, display=display)
+    
+    elif field == "status":
+        status_map = dict(WorkTask.STATUS_CHOICES)
+        if value not in status_map:
+            return _err("잘못된 상태 값입니다.")
+        task.status = value
+        task.save(update_fields=["status", "updated_at"])
+        return _ok(field=field, value=value, display=status_map.get(value, value))
 
     elif field in ("start_date", "due_date"):
         if value:
@@ -475,8 +518,8 @@ def _extract_post_data(request) -> dict:
         "recurrence_type":     post.get("recurrence_type", WorkTask.RECURRENCE_NONE),
         "recurrence_day":      _int_or("recurrence_day", None),
         "status":              post.get("status", WorkTask.STATUS_PENDING),
-        "priority":            _int_or("priority", 50),
         "priority":            post.get("priority", WorkTask.PRIORITY_MID),
         "notify_days_before":  _int_or("notify_days_before", 3),
         "related_users":       related,
+        "family_branches":     post.getlist("family_branches"),
     }

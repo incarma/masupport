@@ -136,6 +136,8 @@ def create_task(user, data: dict) -> WorkTask:
     related_users = data.pop("related_users", [])
 
     with transaction.atomic():
+        if "family_branches" in data:
+            data["family_branches"] = _clean_family_branches(data.get("family_branches"))
         task = WorkTask(**data, owner=user)
         task.full_clean()
         task.save()
@@ -149,6 +151,30 @@ def create_task(user, data: dict) -> WorkTask:
     return task
 
 
+def _clean_family_branches(values):
+    """
+    WorkTask 영업가족 지점명 목록 정규화.
+    - 템플릿에서는 name="family_branches" 다중 hidden input으로 전송
+    - DB에는 JSON list[str]로 저장
+    - 순서 유지 + 중복 제거
+   """
+    if not values:
+        return []
+
+    if isinstance(values, str):
+        values = [values]
+
+    cleaned = []
+    seen = set()
+    for value in values:
+        branch = str(value or "").strip()
+        if not branch or branch in seen:
+            continue
+        cleaned.append(branch)
+        seen.add(branch)
+    return cleaned
+
+
 def update_task(task: WorkTask, data: dict) -> WorkTask:
     """
     WorkTask 수정.
@@ -160,6 +186,7 @@ def update_task(task: WorkTask, data: dict) -> WorkTask:
     # owner 변경 시도 방어
     data.pop("owner",    None)
     data.pop("owner_id", None)
+    data["family_branches"] = _clean_family_branches(data.get("family_branches"))
 
     with transaction.atomic():
         for field, value in data.items():
