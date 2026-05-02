@@ -6,7 +6,7 @@
 {% block content %}
 
 <!-- ── 페이지 제목 ──────────────────────────────────────────── -->
-<h3 class="fw-bold text-center mb-4 board-page-title">업무 등록</h3>
+<h3 class="fw-bold text-center mb-4 board-page-title">업무등록</h3>
 
 <div class="board-narrow mx-auto">
 
@@ -102,22 +102,6 @@
           <input type="number" name="recurrence_day" id="id_recurrence_day"
                  class="form-control" min="1" max="28"
                  value="{{ post_data.recurrence_day|default:'' }}">
-        </div>
-
-        <!-- ── 알림 설정 ──────────────────────────────────── -->
-        <hr class="my-3">
-        <p class="fw-semibold mb-3 small board-section-title-primary">알림 설정</p>
-
-        <div class="mb-3">
-          <label for="id_notify_days_before" class="form-label fw-semibold mb-1">
-            마감 N일 전 이메일 알림
-          </label>
-          <div class="d-flex align-items-center gap-2">
-            <input type="number" name="notify_days_before" id="id_notify_days_before"
-                   class="form-control worktask-notify-days-input" min="0" max="30"
-                   value="{{ post_data.notify_days_before|default:'3' }}">
-            <span class="text-muted small">일 전 (0 = 알림 없음)</span>
-          </div>
         </div>
 
         <!-- ── 지점 / 대상 ─────────────────────────────── -->

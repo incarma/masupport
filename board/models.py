@@ -720,3 +720,4 @@ class WorkTaskAttachment(models.Model):
 
     def __str__(self):
         return f"{self.original_name} (task={self.task_id})"
+

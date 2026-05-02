@@ -8,8 +8,7 @@
 <div id="worktaskListBoot"
      class="worktask-list-wide"
      data-delete-url="{% url 'board:worktasks:worktask_delete' 0 %}"
-     data-inline-url="{% url 'board:worktasks:worktask_inline_update' 0 %}"
-     data-notify-url="{% url 'board:worktasks:worktask_notify_check' %}">
+     data-inline-url="{% url 'board:worktasks:worktask_inline_update' 0 %}">
 
   <!-- ── 페이지 제목 ──────────────────────────────────────── -->
   <h3 class="fw-bold text-center mb-4 board-page-title">업무관리</h3>
@@ -69,11 +68,6 @@
     </form>
   </div>
 
-  <!-- ── 마감 임박 알림 배너 ──────────────────────────────── -->
-  <div id="worktask-notify-banner" class="alert alert-warning py-2 d-none" role="alert">
-    <span id="worktask-notify-text"></span>
-  </div>
-
   <!-- ── 목록 ─────────────────────────────────────────────── -->
   {% if page_obj.object_list %}
   <div class="card shadow border-0 rounded-4 overflow-hidden mb-3">
@@ -111,13 +105,15 @@
               data-pk="{{ task.pk }}"
               data-status="{{ task.status }}">
 
-            <!-- 분류 — 단순 텍스트 표시 -->
+            <!-- 분류 -->
             <td class="worktask-cell-edit"
                 data-field="category"
                 data-value="{{ task.category_id }}"
                 data-pk="{{ task.pk }}">
               <span class="worktask-cell-display">
-                {{ task.category.label|default:"-" }}
+                <span class="worktask-category-badge">
+                  {{ task.category.label|default:"-" }}
+                </span>
                 {% if task.is_template %}
                   <span class="worktask-template-badge ms-1" title="반복 원본">↺</span>
                 {% endif %}
@@ -199,7 +195,7 @@
                   <span {% if task.is_overdue %}class="text-danger fw-bold"{% endif %}>
                     {{ task.due_date|date:"m/d" }}
                   </span>
-                  <small class="text-muted ms-1"
+                  <small class="worktask-dday-badge ms-1"
                          data-dday="{{ task.due_date|date:'Y-m-d' }}"></small>
                 {% else %}
                   <span class="text-muted">-</span>

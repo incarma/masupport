@@ -1244,16 +1244,6 @@
   line-height: 1;
 }
 
-/* WorkTask 목록에서는 분류를 단순 텍스트로 표시한다. */
-.board-scope .worktask-table .worktask-category-badge{
-  background: transparent;
-  border: 0;
-  color: #212529;
-  padding: 0;
-  border-radius: 0;
-  font-weight: 400;
-}
-
 /* 상세 상단 메타 배지 전용 */
 .board-scope #worktaskDetailBoot .worktask-category-badge{
   display: inline-block;
@@ -1304,4 +1294,24 @@
   background: #e7f1ff;
   border-color: #9ec5fe;
   color: #084298;
+}
+
+.board-scope .worktask-category-badge,
+.board-scope .worktask-dday-badge {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  border-radius: 999px;
+  padding: 0.18rem 0.55rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.2;
+  border: 1px solid rgba(0, 63, 125, 0.16);
+  background: rgba(0, 63, 125, 0.08);
+  color: #003f7d;
+  white-space: nowrap;
+}
+
+.board-scope .worktask-dday-badge:empty {
+  display: none;
 }
