@@ -117,7 +117,7 @@ import { getCSRFToken } from "../common/manage/csrf.js";
 
   if      (diff > 0)  el.textContent = `D-${diff}`;
   else if (diff === 0) el.textContent = "D-day";
-  else                el.textContent = `D+${Math.abs(diff)} 초과`;
+  else                el.textContent = `D+${Math.abs(diff)}`;
 })();
 
 // =============================================================================

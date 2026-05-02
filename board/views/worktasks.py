@@ -519,7 +519,6 @@ def _extract_post_data(request) -> dict:
         "recurrence_day":      _int_or("recurrence_day", None),
         "status":              post.get("status", WorkTask.STATUS_PENDING),
         "priority":            post.get("priority", WorkTask.PRIORITY_MID),
-        "notify_days_before":  _int_or("notify_days_before", 3),
         "related_users":       related,
         "family_branches":     post.getlist("family_branches"),
     }

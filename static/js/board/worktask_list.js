@@ -6,7 +6,6 @@
  * 역할:
  *   - 인라인 셀 편집 (분류 / 우선순위 / 시작일 / 마감일 / 상태)
  *   - 삭제 처리
- *   - 마감 임박 알림 폴링 (notify-check API) → 배너 표시
  *   - D-day 계산 렌더링
  *   - BFCache(뒤로가기) 대응
  *
@@ -44,11 +43,6 @@ if (boot.dataset.inited === "1") {
   _init();
 }
 
-// BFCache 대응: 뒤로가기 복귀 시 알림 배너만 재폴링
-window.addEventListener("pageshow", (e) => {
-  if (e.persisted) _pollNotify();
-});
-
 
 // =============================================================================
 // 초기화
@@ -57,7 +51,6 @@ function _init() {
   _bindDeleteButtons();
   _bindInlineEdit();
   _renderDdays();
-  _pollNotify();
 }
 
 
@@ -237,25 +230,29 @@ function _bindInlineEdit() {
               }
             } else if (field === "category") {
               const selectedOpt = editor.options[editor.selectedIndex];
-              newDisplay.textContent = result.display || selectedOpt?.textContent || newVal || "-";
-              newDisplay.classList.add("worktask-category-text");
+              const badge = document.createElement("span");
+              badge.className = "worktask-category-badge";
+              badge.textContent = result.display || selectedOpt?.textContent || newVal || "-";
+              newDisplay.appendChild(badge);
             } else {
               // start_date / due_date
               if (newVal) {
-                newDisplay.textContent = result.display || newVal;
+                const dateText = document.createElement("span");
+                dateText.textContent = result.display || newVal;
+                newDisplay.appendChild(dateText);
+
+                if (field === "due_date") {
+                  const dday = document.createElement("small");
+                  dday.className = "worktask-dday-badge ms-1";
+                  dday.dataset.dday = newVal;
+                  newDisplay.appendChild(dday);
+                }
               } else {
                 newDisplay.innerHTML = `<span class="text-muted">-</span>`;
               }
-              // due_date 변경 시 D-day 재계산
-              if (field === "due_date") {
-                const ddayEl = cell.querySelector("[data-dday]");
-                if (ddayEl) {
-                  ddayEl.dataset.dday = newVal;
-                  _renderDdays();
-                }
-              }
             }
             editor.replaceWith(newDisplay);
+            if (field === "due_date") _renderDdays();
 
           } else {
             alert(result.error || "저장 실패");
@@ -300,44 +297,6 @@ function _renderDdays() {
     else if (diff === 0) el.textContent = "D-day";
     else                el.textContent = `D+${Math.abs(diff)}`;
   });
-}
-
-
-// =============================================================================
-// 알림 폴링
-// =============================================================================
-async function _pollNotify() {
-  const url = boot.dataset.notifyUrl;
-  if (!url) return;
-
-  try {
-    const res  = await fetch(url, { headers: { "X-Requested-With": "XMLHttpRequest" } });
-    if (!res.ok) return;
-    const data = await _safeJson(res);
-
-    if (data.ok && data.count > 0) {
-      _showBanner(data.count, data.items || []);
-    } else {
-      _hideBanner();
-    }
-  } catch (e) {
-    console.warn("[worktask_list] notify poll failed:", e);
-  }
-}
-
-function _showBanner(count, items) {
-  const banner = document.getElementById("worktask-notify-banner");
-  const text   = document.getElementById("worktask-notify-text");
-  if (!banner || !text) return;
-
-  const preview = items.slice(0, 3).map((i) => `"${i.title}"`).join(", ");
-  const extra   = count > 3 ? ` 외 ${count - 3}건` : "";
-  text.textContent = `⚠️ 마감 임박 업무 ${count}건: ${preview}${extra}`;
-  banner.classList.remove("d-none");
-}
-
-function _hideBanner() {
-  document.getElementById("worktask-notify-banner")?.classList.add("d-none");
 }
 
 

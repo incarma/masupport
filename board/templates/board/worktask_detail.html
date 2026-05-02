@@ -16,7 +16,7 @@
      data-skip-url="{% url 'board:worktasks:worktask_skip' task.pk %}">
 
   <!-- ── 페이지 제목 ──────────────────────────────────────── -->
-  <h3 class="fw-bold text-center mb-4 board-page-title">업무 상세</h3>
+  <h3 class="fw-bold text-center mb-4 board-page-title">업무상세</h3>
 
   <div class="board-narrow mx-auto">
 
@@ -72,40 +72,33 @@
         {% if task.description %}
           <div class="board-detail-content mb-3">{{ task.description }}</div>
         {% endif %}
+      </div>
+    </div>
 
-        <!-- 일정 정보 -->
-        <div class="d-flex flex-wrap gap-3">
-          <div>
-            <span class="text-muted small fw-semibold">시작일</span><br>
-            <span class="fw-semibold">
+    <!-- ── 일정 ─────────────────────────────────────────── -->
+    <div class="card shadow border-0 rounded-4 mb-3">
+      <div class="card-body p-4">
+        <div class="row g-4">
+          <div class="col-md-6">
+            <div class="text-muted small fw-semibold mb-1">시작일</div>
+            <div class="fw-semibold">
               {% if task.start_date %}{{ task.start_date|date:"Y년 m월 d일" }}{% else %}-{% endif %}
-            </span>
+            </div>
           </div>
-
-          <div>
-            <span class="text-muted small fw-semibold">마감일</span><br>
+          <div class="col-md-6">
+            <div class="text-muted small fw-semibold mb-1">마감일</div>
             {% if task.due_date %}
               <span class="fw-semibold {% if task.is_overdue %}text-danger{% endif %}">
                 {{ task.due_date|date:"Y년 m월 d일" }}
               </span>
               <span id="detail-dday"
-                    class="ms-1 text-muted small"
+                    class="worktask-dday-badge ms-1"
                     data-due="{{ task.due_date|date:'Y-m-d' }}"></span>
             {% else %}
               <span class="fw-semibold">-</span>
             {% endif %}
           </div>
-
-          <div>
-            <span class="text-muted small fw-semibold">알림</span><br>
-            <span class="small">마감 {{ task.notify_days_before }}일 전
-              {% if task.is_notified %}
-                <span class="badge bg-success ms-1">발송 완료</span>
-              {% endif %}
-            </span>
-          </div>
         </div>
-
       </div>
     </div>
 

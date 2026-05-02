@@ -310,7 +310,6 @@ def generate_monthly_tasks(year: int, month: int) -> int:
                     target_ym=target_ym,
                     status=WorkTask.STATUS_PENDING,
                     priority=tmpl.priority,
-                    notify_days_before=tmpl.notify_days_before,
                 )
                 if tmpl.related_users.exists():
                     child.related_users.set(tmpl.related_users.all())
