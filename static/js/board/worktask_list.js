@@ -48,6 +48,7 @@ if (boot.dataset.inited === "1") {
 // 초기화
 // =============================================================================
 function _init() {
+  _initCalendar();
   _bindDeleteButtons();
   _bindInlineEdit();
   _renderDdays();
@@ -297,6 +298,195 @@ function _renderDdays() {
     else if (diff === 0) el.textContent = "D-day";
     else                el.textContent = `D+${Math.abs(diff)}`;
   });
+}
+
+
+// =============================================================================
+// 캘린더 렌더링
+// =============================================================================
+function _initCalendar() {
+  const root = document.getElementById("worktask-calendar");
+  const toggle = document.getElementById("worktask-calendar-toggle");
+  const prevBtn = document.getElementById("worktask-calendar-prev");
+  const nextBtn = document.getElementById("worktask-calendar-next");
+  const todayBtn = document.getElementById("worktask-calendar-today");
+  if (!root || root.dataset.bound === "1") return;
+  root.dataset.bound = "1";
+
+  const items = _readCalendarItems();
+  let view = boot.dataset.calendarView || root.dataset.view || "week";
+
+  root.dataset.view = view;
+  _renderCalendar(root, items, view);
+  _syncCalendarHeader(view);
+
+  toggle?.addEventListener("click", () => {
+    view = view === "week" ? "month" : "week";
+    _moveCalendar({ view, anchor: boot.dataset.calendarAnchor || boot.dataset.calendarToday });
+  });
+
+  prevBtn?.addEventListener("click", () => _shiftCalendar(view, -1));
+  nextBtn?.addEventListener("click", () => _shiftCalendar(view, 1));
+  todayBtn?.addEventListener("click", () => _moveCalendar({
+    view,
+    anchor: boot.dataset.calendarToday,
+  }));
+}
+
+function _shiftCalendar(view, amount) {
+  const anchor = _dateFromKey(boot.dataset.calendarAnchor || boot.dataset.calendarToday);
+  if (!anchor) return;
+
+  if (view === "month") {
+    anchor.setMonth(anchor.getMonth() + amount);
+  } else {
+    anchor.setDate(anchor.getDate() + amount * 7);
+  }
+
+  _moveCalendar({ view, anchor: _dateKey(anchor) });
+}
+
+function _moveCalendar({ view, anchor }) {
+  const url = new URL(window.location.href);
+  url.searchParams.set("cal_view", view);
+  url.searchParams.set("cal_anchor", anchor);
+  window.location.href = url.toString();
+}
+
+function _syncCalendarHeader(view) {
+  const title = document.getElementById("worktask-calendar-title");
+  const subtitle = document.getElementById("worktask-calendar-subtitle");
+  const toggle = document.getElementById("worktask-calendar-toggle");
+  const todayBtn = document.getElementById("worktask-calendar-today");
+
+  const anchor = _dateFromKey(boot.dataset.calendarAnchor || boot.dataset.calendarToday);
+  const todayKey = boot.dataset.calendarToday;
+  const anchorKey = boot.dataset.calendarAnchor || todayKey;
+  if (!anchor) return;
+
+  if (view === "month") {
+    if (title) title.textContent = `${anchor.getFullYear()}년 ${anchor.getMonth() + 1}월`;
+    if (subtitle) subtitle.textContent = "월간 캘린더";
+    if (toggle) {
+      toggle.textContent = "↩ 주간";
+      toggle.setAttribute("aria-label", "주간 캘린더로 전환");
+    }
+  } else {
+    const weekNo = _weekOfMonth(anchor);
+    if (title) title.textContent = `${anchor.getFullYear()}년 ${anchor.getMonth() + 1}월 ${weekNo}주차`;
+    if (subtitle) subtitle.textContent = "주간 캘린더";
+    if (toggle) {
+      toggle.textContent = "🗓 월간";
+      toggle.setAttribute("aria-label", "월간 캘린더로 전환");
+    }
+  }
+
+  todayBtn?.classList.toggle("d-none", anchorKey === todayKey);
+}
+
+function _weekOfMonth(d) {
+  const first = new Date(d.getFullYear(), d.getMonth(), 1);
+  const firstMondayOffset = (first.getDay() + 6) % 7;
+  return Math.ceil((d.getDate() + firstMondayOffset) / 7);
+}
+
+function _readCalendarItems() {
+  const el = document.getElementById("worktask-calendar-items");
+  if (!el) return [];
+  try {
+    return JSON.parse(el.textContent || "[]");
+  } catch (e) {
+    console.warn("[worktask_list] calendar json parse failed", e);
+    return [];
+  }
+}
+
+function _renderCalendar(root, items, view) {
+  const startKey = view === "month"
+    ? boot.dataset.calendarMonthStart
+    : boot.dataset.calendarWeekStart;
+  const endKey = view === "month"
+    ? boot.dataset.calendarMonthEnd
+    : boot.dataset.calendarWeekEnd;
+  const todayKey = boot.dataset.calendarToday;
+
+  const start = _dateFromKey(startKey);
+  const end = _dateFromKey(endKey);
+  if (!start || !end) return;
+
+  const dayKeys = [];
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    dayKeys.push(_dateKey(d));
+  }
+
+  const dayNames = ["월", "화", "수", "목", "금", "토", "일"];
+  const html = [];
+
+  html.push(`<div class="worktask-calendar-head">`);
+  dayNames.forEach((name) => {
+    html.push(`<div class="worktask-calendar-weekday">${name}</div>`);
+  });
+  html.push(`</div>`);
+
+  html.push(`<div class="worktask-calendar-grid worktask-calendar-grid-${view}">`);
+
+  dayKeys.forEach((key) => {
+    const dayItems = items.filter((item) => item.start <= key && item.end >= key);
+    const dateObj = _dateFromKey(key);
+    const dateLabel = dateObj ? dateObj.getDate() : key;
+
+    html.push(`
+      <div class="worktask-calendar-day${key === todayKey ? " is-today" : ""}">
+        <div class="worktask-calendar-date">${dateLabel}</div>
+        <div class="worktask-calendar-items">
+    `);
+
+    dayItems.forEach((item) => {
+      const isSpan = item.display_type === "span";
+      html.push(`
+        <a class="worktask-calendar-item priority-${_escAttr(item.priority)}${isSpan ? " is-span" : ""}"
+           href="/board/worktasks/${encodeURIComponent(item.id)}/"
+           title="${_escAttr(item.title)}">
+          ${_escHtml(item.title)}
+        </a>
+      `);
+    });
+
+    html.push(`
+        </div>
+      </div>
+    `);
+  });
+
+  html.push(`</div>`);
+  root.innerHTML = html.join("");
+  _syncCalendarHeader(view);
+}
+
+function _dateFromKey(key) {
+  if (!key) return null;
+  const d = new Date(`${key}T00:00:00`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function _dateKey(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function _escHtml(v) {
+  return String(v ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function _escAttr(v) {
+  return _escHtml(v).replaceAll("`", "&#096;");
 }
 
 
