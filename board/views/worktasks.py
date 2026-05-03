@@ -35,6 +35,7 @@ from accounts.decorators import grade_required
 from accounts.models import CustomUser
 from board.forms import WorkTaskCommentForm
 from board.models import WorkCategory, WorkTask, WorkTaskAttachment, WorkTaskComment
+from board.services.holidays import get_holidays_between, resolve_next_business_day
 from board.services import worktasks as wt_svc
 from board.services.comments import handle_comments_actions
 
@@ -160,11 +161,15 @@ def worktask_list(request):
     status_choices = WorkTask.STATUS_CHOICES
     prev_ym, next_ym = _adjacent_yms(ym)
     today = timezone.localdate()
+    business_today = resolve_next_business_day(today)
+
     try:
         ay, am, ad = map(int, cal_anchor_raw.split("-"))
         calendar_anchor = date(ay, am, ad)
     except (ValueError, TypeError):
-        calendar_anchor = today
+        # 오늘이 주말/공휴일이면 기본 캘린더 기준일도 다음 영업일로 보정한다.
+        # 그래야 사용자가 주말/공휴일에 접속해도 당일 미완료 업무가 화면에 보인다.
+        calendar_anchor = business_today
 
     if cal_view not in ("week", "month"):
         cal_view = "week"
@@ -177,11 +182,20 @@ def worktask_list(request):
 
     calendar_range_start = min(view_month_start, week_start)
     calendar_range_end = max(view_month_end, week_end)
+
+    # 공휴일은 WorkTask 소유자 스코프와 별개인 공통 캘린더 데이터다.
+    # 외부 API를 View에서 직접 호출하지 않고 DB 캐시만 조회한다.
+    calendar_holidays = get_holidays_between(
+        calendar_range_start,
+        calendar_range_end,
+    )
+
     calendar_items = wt_svc.build_calendar_payload(
         request.user,
         range_start=calendar_range_start,
         range_end=calendar_range_end,
         today=today,
+        business_today=business_today,
     )
 
     return render(request, "board/worktask_list.html", {
@@ -197,13 +211,15 @@ def worktask_list(request):
         "status_choices": status_choices,
         "keyword": keyword,
         "calendar_items": calendar_items,
-        "calendar_today": today.isoformat(),
+        "calendar_today": business_today.isoformat(),
+        "calendar_real_today": today.isoformat(),
         "calendar_anchor": calendar_anchor.isoformat(),
         "calendar_view": cal_view,
         "calendar_week_start": week_start.isoformat(),
         "calendar_week_end": week_end.isoformat(),
         "calendar_month_start": view_month_start.isoformat(),
         "calendar_month_end": view_month_end.isoformat(),
+        "calendar_holidays": calendar_holidays,
     })
 
 

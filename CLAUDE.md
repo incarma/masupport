@@ -392,16 +392,18 @@ const res = await fetch(URLS.save, {
 });
 ```
 
-**CSRF 토큰 읽기:**
+**CSRF 토큰 읽기 (RULE-Q-01 — 반드시 공통 유틸 사용):**
 
 ```javascript
-function getCsrf() {
-  const el = document.querySelector("[name=csrfmiddlewaretoken]");
-  if (el) return el.value;
-  const m = document.cookie.match(/csrftoken=([^;]+)/);
-  return m ? m[1] : "";
-}
+// ESM 파일 (type="module"):
+import { getCSRFToken } from "../../common/manage/csrf.js";
+
+// IIFE 파일 (일반 <script>):
+const csrf = window.csrfToken || getCSRFToken();
+// window.csrfToken은 csrf_window.js가 주입, getCSRFToken은 common/manage/csrf.js SSOT
 ```
+
+> ⚠️ 위 패턴처럼 `getCsrf()` / `getCookie()` 를 파일마다 재구현하는 것은 **금지**다 (RULE-Q-01).
 
 **이벤트 위임 (동적 요소 처리):**
 
@@ -516,3 +518,89 @@ if (root.dataset.userGrade === "basic") {
 - `04_background_tasks.md` — Celery 작업 설명
 - `05_deployment.md` — 배포 가이드
 - `99_troubleshooting.md` — 트러블슈팅
+
+---
+
+## 0. 이 프로젝트에서 실제 발견된 위반 패턴 (NEVER DO)
+
+> 출처: `docs/harness/NEVER_DO.md` | 기준 커밋: 5e7e7f1
+
+- [ ] `partner/views/subadmin.py` 에서 `u.grade = "leader"` / `target.grade = "basic"` 저장 후 `log_action()` 미호출 금지 → `log_action(request, ACTION.PARTNER_LEADER_ADD/DELETE, obj=u)` 필수 (S-B-05)
+
+- [ ] `accounts/tasks.py` 의 `process_users_excel_task()` 완료 분기에서 `log_action()` 미호출 금지 → `log_action(None, ACTION.ACCOUNTS_EXCEL_UPLOAD, meta={...})` 추가 (S-B-06)
+
+- [ ] `commission/views/api_upload.py`, `commission/views/approval.py` 에서 `@csrf_exempt` 사용 금지 → 프론트엔드 JS에서 `X-CSRFToken` 헤더 또는 FormData `csrfmiddlewaretoken` 필드 포함으로 대체 (S-D-01)
+
+- [ ] `audit/constants.py` 에 미정의된 `ACTION.XXX` 상수를 `log_action()` 인자로 전달 금지 → 상수를 먼저 `audit/constants.py` 에 추가하거나 기존 상수 재활용 (S-E-01 / S-E-04)
+
+---
+
+## 1. 작업 시작 전 필수 확인 파일
+
+코드 작업 요청을 받으면, 아래 파일을 반드시 먼저 읽어라:
+
+- `docs/harness/HARNESS_RULES.md` — 보안 규칙 (audit 로그, CSRF, ACTION 상수)
+- `docs/harness/QUALITY_RULES.md` — 품질 규칙 (CSRF SSOT, CSS 스코핑, JSON 헬퍼 중복)
+- 해당 앱의 `guide_*.md` — 앱별 규약 (존재하는 경우)
+
+---
+
+## 2. 작업 유형별 의무 체크리스트
+
+### 2-A. 뷰 함수 추가/수정 시
+
+- [ ] `@login_required` 또는 `@grade_required` 데코레이터 있는가
+- [ ] AJAX 뷰는 `forbidden_template=None` 있는가
+- [ ] 비즈니스 로직이 service 레이어에 있는가
+- [ ] 파일 다운로드 뷰는 권한 검증 + `FileResponse`인가
+- [ ] JSON 응답 형식이 해당 앱 규약(`ok`/`status`)과 일치하는가
+- [ ] 감사 로그(`log_action`)가 필요한 행위인가 (grade 변경 · 엑셀 업로드 · 결재 등은 필수)
+
+### 2-B. 엑셀 업로드 기능 추가/수정 시
+
+- [ ] `save_attachments()` 또는 registry SSOT 경유하는가
+- [ ] `_norm_emp_id()` 사번 정규화 적용하는가
+- [ ] `bulk_create` / `update_or_create` 사용하는가 (row-by-row `save` 금지)
+- [ ] `transaction.atomic()` 으로 감싸여 있는가
+- [ ] 임시파일 `try/finally` 정리 있는가
+- [ ] 완료 분기에 `log_action()` 호출이 있는가 (RULE-S-02)
+
+### 2-C. JS 파일 추가/수정 시
+
+- [ ] AJAX URL이 `dataset`에서 읽는가 (하드코딩 금지)
+- [ ] BFCache 가드(`dataset.inited`) 있는가
+- [ ] CSRF는 `common/manage/csrf.js` `getCSRFToken()` 사용하는가 (파일 내 재구현 금지 — RULE-Q-01)
+- [ ] `fetch` 응답은 `common/manage/http.js` `readJsonOrThrow()` 사용하는가
+- [ ] 중복 바인딩 방지 가드 있는가
+
+### 2-D. CSS 추가/수정 시
+
+- [ ] 해당 앱의 스코프 루트 선택자 하위에만 규칙이 있는가
+- [ ] `base.css` 수정이 없는가
+- [ ] `fixes.css`에 앱 전용 규칙을 추가하지 않았는가
+- [ ] CSS 변수를 `:root` 전역이 아닌 앱 루트 ID 하위에 선언했는가 (RULE-Q-02)
+- [ ] 스코프 없는 전역 클래스(`.info-table` 등)를 추가하지 않았는가 (RULE-Q-02)
+
+### 2-E. Celery task 추가/수정 시
+
+- [ ] `@shared_task(name="...")` 이름이 `beat_schedule` `"task"` 값과 **정확히** 일치하는가
+- [ ] 멱등성 보장(`update_or_create` / unique key)되어 있는가
+- [ ] `board/tasks/` 패키지면 `autodiscover_tasks(["board.tasks"])` 등록되어 있는가
+
+---
+
+## 3. 회귀 위험 자동 점검 (패치 후 반드시 실행)
+
+코드 패치 후 아래 9가지를 명시적으로 점검하고 결과를 응답에 포함하라:
+
+- [ ] 권한 스코프 변경 여부
+- [ ] URL reverse / 네임스페이스 깨짐 여부
+- [ ] 템플릿 `dataset` / DOM id 변경 여부
+- [ ] 첨부 다운로드 정책 위반 여부
+- [ ] 업로드 레지스트리/컬럼 탐지 영향 여부
+- [ ] DataTables 정책 깨짐 여부
+- [ ] CSS 스코프 누수 가능성
+- [ ] 운영 환경(`Manifest` / `SECURE_SSL_REDIRECT`) 영향 여부
+- [ ] JSON 응답 형식 앱 규약 준수 여부
+
+> 기존 CLAUDE.md 내용과 충돌하는 경우 **더 엄격한 규칙**이 우선한다.

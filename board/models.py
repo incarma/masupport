@@ -408,6 +408,55 @@ class CollateralEval(models.Model):
         )
     
 
+# =============================================================================
+# KR Holiday Cache
+# - WorkTask 캘린더 공휴일 표시용 DB 캐시
+# - View/JS에서 외부 API 직접 호출 금지
+# - Celery/management command가 외부 API를 수집하고 이 테이블을 upsert
+# =============================================================================
+class KrHoliday(models.Model):
+    """
+    대한민국 공휴일 DB 캐시.
+
+    운영 원칙:
+      - date unique: WorkTask 캘린더는 날짜 1개당 대표 공휴일 1건만 표시한다.
+      - source='manual' 또는 'override'는 운영자가 수동 보정한 데이터로 간주한다.
+      - API 수집은 기본적으로 manual/override 데이터를 덮어쓰지 않는다.
+    """
+
+    SOURCE_API = "api"
+    SOURCE_MANUAL = "manual"
+    SOURCE_OVERRIDE = "override"
+
+    SOURCE_CHOICES = [
+        (SOURCE_API, "API"),
+        (SOURCE_MANUAL, "수동등록"),
+        (SOURCE_OVERRIDE, "수동보정"),
+    ]
+
+    date = models.DateField("공휴일 날짜", unique=True, db_index=True)
+    name = models.CharField("공휴일명", max_length=80)
+    is_holiday = models.BooleanField("휴일 여부", default=True, db_index=True)
+    is_temporary = models.BooleanField("임시공휴일 여부", default=False)
+    source = models.CharField("출처", max_length=30, choices=SOURCE_CHOICES, default=SOURCE_API)
+    source_event_id = models.CharField("원천 식별자", max_length=80, blank=True, default="")
+    raw_payload = models.JSONField("원본 응답", default=dict, blank=True)
+    fetched_at = models.DateTimeField("마지막 수집시각", null=True, blank=True)
+    created_at = models.DateTimeField("생성일시", auto_now_add=True)
+    updated_at = models.DateTimeField("수정일시", auto_now=True)
+
+    class Meta:
+        ordering = ["date"]
+        verbose_name = "대한민국 공휴일"
+        verbose_name_plural = "대한민국 공휴일"
+        indexes = [
+            models.Index(fields=["date", "is_holiday"], name="krholiday_date_holiday_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.date:%Y-%m-%d} {self.name}"
+
+
 # =========================================================
 # Industry Info Models Import
 # - board 앱의 업계정보 실체 모델을 app registry에 등록

@@ -314,10 +314,11 @@ function _initCalendar() {
   root.dataset.bound = "1";
 
   const items = _readCalendarItems();
+  const holidays = _readCalendarHolidays();
   let view = boot.dataset.calendarView || root.dataset.view || "week";
 
   root.dataset.view = view;
-  _renderCalendar(root, items, view);
+  _renderCalendar(root, items, view, holidays);
   _syncCalendarHeader(view);
 
   toggle?.addEventListener("click", () => {
@@ -401,7 +402,23 @@ function _readCalendarItems() {
   }
 }
 
-function _renderCalendar(root, items, view) {
+function _readCalendarHolidays() {
+  const el = document.getElementById("worktask-calendar-holidays");
+  if (!el) return {};
+
+  try {
+    const rows = JSON.parse(el.textContent || "[]");
+    return rows.reduce((acc, row) => {
+      if (row?.date) acc[row.date] = row;
+      return acc;
+    }, {});
+  } catch (e) {
+    console.warn("[worktask_list] holiday json parse failed", e);
+    return {};
+  }
+}
+
+function _renderCalendar(root, items, view, holidays = {}) {
   const startKey = view === "month"
     ? boot.dataset.calendarMonthStart
     : boot.dataset.calendarWeekStart;
@@ -415,6 +432,18 @@ function _renderCalendar(root, items, view) {
   if (!start || !end) return;
 
   const dayKeys = [];
+
+  // 월간 캘린더는 토/일을 숨기되, 첫 주의 월~금 위치는 유지해야 한다.
+  // 예: 2026-05-01은 금요일이므로 월~목 빈칸 4개가 먼저 필요하다.
+  if (view === "month") {
+    const firstDay = start.getDay(); // 0=일, 1=월, ..., 5=금, 6=토
+    if (firstDay >= 1 && firstDay <= 5) {
+      for (let i = 1; i < firstDay; i += 1) {
+        dayKeys.push(null);
+      }
+    }
+  }
+
   for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
     const day = d.getDay(); // 0=일, 6=토
     if (day !== 0 && day !== 6) {
@@ -434,13 +463,24 @@ function _renderCalendar(root, items, view) {
   html.push(`<div class="worktask-calendar-grid worktask-calendar-grid-${view}">`);
 
   dayKeys.forEach((key) => {
+    if (!key) {
+      html.push(`
+        <div class="worktask-calendar-day is-empty" aria-hidden="true"></div>
+      `);
+      return;
+    }
+
     const dayItems = items.filter((item) => item.start <= key && item.end >= key);
+    const holiday = holidays[key] || null;
     const dateObj = _dateFromKey(key);
     const dateLabel = dateObj ? dateObj.getDate() : key;
 
     html.push(`
-      <div class="worktask-calendar-day${key === todayKey ? " is-today" : ""}">
-        <div class="worktask-calendar-date">${dateLabel}</div>
+      <div class="worktask-calendar-day${key === todayKey ? " is-today" : ""}${holiday ? " is-holiday" : ""}">
+        <div class="worktask-calendar-date-row">
+          <div class="worktask-calendar-date">${dateLabel}</div>
+          ${holiday ? `<div class="worktask-calendar-holiday" title="${_escAttr(holiday.name)}">${_escHtml(holiday.name)}</div>` : ""}
+        </div>
         <div class="worktask-calendar-items">
     `);
 

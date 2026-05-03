@@ -1518,3 +1518,42 @@
   gap: 6px;
   flex-wrap: wrap;
 }
+
+
+/* =============================================================================
+   WorkTask Calendar — KR Holiday
+   - .board-scope 하위 스코프 유지
+   - 토/일은 기존 캘린더 정책상 렌더링하지 않으므로 평일 공휴일만 표시됨
+============================================================================= */
+.board-scope .worktask-calendar-date-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 0;
+}
+
+.board-scope .worktask-calendar-day.is-holiday {
+  background: #fff8f8;
+}
+
+.board-scope .worktask-calendar-holiday {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 2px 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  color: #dc3545;
+  background: #fff5f5;
+  border: 1px solid #f1aeb5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.board-scope .worktask-calendar-day.is-empty {
+  visibility: hidden;
+  pointer-events: none;
+}

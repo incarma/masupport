@@ -30,6 +30,7 @@ class ACTION:
     TASK_ATTACHMENT_DOWNLOAD = "board.task_attachment.download"
     BOARD_SUPPORT_PDF_GENERATE = "board.support_pdf.generate"
     BOARD_STATES_PDF_GENERATE = "board.states_pdf.generate"
+    BOARD_KR_HOLIDAY_SYNC = "board.kr_holiday.sync"
 
     # Manual
     MANUAL_CREATE = "manual.manual.create"
