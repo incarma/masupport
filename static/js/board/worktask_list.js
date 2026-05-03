@@ -416,13 +416,16 @@ function _renderCalendar(root, items, view) {
 
   const dayKeys = [];
   for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-    dayKeys.push(_dateKey(d));
+    const day = d.getDay(); // 0=일, 6=토
+    if (day !== 0 && day !== 6) {
+      dayKeys.push(_dateKey(d));
+    }
   }
 
-  const dayNames = ["월", "화", "수", "목", "금", "토", "일"];
   const html = [];
 
   html.push(`<div class="worktask-calendar-head">`);
+  const dayNames = ["월", "화", "수", "목", "금"];
   dayNames.forEach((name) => {
     html.push(`<div class="worktask-calendar-weekday">${name}</div>`);
   });

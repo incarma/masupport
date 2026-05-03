@@ -1371,7 +1371,7 @@
 
 .board-scope .worktask-calendar-head{
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 6px;
   margin-bottom: 6px;
 }
@@ -1385,7 +1385,7 @@
 
 .board-scope .worktask-calendar-grid{
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 6px;
 }
 
