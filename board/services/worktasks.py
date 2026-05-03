@@ -54,6 +54,7 @@ def build_calendar_payload(
     range_start: date,
     range_end: date,
     today: date | None = None,
+    business_today: date | None = None,
 ) -> list[dict]:
     """
     WorkTask 목록 상단 캘린더용 payload 생성.
@@ -62,16 +63,18 @@ def build_calendar_payload(
 
     표시 규칙:
       1) 시작일/마감일 없음:
-         - 완료/보류 전까지 매일 '오늘' 칸에 표시
+         - 완료/보류 전까지 business_today 칸에 표시
+         - 오늘이 주말/공휴일이면 다음 영업일 칸에 표시
       2) 시작일만 있음:
-         - 시작일 도래 후 완료/보류 전까지 매일 '오늘' 칸에 표시
+         - 시작일 도래 후 완료/보류 전까지 business_today 칸에 표시
       3) 마감일만 있음:
-         - 마감일 이후 완료/보류 전까지 매일 '오늘' 칸에 표시
+         - 마감일 이후 완료/보류 전까지 business_today 칸에 표시
       4) 시작일/마감일 모두 있음:
          - calendar_span_mode=True  → 시작일~마감일 기간 막대 표시
          - calendar_span_mode=False → 시작일 도래 후 완료/보류 전까지 매일 '오늘' 칸에 표시
     """
     today = today or timezone.localdate()
+    business_today = business_today or today
 
     qs = (
         get_user_queryset(user)
@@ -91,32 +94,40 @@ def build_calendar_payload(
         display_type = "rolling"
 
         if not start_date and not due_date:
-            display_start = today
-            display_end = today
+            display_start = business_today
+            display_end = business_today
             display_type = "floating"
 
         elif start_date and not due_date:
             if today < start_date:
                 continue
-            display_start = today
-            display_end = today
+            display_start = business_today
+            display_end = business_today
 
         elif not start_date and due_date:
             if today < due_date:
                 continue
-            display_start = today
-            display_end = today
+            display_start = business_today
+            display_end = business_today
 
         else:
             if span_mode:
-                display_start = start_date
-                display_end = due_date
-                display_type = "span"
+                # 오늘이 주말/공휴일이면 당일 처리 대상 업무는 다음 영업일 칸에 우선 표시한다.
+                # 단, 실제 기간 막대가 필요한 일반 평일에는 기존 start~due span 정책 유지.
+                if today != business_today and start_date <= today <= due_date:
+                    display_start = business_today
+                    display_end = business_today
+                    display_type = "rolling"
+                    span_mode = False
+                else:
+                    display_start = start_date
+                    display_end = due_date
+                    display_type = "span"
             else:
                 if today < start_date:
                     continue
-                display_start = today
-                display_end = today
+                display_start = business_today
+                display_end = business_today
 
         if not display_start or not display_end:
             continue

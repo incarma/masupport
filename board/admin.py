@@ -26,7 +26,30 @@ from .industry_models import (
     IndustryRecommendation,
     IndustryUserPreference,
 )
-from .models import Post, WorkCategory, WorkTask, WorkTaskAttachment
+from .models import Post, KrHoliday, WorkCategory, WorkTask, WorkTaskAttachment
+
+
+# =============================================================================
+# KR Holiday Admin
+# - API 수집 데이터 확인
+# - 임시공휴일/대체공휴일 수동 보정
+# =============================================================================
+@admin.register(KrHoliday)
+class KrHolidayAdmin(admin.ModelAdmin):
+    list_display = (
+        "date",
+        "name",
+        "is_holiday",
+        "is_temporary",
+        "source",
+        "fetched_at",
+        "updated_at",
+    )
+    list_filter = ("is_holiday", "is_temporary", "source")
+    search_fields = ("name", "source_event_id")
+    date_hierarchy = "date"
+    ordering = ("-date",)
+    readonly_fields = ("raw_payload", "fetched_at", "created_at", "updated_at")
 
 
 # =========================================================

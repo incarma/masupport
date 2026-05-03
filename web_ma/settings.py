@@ -503,6 +503,47 @@ BOARD_STATES_PDF_RATE_LIMIT = config(
     default="10/60",
 )
 
+
+# =============================================================================
+# 11-4) Board WorkTask KR Holiday API / DB Cache
+# -----------------------------------------------------------------------------
+# 원칙:
+# - View/JS는 외부 API를 직접 호출하지 않는다.
+# - Celery/management command가 외부 API를 호출하고 KrHoliday 테이블에 캐시한다.
+# - serviceKey는 template/JS/log에 노출하지 않는다.
+# =============================================================================
+KR_HOLIDAY_API_ENABLED = config(
+    "KR_HOLIDAY_API_ENABLED",
+    default=False,
+    cast=bool,
+)
+
+KR_HOLIDAY_API_KEY = config("KR_HOLIDAY_API_KEY", default="")
+
+KR_HOLIDAY_API_BASE_URL = config(
+    "KR_HOLIDAY_API_BASE_URL",
+    default="https://apis.data.go.kr/B090041/openapi/service/SpcdeInfoService/getRestDeInfo",
+)
+
+KR_HOLIDAY_FETCH_YEARS_BEFORE = config(
+    "KR_HOLIDAY_FETCH_YEARS_BEFORE",
+    default=1,
+    cast=int,
+)
+
+KR_HOLIDAY_FETCH_YEARS_AFTER = config(
+    "KR_HOLIDAY_FETCH_YEARS_AFTER",
+    default=2,
+    cast=int,
+)
+
+KR_HOLIDAY_API_TIMEOUT = config(
+    "KR_HOLIDAY_API_TIMEOUT",
+    default=10,
+    cast=int,
+)
+
+
 # =============================================================================
 # 12) Default PK
 # =============================================================================

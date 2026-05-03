@@ -111,4 +111,26 @@ app.conf.beat_schedule = {
         "task":     "board.tasks.notify_due_worktasks",
         "schedule": crontab(hour="8", minute="0"),
     },
+
+    # ------------------------------------------------------------------
+    # WorkTask 대한민국 공휴일 DB 캐시 동기화 — 매일 04:20
+    # board/tasks/holidays.py: sync_kr_holidays_window_task
+    # - 임시공휴일/대체공휴일 반영 지연 최소화
+    # - upsert 구조라 매일 실행해도 중복 생성 없음
+    # ------------------------------------------------------------------
+    "board-kr-holidays-sync-daily": {
+        "task": "board.tasks.holidays.sync_kr_holidays_window",
+        "schedule": crontab(hour="4", minute="20"),
+        "args": (),
+    },
+
+    # ------------------------------------------------------------------
+    # WorkTask 대한민국 공휴일 DB 캐시 월간 재동기화 — 매월 1일 04:40
+    # - 전년도~다음 2년 window를 다시 점검
+    # ------------------------------------------------------------------
+    "board-kr-holidays-sync-monthly": {
+        "task": "board.tasks.holidays.sync_kr_holidays_window",
+        "schedule": crontab(day_of_month="1", hour="4", minute="40"),
+        "args": (),
+    },
 }
