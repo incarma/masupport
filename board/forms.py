@@ -3,7 +3,7 @@
 from django import forms
 from django.core.exceptions import ValidationError
 
-from .models import Post, Comment, Task, TaskComment
+from .models import Post, Comment, Task, TaskComment, WorkTaskComment
 from .constants import POST_CATEGORY_CHOICES, TASK_CATEGORY_CHOICES
 
 
@@ -158,3 +158,8 @@ class CommentForm(_BaseCommentForm):
 class TaskCommentForm(_BaseCommentForm):
     class Meta(_BaseCommentForm.Meta):
         model = TaskComment
+
+
+class WorkTaskCommentForm(_BaseCommentForm):
+    class Meta(_BaseCommentForm.Meta):
+        model = WorkTaskComment

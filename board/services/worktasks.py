@@ -18,6 +18,7 @@ from datetime import date
 from typing import TYPE_CHECKING
 
 from django.db import transaction
+from django.db.models import Count
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
@@ -47,6 +48,7 @@ def get_user_queryset(user) -> "QuerySet[WorkTask]":
         .filter(owner=user)
         .select_related("category", "owner")
         .prefetch_related("related_users", "attachments")
+        .annotate(comment_count=Count("comments", distinct=True))
     )
 
 
@@ -83,6 +85,7 @@ def apply_filters(qs: "QuerySet[WorkTask]", params: dict) -> "QuerySet[WorkTask]
     ym       = (params.get("ym")       or "").strip()
     status   = (params.get("status")   or "").strip()
     category = (params.get("category") or "").strip()
+    branch   = (params.get("branch")   or "").strip()
     keyword  = (params.get("keyword")  or "").strip()
 
     # -- 귀속월 필터 --
@@ -112,6 +115,10 @@ def apply_filters(qs: "QuerySet[WorkTask]", params: dict) -> "QuerySet[WorkTask]
     # -- 카테고리 필터 --
     if category:
         qs = qs.filter(category_id=category)
+
+    # -- 지점 필터 --
+    if branch:
+        qs = qs.filter(family_branches__contains=[branch])
 
     # -- 키워드 필터 --
     if keyword:

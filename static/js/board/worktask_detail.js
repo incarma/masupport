@@ -24,6 +24,12 @@
 
 import { getCSRFToken } from "../common/manage/csrf.js";
 
+(function _initWorkTaskCommentEdit() {
+  if (window.Board?.Common?.initCommentEdit) {
+    window.Board.Common.initCommentEdit();
+  }
+})();
+
 // =============================================================================
 // [1] 등록/수정 폼 — 관련 인물 검색 모달 연동
 // =============================================================================

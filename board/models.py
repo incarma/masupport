@@ -721,3 +721,14 @@ class WorkTaskAttachment(models.Model):
     def __str__(self):
         return f"{self.original_name} (task={self.task_id})"
 
+
+class WorkTaskComment(models.Model):
+    task = models.ForeignKey(WorkTask, related_name="comments", on_delete=models.CASCADE)
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    content = models.TextField("댓글 내용", max_length=500)
+    created_at = models.DateTimeField("작성일시", auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "업무관리 댓글"
+        verbose_name_plural = "업무관리 댓글 목록"

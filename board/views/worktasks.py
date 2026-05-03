@@ -32,8 +32,10 @@ from django.db.models.functions import Trim
 
 from accounts.decorators import grade_required
 from accounts.models import CustomUser
-from board.models import WorkCategory, WorkTask, WorkTaskAttachment
+from board.forms import WorkTaskCommentForm
+from board.models import WorkCategory, WorkTask, WorkTaskAttachment, WorkTaskComment
 from board.services import worktasks as wt_svc
+from board.services.comments import handle_comments_actions
 
 logger = logging.getLogger(__name__)
 
@@ -51,9 +53,16 @@ def _get_worktask_branch_options(request) -> list[str]:
     user = request.user
 
     if getattr(user, "grade", "") == "superuser":
+        qs = CustomUser.objects.filter(is_active=True)
+        part = (getattr(user, "part", "") or "").strip()
+        channel = (getattr(user, "channel", "") or "").strip()
+        if part:
+            qs = qs.filter(part=part)
+        elif channel:
+            qs = qs.filter(channel=channel)
+
         return list(
-            CustomUser.objects
-            .filter(is_active=True)
+            qs
             .annotate(branch_name=Trim("branch"))
             .exclude(branch_name="")
             .values_list("branch_name", flat=True)
@@ -115,12 +124,14 @@ def worktask_list(request):
     ym       = request.GET.get("ym",       _today_ym())
     status   = request.GET.get("status",   "")
     category = request.GET.get("category", "")
+    branch   = request.GET.get("branch",   "")
     keyword  = request.GET.get("keyword",  "")
 
     # 서비스 경유 (소유자 격리 보장)
     qs = wt_svc.get_user_queryset(request.user)
     qs = wt_svc.apply_filters(qs, {
-        "ym": ym, "status": status, "category": category, "keyword": keyword
+        "ym": ym, "status": status, "category": category,
+        "branch": branch, "keyword": keyword
     })
     qs = qs.order_by("priority", "due_date", "-created_at")
 
@@ -138,7 +149,9 @@ def worktask_list(request):
         "next_ym":       next_ym,
         "status":        status,
         "category":      category,
+        "branch":        branch,
         "categories":    categories,
+        "branch_options": _get_worktask_branch_options(request),
         "status_choices": status_choices,
         "keyword": keyword,
     })
@@ -189,6 +202,19 @@ def worktask_detail(request, pk: int):
     get_user_task → owner != request.user 이면 404.
     """
     task         = wt_svc.get_user_task(request.user, pk)
+
+    if request.method == "POST":
+        handled = handle_comments_actions(
+            request=request,
+            obj=task,
+            comment_model=WorkTaskComment,
+            fk_field="task",
+            redirect_detail_name="board:worktasks:worktask_detail",
+        )
+        if handled:
+            return handled
+        return redirect("board:worktasks:worktask_detail", pk=task.pk)
+
     attachments  = task.attachments.all()
     related_users = task.related_users.all()
 
@@ -196,6 +222,8 @@ def worktask_detail(request, pk: int):
         "task":          task,
         "attachments":   attachments,
         "related_users": related_users,
+        "comments":      task.comments.order_by("-created_at"),
+        "form":          WorkTaskCommentForm(),
     })
 
 
