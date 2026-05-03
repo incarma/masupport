@@ -554,6 +554,11 @@ class WorkTask(models.Model):
     # -------------------------------------------------------------------------
     start_date      = models.DateField(null=True, blank=True, verbose_name="시작일")
     due_date        = models.DateField(null=True, blank=True, verbose_name="마감일")
+    calendar_span_mode = models.BooleanField(
+        default=False,
+        verbose_name="캘린더 기간 막대 표시",
+        help_text="체크 시 시작일부터 마감일까지 캘린더에 기간 막대로 표시합니다.",
+    )
     recurrence_type = models.CharField(
         max_length=20, choices=RECURRENCE_CHOICES,
         default=RECURRENCE_NONE, verbose_name="반복 유형",

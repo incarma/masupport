@@ -1351,3 +1351,170 @@
 .board-scope .worktask-comment-count-badge{
   flex: 0 0 auto;
 }
+
+
+/* ==========================================================
+ 13) WorkTask Calendar
+========================================================== */
+
+.board-scope .worktask-month-input{
+  width: 150px;
+}
+
+.board-scope .worktask-calendar-card{
+  overflow: hidden;
+}
+
+.board-scope .worktask-calendar{
+  width: 100%;
+}
+
+.board-scope .worktask-calendar-head{
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.board-scope .worktask-calendar-weekday{
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #6c757d;
+}
+
+.board-scope .worktask-calendar-grid{
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.board-scope .worktask-calendar-day{
+  min-height: 118px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 8px;
+  background: #fff;
+  min-width: 0;
+}
+
+.board-scope .worktask-calendar-day.is-today{
+  border-color: #005BAC;
+  box-shadow: 0 0 0 2px rgba(0, 91, 172, .12);
+}
+
+.board-scope .worktask-calendar-date{
+  font-size: 13px;
+  font-weight: 800;
+  color: #243447;
+  margin-bottom: 6px;
+}
+
+.board-scope .worktask-calendar-items{
+  display: grid;
+  gap: 4px;
+}
+
+.board-scope .worktask-calendar-item{
+  display: block;
+  min-width: 0;
+  padding: 4px 7px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.25;
+  text-decoration: none;
+  color: #111827;
+  background: #f3f4f6;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-left: 4px solid #9ca3af;
+}
+
+.board-scope .worktask-calendar-item:hover{
+  background: #eaf3ff;
+  color: #003f7d;
+}
+
+.board-scope .worktask-calendar-item.is-span{
+  border-radius: 999px;
+  font-weight: 700;
+}
+
+.board-scope .worktask-calendar-item.priority-high{
+  border-left-color: #dc3545;
+}
+
+.board-scope .worktask-calendar-item.priority-mid{
+  border-left-color: #ffc107;
+}
+
+.board-scope .worktask-calendar-item.priority-low{
+  border-left-color: #0d6efd;
+}
+
+@media (max-width: 768px){
+  .board-scope .worktask-calendar{
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .board-scope .worktask-calendar-head,
+  .board-scope .worktask-calendar-grid{
+    min-width: 760px;
+  }
+}
+
+.board-scope .worktask-filter-inline{
+  display: flex;
+  align-items: end;
+  gap: 8px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 2px;
+}
+
+.board-scope .worktask-filter-right{
+  margin-left: auto;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: end;
+  gap: 8px;
+}
+
+.board-scope .worktask-filter-item{
+  flex: 0 0 auto;
+}
+
+.board-scope .worktask-keyword-item{
+  min-width: 220px;
+}
+
+.board-scope .worktask-filter-actions{
+  flex: 0 0 auto;
+  display: flex;
+  gap: 8px;
+  align-items: end;
+}
+
+.board-scope .worktask-create-icon-btn{
+  min-width: 34px;
+  font-weight: 800;
+}
+
+.board-scope .worktask-calendar-toolbar{
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.board-scope .worktask-calendar-controls{
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}

@@ -8,72 +8,107 @@
 <div id="worktaskListBoot"
      class="worktask-list-wide"
      data-delete-url="{% url 'board:worktasks:worktask_delete' 0 %}"
-     data-inline-url="{% url 'board:worktasks:worktask_inline_update' 0 %}">
+     data-inline-url="{% url 'board:worktasks:worktask_inline_update' 0 %}"
+     data-calendar-today="{{ calendar_today }}"
+     data-calendar-anchor="{{ calendar_anchor }}"
+     data-calendar-view="{{ calendar_view }}"
+     data-calendar-week-start="{{ calendar_week_start }}"
+     data-calendar-week-end="{{ calendar_week_end }}"
+     data-calendar-month-start="{{ calendar_month_start }}"
+     data-calendar-month-end="{{ calendar_month_end }}">
 
   <!-- ── 페이지 제목 ──────────────────────────────────────── -->
   <h3 class="fw-bold text-center mb-4 board-page-title">업무관리</h3>
 
-  <!-- ── 월 네비게이션 + 등록 버튼 ───────────────────────── -->
-  <div class="card shadow p-3 border-0 rounded-4 mb-3">
-    <div class="d-flex align-items-center justify-content-between gap-2 flex-wrap">
-      <div class="d-flex align-items-center gap-2">
-        <a href="?ym={{ prev_ym }}{% if status %}&status={{ status }}{% endif %}{% if category %}&category={{ category }}{% endif %}{% if branch %}&branch={{ branch }}{% endif %}{% if keyword %}&keyword={{ keyword }}{% endif %}"
-           class="btn btn-sm btn-outline-secondary">◀ {{ prev_ym }}</a>
-        <span class="btn btn-sm btn-primary fw-bold pe-none px-4">{{ ym }}</span>
-        <a href="?ym={{ next_ym }}{% if status %}&status={{ status }}{% endif %}{% if category %}&category={{ category }}{% endif %}{% if branch %}&branch={{ branch }}{% endif %}{% if keyword %}&keyword={{ keyword }}{% endif %}"
-           class="btn btn-sm btn-outline-secondary">{{ next_ym }} ▶</a>
+  <!-- ── 캘린더 ───────────────────────────────────────────── -->
+  <div class="card shadow p-3 border-0 rounded-4 mb-3 worktask-calendar-card">
+    <div class="worktask-calendar-toolbar">
+      <div>
+        <p class="fw-bold mb-0" id="worktask-calendar-title">업무 캘린더</p>
+        <p class="small text-muted mb-0" id="worktask-calendar-subtitle">기본 보기: 오늘 일자가 포함된 주간 캘린더</p>
       </div>
-      <a href="{% url 'board:worktasks:worktask_create' %}"
-         class="btn btn-primary btn-sm">+ 업무 등록</a>
+      <div class="worktask-calendar-controls">
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="worktask-calendar-prev">◀</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary d-none" id="worktask-calendar-today">오늘</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="worktask-calendar-next">▶</button>
+        <button type="button"
+                class="btn btn-sm btn-outline-primary"
+                id="worktask-calendar-toggle"
+                data-view="{{ calendar_view }}"
+                aria-label="월간 캘린더로 전환">
+          🗓 월간
+        </button>
+      </div>
     </div>
+    <div id="worktask-calendar" class="worktask-calendar" data-view="week"></div>
   </div>
 
   <!-- ── 필터 카드 ────────────────────────────────────────── -->
   <div class="card shadow p-3 border-0 rounded-4 mb-3">
-    <form method="get" class="row g-2 align-items-end">
-      <input type="hidden" name="ym" value="{{ ym }}">
+    <form method="get" class="worktask-filter-form">
+      <div class="worktask-filter-inline">
 
-      <div class="col-auto">
-        <label class="form-label mb-1 fw-semibold small">상태</label>
-        <select name="status" class="form-select form-select-sm">
-          <option value="">전체 상태</option>
-          {% for val, lbl in status_choices %}
-            <option value="{{ val }}" {% if status == val %}selected{% endif %}>{{ lbl }}</option>
-          {% endfor %}
-        </select>
-      </div>
+        <div class="worktask-filter-item">
+          <label class="form-label mb-1 fw-semibold small">상태</label>
+          <select name="status" class="form-select form-select-sm">
+            <option value="">전체 상태</option>
+            {% for val, lbl in status_choices %}
+              <option value="{{ val }}" {% if status == val %}selected{% endif %}>{{ lbl }}</option>
+            {% endfor %}
+          </select>
+        </div>
 
-      <div class="col-auto">
-        <label class="form-label mb-1 fw-semibold small">분류</label>
-        <select name="category" class="form-select form-select-sm">
-          <option value="">전체 분류</option>
-          {% for cat in categories %}
-            <option value="{{ cat.code }}" {% if category == cat.code %}selected{% endif %}>
-              {{ cat.label }}
-            </option>
-          {% endfor %}
-        </select>
-      </div>
+        <div class="worktask-filter-item">
+          <label class="form-label mb-1 fw-semibold small">분류</label>
+          <select name="category" class="form-select form-select-sm">
+            <option value="">전체 분류</option>
+            {% for cat in categories %}
+              <option value="{{ cat.code }}" {% if category == cat.code %}selected{% endif %}>
+                {{ cat.label }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
 
-      <div class="col-auto">
-        <label class="form-label mb-1 fw-semibold small">지점</label>
-        <select name="branch" class="form-select form-select-sm">
-          <option value="">전체 지점</option>
-          {% for b in branch_options %}
-            <option value="{{ b }}" {% if branch == b %}selected{% endif %}>{{ b }}</option>
-          {% endfor %}
-        </select>
-      </div>
+        <div class="worktask-filter-item">
+          <label class="form-label mb-1 fw-semibold small">지점</label>
+          <select name="branch" class="form-select form-select-sm">
+            <option value="">전체 지점</option>
+            {% for b in branch_options %}
+              <option value="{{ b }}" {% if branch == b %}selected{% endif %}>{{ b }}</option>
+            {% endfor %}
+          </select>
+        </div>
 
-      <div class="col-auto">
-        <label class="form-label mb-1 fw-semibold small">검색</label>
-        <input type="text" name="keyword" class="form-control form-control-sm"
-               placeholder="업무명 검색" value="{{ keyword|default:'' }}">
-      </div>
+        <div class="worktask-filter-item worktask-keyword-item">
+          <label class="form-label mb-1 fw-semibold small">검색</label>
+          <input type="text" name="keyword" class="form-control form-control-sm"
+                placeholder="업무명 검색" value="{{ keyword|default:'' }}">
+        </div>
 
-      <div class="col-auto d-flex gap-2">
-        <button type="submit" class="btn btn-primary btn-sm">조회</button>
-        <a href="?ym={{ ym }}" class="btn btn-outline-secondary btn-sm">초기화</a>
+        <div class="worktask-filter-actions">
+          <button type="submit" class="btn btn-primary btn-sm">조회</button>
+          <a href="?ym={{ ym }}" class="btn btn-outline-secondary btn-sm">초기화</a>
+        </div>
+
+        <div class="worktask-filter-right">
+          <a href="?ym={{ prev_ym }}{% if status %}&status={{ status }}{% endif %}{% if category %}&category={{ category }}{% endif %}{% if branch %}&branch={{ branch }}{% endif %}{% if keyword %}&keyword={{ keyword }}{% endif %}"
+             class="btn btn-sm btn-outline-secondary">◀</a>
+
+          <input type="month"
+                 name="ym"
+                 class="form-control form-control-sm worktask-month-input"
+                 value="{{ ym }}">
+
+          <a href="?ym={{ next_ym }}{% if status %}&status={{ status }}{% endif %}{% if category %}&category={{ category }}{% endif %}{% if branch %}&branch={{ branch }}{% endif %}{% if keyword %}&keyword={{ keyword }}{% endif %}"
+             class="btn btn-sm btn-outline-secondary">▶</a>
+
+          <a href="{% url 'board:worktasks:worktask_create' %}"
+             class="btn btn-primary btn-sm worktask-create-icon-btn"
+             title="업무 등록"
+             aria-label="업무 등록">+ 업무 등록</a>
+        </div>
+      
       </div>
     </form>
   </div>
@@ -287,6 +322,9 @@
     {% endfor %}
   ]
 </script>
+
+<!-- 캘린더 데이터 -->
+{{ calendar_items|json_script:"worktask-calendar-items" }}
 
 {% endblock %}
 

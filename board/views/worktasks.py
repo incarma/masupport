@@ -15,7 +15,8 @@ from __future__ import annotations
 
 import logging
 import urllib.parse
-from datetime import date
+import calendar
+from datetime import date, timedelta
 
 from django.core.paginator import Paginator
 from django.http import (
@@ -107,6 +108,21 @@ def _adjacent_yms(ym: str) -> tuple[str, str]:
     return f"{py}-{pm:02d}", f"{ny}-{nm:02d}"
 
 
+def _month_range_from_ym(ym: str) -> tuple[date, date]:
+    try:
+        y, m = int(ym[:4]), int(ym[5:7])
+    except (ValueError, IndexError):
+        d = timezone.localdate()
+        y, m = d.year, d.month
+
+    return date(y, m, 1), date(y, m, calendar.monthrange(y, m)[1])
+
+
+def _week_range_containing(d: date) -> tuple[date, date]:
+    start = d - timedelta(days=d.weekday())
+    return start, start + timedelta(days=6)
+
+
 # =============================================================================
 # 목록
 # =============================================================================
@@ -126,6 +142,8 @@ def worktask_list(request):
     category = request.GET.get("category", "")
     branch   = request.GET.get("branch",   "")
     keyword  = request.GET.get("keyword",  "")
+    cal_view = request.GET.get("cal_view", "week")
+    cal_anchor_raw = request.GET.get("cal_anchor", "")
 
     # 서비스 경유 (소유자 격리 보장)
     qs = wt_svc.get_user_queryset(request.user)
@@ -141,6 +159,30 @@ def worktask_list(request):
     categories     = WorkCategory.objects.filter(is_active=True).order_by("sort_order")
     status_choices = WorkTask.STATUS_CHOICES
     prev_ym, next_ym = _adjacent_yms(ym)
+    today = timezone.localdate()
+    try:
+        ay, am, ad = map(int, cal_anchor_raw.split("-"))
+        calendar_anchor = date(ay, am, ad)
+    except (ValueError, TypeError):
+        calendar_anchor = today
+
+    if cal_view not in ("week", "month"):
+        cal_view = "week"
+
+    month_start, month_end = _month_range_from_ym(ym)
+    week_start, week_end = _week_range_containing(calendar_anchor)
+    view_month_start, view_month_end = _month_range_from_ym(
+        f"{calendar_anchor.year}-{calendar_anchor.month:02d}"
+    )
+
+    calendar_range_start = min(view_month_start, week_start)
+    calendar_range_end = max(view_month_end, week_end)
+    calendar_items = wt_svc.build_calendar_payload(
+        request.user,
+        range_start=calendar_range_start,
+        range_end=calendar_range_end,
+        today=today,
+    )
 
     return render(request, "board/worktask_list.html", {
         "page_obj":      page_obj,
@@ -154,6 +196,14 @@ def worktask_list(request):
         "branch_options": _get_worktask_branch_options(request),
         "status_choices": status_choices,
         "keyword": keyword,
+        "calendar_items": calendar_items,
+        "calendar_today": today.isoformat(),
+        "calendar_anchor": calendar_anchor.isoformat(),
+        "calendar_view": cal_view,
+        "calendar_week_start": week_start.isoformat(),
+        "calendar_week_end": week_end.isoformat(),
+        "calendar_month_start": view_month_start.isoformat(),
+        "calendar_month_end": view_month_end.isoformat(),
     })
 
 
@@ -543,6 +593,7 @@ def _extract_post_data(request) -> dict:
         "description":         post.get("description", "").strip(),
         "start_date":          start_date,
         "due_date":            due_date,
+        "calendar_span_mode":   post.get("calendar_span_mode") == "1",
         "recurrence_type":     post.get("recurrence_type", WorkTask.RECURRENCE_NONE),
         "recurrence_day":      _int_or("recurrence_day", None),
         "status":              post.get("status", WorkTask.STATUS_PENDING),

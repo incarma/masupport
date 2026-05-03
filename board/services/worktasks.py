@@ -33,6 +33,115 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
+# 캘린더 표시 규칙
+# =============================================================================
+
+WORKTASK_CALENDAR_TERMINAL_STATUSES = [
+    WorkTask.STATUS_DONE,
+    WorkTask.STATUS_SKIPPED,
+]
+
+WORKTASK_PRIORITY_SORT = {
+    WorkTask.PRIORITY_HIGH: 0,
+    WorkTask.PRIORITY_MID: 1,
+    WorkTask.PRIORITY_LOW: 2,
+}
+
+
+def build_calendar_payload(
+    user,
+    *,
+    range_start: date,
+    range_end: date,
+    today: date | None = None,
+) -> list[dict]:
+    """
+    WorkTask 목록 상단 캘린더용 payload 생성.
+
+    기존 소유자 격리 SSOT(get_user_queryset)를 그대로 사용한다.
+
+    표시 규칙:
+      1) 시작일/마감일 없음:
+         - 완료/보류 전까지 매일 '오늘' 칸에 표시
+      2) 시작일만 있음:
+         - 시작일 도래 후 완료/보류 전까지 매일 '오늘' 칸에 표시
+      3) 마감일만 있음:
+         - 마감일 이후 완료/보류 전까지 매일 '오늘' 칸에 표시
+      4) 시작일/마감일 모두 있음:
+         - calendar_span_mode=True  → 시작일~마감일 기간 막대 표시
+         - calendar_span_mode=False → 시작일 도래 후 완료/보류 전까지 매일 '오늘' 칸에 표시
+    """
+    today = today or timezone.localdate()
+
+    qs = (
+        get_user_queryset(user)
+        .exclude(status__in=WORKTASK_CALENDAR_TERMINAL_STATUSES)
+        .order_by("priority", "due_date", "start_date", "-created_at")
+    )
+
+    items: list[dict] = []
+
+    for task in qs:
+        start_date = task.start_date
+        due_date = task.due_date
+        span_mode = bool(getattr(task, "calendar_span_mode", False))
+
+        display_start: date | None = None
+        display_end: date | None = None
+        display_type = "rolling"
+
+        if not start_date and not due_date:
+            display_start = today
+            display_end = today
+            display_type = "floating"
+
+        elif start_date and not due_date:
+            if today < start_date:
+                continue
+            display_start = today
+            display_end = today
+
+        elif not start_date and due_date:
+            if today < due_date:
+                continue
+            display_start = today
+            display_end = today
+
+        else:
+            if span_mode:
+                display_start = start_date
+                display_end = due_date
+                display_type = "span"
+            else:
+                if today < start_date:
+                    continue
+                display_start = today
+                display_end = today
+
+        if not display_start or not display_end:
+            continue
+
+        if display_end < range_start or display_start > range_end:
+            continue
+
+        items.append({
+            "id": task.pk,
+            "title": task.title,
+            "category": getattr(task.category, "label", ""),
+            "priority": task.priority,
+            "priority_order": WORKTASK_PRIORITY_SORT.get(task.priority, 9),
+            "status": task.status,
+            "start": display_start.isoformat(),
+            "end": display_end.isoformat(),
+            "display_type": display_type,
+            "span": span_mode,
+        })
+
+    items.sort(key=lambda x: (x["priority_order"], x["start"], x["title"]))
+    return items
+
+
+# =============================================================================
 # 소유자 격리 SSOT — 모든 쿼리의 진입점
 # =============================================================================
 
