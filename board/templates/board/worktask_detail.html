@@ -75,6 +75,24 @@
       </div>
     </div>
 
+    {% url "board:worktasks:worktask_detail" task.pk as detail_url %}
+    <input type="hidden" id="commentEditCsrfToken" value="{{ csrf_token }}">
+
+    <!-- ── 댓글 ─────────────────────────────────────────── -->
+    <div class="card shadow border-0 rounded-4 mb-3 board-comment-card">
+      <div class="card-body p-4">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <h6 class="fw-bold mb-0 board-section-title-primary">
+            댓글
+            {% if comments %}<span class="badge bg-secondary ms-1">{{ comments|length }}</span>{% endif %}
+          </h6>
+        </div>
+
+        {% include "board/includes/_comment_list.html" with comments=comments empty_text="아직 댓글이 없습니다." %}
+        {% include "board/includes/_comment_form.html" with form=form action_url=detail_url submit_label="등록" %}
+      </div>
+    </div>
+
     <!-- ── 일정 ─────────────────────────────────────────── -->
     <div class="card shadow border-0 rounded-4 mb-3">
       <div class="card-body p-4">
@@ -184,5 +202,7 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="{% static 'js/common/confirm_submit.js' %}?v={% now 'U' %}"></script>
+<script src="{% static 'js/board/common/comment_edit.js' %}?v=20260104"></script>
 <script type="module" src="{% static 'js/board/worktask_detail.js' %}"></script>
 {% endblock %}

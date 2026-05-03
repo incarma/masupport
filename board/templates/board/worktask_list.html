@@ -17,10 +17,10 @@
   <div class="card shadow p-3 border-0 rounded-4 mb-3">
     <div class="d-flex align-items-center justify-content-between gap-2 flex-wrap">
       <div class="d-flex align-items-center gap-2">
-        <a href="?ym={{ prev_ym }}{% if status %}&status={{ status }}{% endif %}{% if category %}&category={{ category }}{% endif %}{% if keyword %}&keyword={{ keyword }}{% endif %}"
+        <a href="?ym={{ prev_ym }}{% if status %}&status={{ status }}{% endif %}{% if category %}&category={{ category }}{% endif %}{% if branch %}&branch={{ branch }}{% endif %}{% if keyword %}&keyword={{ keyword }}{% endif %}"
            class="btn btn-sm btn-outline-secondary">◀ {{ prev_ym }}</a>
         <span class="btn btn-sm btn-primary fw-bold pe-none px-4">{{ ym }}</span>
-        <a href="?ym={{ next_ym }}{% if status %}&status={{ status }}{% endif %}{% if category %}&category={{ category }}{% endif %}{% if keyword %}&keyword={{ keyword }}{% endif %}"
+        <a href="?ym={{ next_ym }}{% if status %}&status={{ status }}{% endif %}{% if category %}&category={{ category }}{% endif %}{% if branch %}&branch={{ branch }}{% endif %}{% if keyword %}&keyword={{ keyword }}{% endif %}"
            class="btn btn-sm btn-outline-secondary">{{ next_ym }} ▶</a>
       </div>
       <a href="{% url 'board:worktasks:worktask_create' %}"
@@ -51,6 +51,16 @@
             <option value="{{ cat.code }}" {% if category == cat.code %}selected{% endif %}>
               {{ cat.label }}
             </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="col-auto">
+        <label class="form-label mb-1 fw-semibold small">지점</label>
+        <select name="branch" class="form-select form-select-sm">
+          <option value="">전체 지점</option>
+          {% for b in branch_options %}
+            <option value="{{ b }}" {% if branch == b %}selected{% endif %}>{{ b }}</option>
           {% endfor %}
         </select>
       </div>
@@ -122,13 +132,20 @@
 
             <!-- 업무명 -->
             <td class="board-col-title">
-              <a href="{% url 'board:worktasks:worktask_detail' task.pk %}"
-                 class="text-decoration-none text-dark fw-semibold">
-                {{ task.title }}
-              </a>
-              {% if task.attachments.count %}
-                <span class="text-muted ms-1" title="첨부 {{ task.attachments.count }}개">📎</span>
-              {% endif %}
+              <div class="worktask-title-line">
+                <a href="{% url 'board:worktasks:worktask_detail' task.pk %}"
+                   class="worktask-title-link text-decoration-none text-dark fw-semibold">
+                  {{ task.title }}
+                </a>
+                {% if task.attachments.count %}
+                  <span class="text-muted worktask-title-icon"
+                        title="첨부 {{ task.attachments.count }}개">📎</span>
+                {% endif %}
+                {% if task.comment_count %}
+                  <span class="worktask-comment-count-badge"
+                        title="댓글 {{ task.comment_count }}개">💬 {{ task.comment_count }}</span>
+                {% endif %}
+              </div>
             </td>
 
             <!-- 지점 -->
