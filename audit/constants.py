@@ -77,6 +77,7 @@ class ACTION:
     COMMISSION_UPLOAD_APPROVAL = "commission.upload.approval"
     COMMISSION_UPLOAD_EFFICIENCY = "commission.upload.efficiency"
     COMMISSION_FAIL_EXCEL_DOWNLOAD = "commission.fail_excel.download"
+    COMMISSION_EXCEL_UPLOAD = "commission.excel.upload"
 
     # Accounts
     ACCOUNTS_EXCEL_UPLOAD = "accounts.excel.upload"

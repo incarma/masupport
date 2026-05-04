@@ -403,3 +403,72 @@
   max-height: 300px;
   overflow-y: auto;
 }
+
+
+/* ==========================================================
+ 4) Collect Notice (환수내역 안내자료 제작)
+ - collect_home 기존 정책 영향 없음
+ - #collect-notice 하위로만 스코프 제한
+========================================================== */
+
+#collect-notice .notice-row {
+  width: 100%;
+  min-width: 0;
+}
+
+#collect-notice .notice-row[hidden],
+#collect-notice .cn-loading-overlay[hidden] {
+  display: none !important;
+}
+
+#collect-notice .notice-row-year-select {
+  flex: 0 0 96px;
+  width: 96px;
+  max-width: 96px;
+}
+
+#collect-notice .notice-row-month-select {
+  flex: 0 0 76px;
+  width: 76px;
+  max-width: 76px;
+}
+
+#collect-notice .cn-title-year {
+  width: 96px;
+}
+
+#collect-notice .cn-title-month {
+  width: 76px;
+}
+
+#collect-notice .notice-row-filename {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#collect-notice .cn-file-label {
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+#collect-notice .cn-loading-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, .65);
+}
+
+@media (max-width: 576px) {
+  #collect-notice .notice-row {
+    flex-wrap: wrap !important;
+  }
+
+  #collect-notice .notice-row-filename {
+    flex-basis: 100%;
+  }
+}

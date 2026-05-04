@@ -35,6 +35,7 @@
   }
 
   /* ── CSRF 토큰 탐색 (SSOT 우선순위) ─────────────────── */
+  // TODO RULE-Q-01: csrf_window.js 로드 확인 후 window.csrfToken 으로 전환 필요
   function getCSRF() {
     if (window.csrfToken) return window.csrfToken;
     var h = qs("[name=csrfmiddlewaretoken]");

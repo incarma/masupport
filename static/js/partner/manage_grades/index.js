@@ -35,6 +35,7 @@
         .replaceAll('"', "&quot;")
         .replaceAll("'", "&#039;");
     },
+    // TODO RULE-Q-01: csrf_window.js 로드 확인 후 window.csrfToken 으로 전환 필요
     getCookie(name) {
       const value = `; ${document.cookie || ""}`;
       const parts = value.split(`; ${name}=`);

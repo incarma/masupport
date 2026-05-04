@@ -24,20 +24,12 @@
 import { qs, qsa } from "../common/forms/dom.js";
 import { initRowController } from "../common/forms/rows.js";
 import { bindPremiumInputs } from "../common/forms/premium.js";
+import { getCSRFToken } from "../common/manage/csrf.js";
 
 const INIT_FLAG = "boardSupportInited";
 const BUSY_FLAG = "boardSupportBusy";
 const USER_BIND_FLAG = "boardSupportUserBind";
 const PAGE_SHOW_FLAG = "boardSupportPageShowBind";
-
-function getCsrfToken() {
-  return (
-    window.csrfToken ||
-    document.querySelector('[name="csrfmiddlewaretoken"]')?.value ||
-    document.cookie.match(/csrftoken=([^;]+)/)?.[1] ||
-    ""
-  );
-}
 
 function isJsonResponse(res) {
   return (res.headers.get("content-type") || "").toLowerCase().includes("application/json");
@@ -72,7 +64,7 @@ function bindPageShowReset({ overlay, button }) {
 
 async function downloadPdf({ url, formEl, filename }) {
   const formData = new FormData(formEl);
-  const csrf = getCsrfToken();
+  const csrf = getCSRFToken();
 
   const res = await fetch(url, {
     method: "POST",

@@ -15,6 +15,9 @@ from django.db import transaction
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import PatternFill
 
+from audit.constants import ACTION
+from audit.services import log_action
+
 from .constants import (
     CACHE_ERROR_PREFIX,
     CACHE_PROGRESS_PREFIX,
@@ -478,6 +481,22 @@ def process_users_excel_task(self, task_id: str, file_path: str, batch_size: int
             "[TASK DONE] tid=%s status=SUCCESS sheet=%s total=%s created=%s updated=%s skipped=%s errors=%s",
             task_id, sheet_name, total, created, updated, skipped, err_cnt
         )
+
+        try:
+            log_action(
+                request=None,
+                action=ACTION.ACCOUNTS_EXCEL_UPLOAD,
+                meta={
+                    "file": file_path,
+                    "updated": updated,
+                    "created": created,
+                    "skipped": skipped,
+                    "errors": err_cnt,
+                    "source": "celery_task",
+                },
+            )
+        except Exception:
+            logger.exception("audit log 기록 실패 — process_users_excel_task")
 
         return {
             "status": "SUCCESS",

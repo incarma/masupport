@@ -11,7 +11,6 @@ Approval/Efficiency Excel Upload API (superuser only)
 """
 
 from django.db import transaction
-from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from accounts.decorators import grade_required
@@ -89,7 +88,6 @@ def _common_upload(*, request, ym: str, part: str, kind: str, file_path: str, or
     return row_count, inserted, result
 
 
-@csrf_exempt
 @require_POST
 @grade_required("superuser")
 def approval_upload_excel(request):

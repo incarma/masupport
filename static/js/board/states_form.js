@@ -22,20 +22,11 @@
 import { qs } from "../common/forms/dom.js";
 import { initRowController } from "../common/forms/rows.js";
 import { bindPremiumInputs } from "../common/forms/premium.js";
+import { getCSRFToken } from "../common/manage/csrf.js";
 
 const INIT_FLAG = "boardStatesInited";
 const BUSY_FLAG = "boardStatesBusy";
 const PAGE_SHOW_FLAG = "boardStatesPageShowBind";
-
-function getCsrfToken() {
-  return (
-    window.csrfToken ||
-    document.querySelector('[name="csrfmiddlewaretoken"]')?.value ||
-    document.cookie.match(/csrftoken=([^;]+)/)?.[1] ||
-    ""
-  );
-
-}
 
 function isJsonResponse(res) {
   return (res.headers.get("content-type") || "").toLowerCase().includes("application/json");
@@ -79,7 +70,7 @@ function getPdfUrlFallback() {
 
 async function downloadPdf({ url, formEl, filename }) {
   const formData = new FormData(formEl);
-  const csrf = getCsrfToken();
+  const csrf = getCSRFToken();
 
   const res = await fetch(url, {
     method: "POST",
