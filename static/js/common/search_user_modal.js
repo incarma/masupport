@@ -70,6 +70,7 @@
       document.getElementById("manage-calculate") ||
       document.getElementById("manage-table") ||
       document.getElementById("collect-home") ||
+      document.getElementById("collect-notice") ||
       document.getElementById("deposit-home") ||
       document.getElementById("support-form") ||
       null
@@ -423,6 +424,11 @@
         const btn = e.target?.closest?.(".btnOpenSearch");
         if (!btn) return;
         markActiveRowFromBtn(btn);
+
+        if (!btn.dataset.bsToggle && window.bootstrap?.Modal) {
+          const modalEl = document.getElementById("searchUserModal");
+          if (modalEl) window.bootstrap.Modal.getOrCreateInstance(modalEl).show();
+        }
       },
       true
     );
@@ -497,12 +503,11 @@
 
       const root = getActiveRoot();
 
-      // ✅ [수정 1] collect-home: 검색 모달만 닫고 피드백 모달은 유지
-      // deposit-home의 location.href 방식과 다름 — 혼동 금지
-      // collect_home.js의 userSelected 이벤트 리스너가 대상자 선택을 처리함
-      if (root?.id === "collect-home") {
+      // ✅ collect-notice: row 자동입력 없음 → 이벤트만 전달
+      if (root?.id === "collect-notice") {
         dispatchUserSelected(selected);
         tryHideModal(modalEl);
+
         if (input) input.value = "";
         resultsBox.innerHTML = "";
         return;

@@ -7,6 +7,7 @@ window.EsignFetch = (function () {
   let _lastGroups = [];
 
   // ─── CSRF 헬퍼 ───────────────────────────────────────────────
+  // TODO RULE-Q-01: csrf_window.js 로드 확인 후 window.csrfToken 으로 전환 필요
   function getCsrf() {
     return (
       document.cookie.match(/csrftoken=([^;]+)/)?.[1] ||

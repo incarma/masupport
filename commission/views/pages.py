@@ -292,3 +292,32 @@ def collect_home(request):
         "current_user_grade": str(request.user.grade),
     }
     return render(request, "commission/collect_home.html", ctx)
+
+
+# =============================================================================
+# Collect Notice (환수내역 안내자료 제작) — superuser 전용
+# =============================================================================
+
+from datetime import date as _date  # noqa: E402  (파일 하단 local import — 순환 참조 없음)
+
+
+@grade_required("superuser")
+def collect_notice(request):
+    """
+    환수내역 안내자료 제작 페이지.
+
+    [설계 원칙]
+    - superuser 전용 (@grade_required 단독 적용 — login_required는 grade_required 내부에서 처리)
+    - 파일 처리는 100% 클라이언트(SheetJS + ExcelJS)에서 전담 → 서버 업로드/저장 없음
+    - 비즈니스 로직 없음 → 서비스 레이어 호출 없음
+    - audit 로그 미적용 (서버 전송 없음, 추후 확장 가능)
+
+    [컨텍스트]
+    - accounts_search_url : 대상자 검색 모달 연동 (collect_home과 동일 SSOT 재사용)
+    - current_year        : 기준 연월 셀렉트 초기값 세팅용 (JS에서 data-current-year로 읽음)
+    """
+    ctx = {
+        "accounts_search_url": _accounts_search_url(),  # 기존 SSOT 함수 재사용
+        "current_year": _date.today().year,
+    }
+    return render(request, "commission/collect_notice.html", ctx)

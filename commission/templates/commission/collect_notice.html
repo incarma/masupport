@@ -1,0 +1,147 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}환수내역{% endblock %}
+
+{% block app_css %}
+<link rel="stylesheet"
+      href="{% static 'css/apps/commission.css' %}{% if STATIC_VERSION %}?v={{ STATIC_VERSION }}{% endif %}">
+{% endblock %}
+
+
+{% block content %}
+<!-- =========================================================================
+   루트 요소 — JS Boot 계약 (dataset SSOT)
+   data-search-user-url : 대상자 검색 모달 API URL
+   data-current-year    : 연도 셀렉트 초기값
+   data-current-user-grade : 등급 (JS 방어용)
+   ========================================================================= -->
+<div class="container my-4" id="collect-notice"
+     data-search-user-url="{{ accounts_search_url }}"
+     data-current-year="{{ current_year }}"
+     data-current-user-grade="{{ request.user.grade }}">
+
+  <h3 class="fw-bold text-center mb-4 commission-title">환수내역</h3>
+
+  <!-- ① 대상 카드 -->
+  <div class="card shadow-sm border-0 rounded-4 mb-3" id="noticeTargetCard">
+    <div class="card-body p-3">
+      <h5 class="fw-bold mb-3 commission-title">대상자</h5>
+      <div class="row g-2 align-items-center">
+        <div class="col-auto">
+          <select id="noticeTitleYear"
+                  class="form-select form-select-sm cn-title-year"></select>
+        </div>
+        <div class="col-auto">
+          <select id="noticeTitleMonth"
+                  class="form-select form-select-sm cn-title-month"></select>
+        </div>
+        <div class="col-auto">
+          <button type="button"
+                  class="btn btn-outline-secondary btn-sm btnOpenSearch"
+                  id="btnSearchTarget"
+                  data-bs-toggle="modal"
+                  data-bs-target="#searchUserModal">
+            대상자 검색
+          </button>
+        </div>
+        <div class="col">
+          <span id="targetDisplay" class="text-muted cn-target-display">
+            대상자를 선택해주세요.
+          </span>
+        </div>
+      </div>
+      <input type="hidden" id="targetEmpId"  value="">
+      <input type="hidden" id="targetName"   value="">
+      <input type="hidden" id="targetBranch" value="">
+    </div>
+  </div>
+
+  <!-- ② 내역 카드 -->
+  <div class="card shadow-sm border-0 rounded-4 mb-3">
+    <div class="card-body p-3">
+
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5 class="fw-bold mb-0 commission-title">내역 파일</h5>
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="btnAddRow">
+          + 행 추가
+        </button>
+      </div>
+
+      <div id="noticeRowList" class="mb-3">
+        <p id="noticeRowEmpty" class="text-muted text-center py-3 mb-0 cn-row-empty">
+          '+ 행 추가'를 눌러 기준 연월과 파일을 추가하세요.
+        </p>
+
+        <!-- 행 템플릿 — JS가 cloneNode로 복제, hidden 상태 유지 -->
+        <div id="noticeRowTemplate"
+             class="notice-row d-flex flex-nowrap align-items-center gap-2 mb-2"
+             hidden>
+          <select class="form-select form-select-sm notice-row-year-select flex-shrink-0 cn-sel-year"></select>
+          <select class="form-select form-select-sm notice-row-month-select flex-shrink-0 cn-sel-month"></select>
+          <label class="btn btn-outline-secondary btn-sm mb-0 flex-shrink-0 cn-file-label">
+            파일 선택
+            <input type="file" class="notice-row-file-input" accept=".xlsx,.xls" hidden>
+          </label>
+          <span class="notice-row-filename text-muted flex-grow-1 cn-filename">파일 미선택</span>
+          <button type="button"
+                  class="btn btn-outline-danger btn-sm flex-shrink-0 notice-row-delete"
+                  title="행 삭제">✕</button>
+        </div>
+      </div>
+
+      <div class="d-grid">
+        <button type="button" class="btn btn-primary" id="btnMakeNotice">
+          안내자료 제작
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ③ 다운로드 카드 (초기 hidden) -->
+  <div class="card shadow-sm border-0 rounded-4 mb-3"
+       id="noticeDownloadCard" hidden>
+    <div class="card-body p-3">
+      <h5 class="fw-bold mb-3 cn-success-title">✅ 안내자료 제작 완료</h5>
+      <p id="noticeDownloadInfo" class="text-muted mb-3 cn-download-info"></p>
+      <div class="d-flex gap-2">
+        <button type="button" class="btn btn-success" id="btnDownloadResult">
+          📥 엑셀 다운로드
+        </button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="btnResetDownload">
+          초기화
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ④ 로딩 오버레이 -->
+  <div id="loadingOverlay" hidden class="cn-loading-overlay">
+    <div class="spinner-border text-primary" role="status">
+      <span class="visually-hidden">처리 중...</span>
+    </div>
+    <p class="mt-2 ms-2 mb-0 fw-semibold">안내자료 제작 중...</p>
+  </div>
+
+</div>
+
+{# 공통 대상자 검색 모달: extends 템플릿에서는 반드시 block 내부에 둔다. #}
+{% include 'components/search_user_modal.html' with search_url=accounts_search_url %}
+{% endblock %}
+
+
+{% block extra_js %}
+<!-- =========================================================================
+   JS 로드 순서
+   1) SheetJS 0.18.5 — raw xlsx 파싱 + 결과 xlsx 생성 (단일 라이브러리)
+      ※ ExcelJS 제거 — unsafe-eval CSP 위반으로 이 프로젝트에서 사용 불가
+   2) CommissionCommon 공용 유틸
+   3) collect_notice.js (ESM)
+   ========================================================================= -->
+<script src="{% static 'vendor/xlsx/0.18.5/xlsx.full.min.js' %}"></script>
+<script src="{% static 'js/commission/_dom.js' %}{% if STATIC_VERSION %}?v={{ STATIC_VERSION }}{% endif %}"></script>
+<script src="{% static 'js/commission/_format.js' %}{% if STATIC_VERSION %}?v={{ STATIC_VERSION }}{% endif %}"></script>
+<script src="{% static 'js/commission/collect_notice.js' %}{% if STATIC_VERSION %}?v={{ STATIC_VERSION }}{% endif %}"
+        type="module"></script>
+{% endblock %}

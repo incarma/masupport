@@ -10,7 +10,6 @@ Deposit(채권) Excel Upload API (superuser only)
 """
 
 from django.db import transaction
-from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from accounts.decorators import grade_required
@@ -51,7 +50,6 @@ def _build_fail_excel_token(*, request, part: str, upload_type: str, result: dic
     return token, missing_sample
 
 
-@csrf_exempt
 @require_POST
 @grade_required("superuser")
 def upload_excel(request):

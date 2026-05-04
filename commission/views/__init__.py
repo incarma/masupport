@@ -55,6 +55,8 @@ _PAGES = {
     # legacy alias
     "commission_home": ("commission.views.pages", "redirect_to_deposit"),
     "collect_home": ("commission.views.pages", "collect_home"),
+    # 환수내역 안내자료 제작 페이지 (superuser 전용, 클라이언트 전용 xlsx 생성)
+    "collect_notice":      ("commission.views.pages", "collect_notice"),
 }
 
 _COLLECT_API_NAMES = frozenset({
@@ -155,6 +157,7 @@ __all__ = [
     "deposit_home",
     "approval_home",
     "support_home",
+    "collect_notice",
     # upload
     "upload_excel",
     "approval_upload_excel",

@@ -54,4 +54,10 @@ urlpatterns = [
     path("collect/api/feedback/update/",views.api_collect_feedback_update, name="api_collect_feedback_update"),
     path("collect/api/feedback/delete/",views.api_collect_feedback_delete, name="api_collect_feedback_delete"),
     path("collect/api/dropdown-feedback/save/", views.api_collect_dropdown_feedback_save, name="api_collect_dropdown_feedback_save"),
+
+    # =========================================================================
+    # Collect Notice (환수내역 안내자료)
+    # superuser 전용 · 클라이언트 전용 xlsx 생성 · 서버 파일 전송 없음
+    # =========================================================================
+    path("collect/notice/", views.collect_notice, name="collect_notice"),
 ]

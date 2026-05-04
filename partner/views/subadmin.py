@@ -6,6 +6,8 @@
 #   2) 삭제(강등) 시에도 SubAdminTemp row 삭제 금지, level만 초기화(팀/직급 보존)
 # ------------------------------------------------------------
 
+import logging
+
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.http import JsonResponse
@@ -14,7 +16,11 @@ from django.views.decorators.http import require_POST
 
 from accounts.decorators import grade_required
 from accounts.models import CustomUser
+from audit.constants import ACTION
+from audit.services import log_action
 from partner.models import SubAdminTemp
+
+logger = logging.getLogger(__name__)
 
 
 def _to_str(v) -> str:
@@ -52,9 +58,20 @@ def ajax_add_sub_admin(request):
     if u.grade in ("resign", "inactive"):
         return JsonResponse({"ok": False, "error": "퇴사/비활성 사용자는 추가할 수 없습니다."}, status=400)
 
-    changed = (u.grade != "leader")
+    _old_grade = u.grade
+    changed = (_old_grade != "leader")
     u.grade = "leader"
     u.save(update_fields=["grade"])
+
+    try:
+        log_action(
+            request,
+            ACTION.PARTNER_LEADER_ADD,
+            obj=u,
+            meta={"from_grade": _old_grade, "to_grade": "leader"},
+        )
+    except Exception:
+        logger.exception("audit log 기록 실패 — ajax_add_sub_admin")
 
     # ✅ SubAdminTemp 생성/유지: team/position defaults 금지 (초기화 방지)
     sa, created = SubAdminTemp.objects.get_or_create(
@@ -127,8 +144,19 @@ def ajax_delete_subadmin(request):
             return JsonResponse({"ok": False, "error": "다른 지점 사용자는 삭제할 수 없습니다."}, status=403)
 
     # ✅ 1) grade 변경
+    _old_grade = target.grade
     target.grade = "basic"
     target.save(update_fields=["grade"])
+
+    try:
+        log_action(
+            request,
+            ACTION.PARTNER_LEADER_DELETE,
+            obj=target,
+            meta={"from_grade": _old_grade, "to_grade": target.grade},
+        )
+    except Exception:
+        logger.exception("audit log 기록 실패 — ajax_delete_subadmin")
 
     # ✅ 2) SubAdminTemp는 유지(팀/직급 보존), level만 초기화
     sa_qs = SubAdminTemp.objects.select_for_update().filter(user=target)

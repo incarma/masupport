@@ -48,6 +48,7 @@
   /* ===========================================================================
    * CSRF helpers
    * =========================================================================== */
+  // TODO RULE-Q-01: csrf_window.js 로드 확인 후 window.csrfToken 으로 전환 필요
   function getCookie(name) {
     var value = "; " + (document.cookie || "");
     var parts = value.split("; " + name + "=");
