@@ -49,7 +49,7 @@
 }
 
 /* 중간관리자 추가 모달 전용(요청 반영) */
-.modal-subadmin-sm {
+#manage-grades .modal-subadmin-sm {
   max-width: 35%;
 }
 

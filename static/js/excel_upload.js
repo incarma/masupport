@@ -18,11 +18,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (!uploadForm || !fileInput) return;
 
-  const getCSRF = () =>
-    document.querySelector('[name=csrfmiddlewaretoken]')?.value ||
-    document.cookie.match(/csrftoken=([^;]+)/)?.[1] ||
-    "";
-
   const safeText = (v) => (v === null || v === undefined ? "" : String(v));
   const escapeHtml = (v) =>
     safeText(v)
@@ -101,7 +96,7 @@ document.addEventListener("DOMContentLoaded", () => {
         method: "POST",
         body: formData,
         headers: {
-          "X-CSRFToken": getCSRF(),
+          "X-CSRFToken": window.csrfToken,
           "X-Requested-With": "XMLHttpRequest",
         },
         credentials: "same-origin",

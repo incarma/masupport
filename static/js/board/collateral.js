@@ -6,7 +6,7 @@
  *
  * ── 규약 준수 ─────────────────────────────────────────────
  *  Boot   : #collateralBoot dataset 만 읽음
- *  CSRF   : window.csrfToken → [name=csrfmiddlewaretoken] → cookie
+ *  CSRF   : window.csrfToken (csrf_window.js 주입)
  *  fetch  : credentials:"same-origin" + X-Requested-With
  *  중복제출: dataset.submitting="1"
  *  DOM가드 : if (!el) return

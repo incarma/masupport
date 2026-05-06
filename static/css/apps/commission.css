@@ -25,11 +25,12 @@
   }
 }
 
-.deposit-title { color: #003f7d; }
-.deposit-section-title { color: #000; }
+#deposit-home .deposit-title,
+#collect-home .deposit-title { color: #003f7d; }
+#deposit-home .deposit-section-title { color: #000; }
 
 /* 공통: 말줄임 처리용 span (JS: .ellipsis-cell 클릭 → 전체보기 모달) */
-.ellipsis-cell{
+#deposit-home .ellipsis-cell{
   display:block;
   width:100%;
   overflow:hidden;
@@ -44,7 +45,7 @@
 /* ------------------------------
  1-1) info-table 공통(상단 지표/인적사항 등)
 ------------------------------ */
-.info-table thead th{
+#deposit-home .info-table thead th{
   font-size:0.85rem;
   font-weight:700;
   color:#5b6b7a;
@@ -52,7 +53,7 @@
   border-bottom:1px solid #e6edf5;
   padding:10px 12px;
 }
-.info-table tbody td{
+#deposit-home .info-table tbody td{
   font-size:1rem;
   padding:10px 12px;
   border-bottom:1px solid #eef2f7;

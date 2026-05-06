@@ -11,6 +11,7 @@ from django.views.decorators.http import require_GET
 
 from accounts.models import CustomUser
 from commission.models import DepositOther, DepositSummary, DepositSurety
+from commission.views.utils_json import _json_error as _json_err
 
 # =============================================================================
 # 0) Common helpers
@@ -58,10 +59,6 @@ def _int0(v: Any) -> int:
             return int(v)
         except Exception:
             return 0
-
-
-def _json_err(message: str, *, status: int = 400) -> JsonResponse:
-    return JsonResponse({"ok": False, "message": message}, status=status)
 
 
 # =============================================================================
