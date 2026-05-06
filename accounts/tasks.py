@@ -272,6 +272,7 @@ def process_users_excel_task(self, task_id: str, file_path: str, batch_size: int
         created = updated = skipped = err_cnt = 0
         processed = 0
 
+        grade_changed = 0
         buffer_rows: List[Tuple[Any, ...]] = []
         current_excel_row_num = 2  # 엑셀 실제 행번호(헤더 다음)
 
@@ -284,7 +285,7 @@ def process_users_excel_task(self, task_id: str, file_path: str, batch_size: int
 
         @transaction.atomic
         def flush_chunk(rows_chunk: List[Tuple[Any, ...]], start_row_num: int) -> None:
-            nonlocal created, updated, skipped, err_cnt, processed, results, existing_grade_map
+            nonlocal created, updated, skipped, err_cnt, processed, results, existing_grade_map, grade_changed
 
             def _build_initial_password(emp_id: str) -> str:
                 """
@@ -385,7 +386,10 @@ def process_users_excel_task(self, task_id: str, file_path: str, batch_size: int
 
                         if update_fields:
                             # 중복 제거
+                            prev_grade = existing_grade_map.get(emp_id)
                             user.save(update_fields=list(dict.fromkeys(update_fields)))
+                            if "grade" in update_fields and prev_grade != user.grade:
+                                grade_changed += 1
 
                         existing_grade_map[emp_id] = user.grade
 
@@ -498,6 +502,20 @@ def process_users_excel_task(self, task_id: str, file_path: str, batch_size: int
         except Exception:
             logger.exception("audit log 기록 실패 — process_users_excel_task")
 
+        if grade_changed:
+            try:
+                log_action(
+                    request=None,
+                    action=ACTION.ACCOUNTS_GRADE_UPDATE,
+                    meta={
+                        "grade_changed_count": grade_changed,
+                        "file": file_path,
+                        "source": "celery_task",
+                    },
+                )
+            except Exception:
+                logger.exception("audit log 기록 실패 — ACCOUNTS_GRADE_UPDATE")
+
         return {
             "status": "SUCCESS",
             "result_path": result_path,
@@ -507,6 +525,7 @@ def process_users_excel_task(self, task_id: str, file_path: str, batch_size: int
             "updated": updated,
             "skipped": skipped,
             "errors": err_cnt,
+            "grade_changed": grade_changed,
         }
 
     except Exception as e:

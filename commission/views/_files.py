@@ -14,9 +14,13 @@ Upload file helpers (views layer SSOT)
 """
 
 from dataclasses import dataclass
+import logging
 from typing import Optional, Tuple
 
 from django.core.files.storage import FileSystemStorage
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -61,4 +65,4 @@ def safe_delete(temp: TempUpload) -> None:
     try:
         temp.fs.delete(temp.saved_name)
     except Exception:
-        pass
+        logger.exception("[commission.files] temp upload delete failed saved_name=%s", temp.saved_name)

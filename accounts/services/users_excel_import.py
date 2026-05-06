@@ -2,8 +2,12 @@
 from __future__ import annotations
 
 import math
+import logging
 from datetime import date, datetime
 from typing import Any, Dict, Iterable, Optional, Tuple
+
+
+logger = logging.getLogger(__name__)
 
 
 # =============================================================================
@@ -49,7 +53,7 @@ def normalize_emp_id(v: Any) -> str:
         if isinstance(v, float) and float(v).is_integer():
             return str(int(v))
     except Exception:
-        pass
+        logger.exception("[accounts.excel_import] normalize_emp_id failed value=%r", v)
 
     s = _to_str(v)
     if not s:

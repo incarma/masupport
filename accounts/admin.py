@@ -1,6 +1,7 @@
 # django_ma/accounts/admin.py
 from __future__ import annotations
 
+import logging
 import re
 import uuid
 from pathlib import Path
@@ -36,6 +37,10 @@ from .models import CustomUser
 from .tasks import process_users_excel_task
 from audit.constants import ACTION
 from audit.services import log_action
+
+
+logger = logging.getLogger(__name__)
+
 
 # =============================================================================
 # Settings / Constants
@@ -408,7 +413,10 @@ class CustomUserAdmin(UserAdmin):
                     )
                 except Exception:
                     # audit 실패가 관리자 복구 자체를 막으면 안 됨
-                    pass
+                    logger.exception(
+                        "[accounts.admin] password reset/unlock audit failed user_id=%s",
+                        target.id,
+                    )
 
                 changed += 1
 
@@ -438,7 +446,10 @@ class CustomUserAdmin(UserAdmin):
                         success=True,
                     )
                 except Exception:
-                    pass
+                    logger.exception(
+                        "[accounts.admin] must_change_password clear audit failed user_id=%s",
+                        target.id,
+                    )
                 changed += 1
         self.message_user(request, f"{changed}명의 강제 비밀번호 변경 플래그를 해제했습니다.", level=messages.SUCCESS)
     

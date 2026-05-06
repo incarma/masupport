@@ -1,5 +1,6 @@
 # django_ma/commission/views/approval.py
 from __future__ import annotations
+import logging
 
 """
 Approval/Efficiency Excel Upload API (superuser only)
@@ -28,6 +29,9 @@ from ._files import save_temp_upload, safe_delete
 from ._ym import resolve_ym
 from .utils_fail_excel import store_fail_rows_as_excel
 from .utils_json import _json_error, _json_ok
+
+
+logger = logging.getLogger(__name__)
 
 
 def _common_upload(*, request, ym: str, part: str, kind: str, file_path: str, original_name: str) -> tuple[int, int, dict]:
@@ -119,7 +123,7 @@ def approval_upload_excel(request):
                 success=False,
             )
         except Exception:
-            pass
+            logger.exception("[commission.approval] audit failed: resolve_ym")
         return _json_error(str(ve), status=400)
 
     if kind not in ("efficiency", "approval"):
@@ -131,7 +135,7 @@ def approval_upload_excel(request):
                 success=False,
             )
         except Exception:
-            pass
+            logger.exception("[commission.approval] audit failed: invalid kind")
         return _json_error("구분(kind)을 선택해주세요. (efficiency/approval)", status=400)
     if not excel_file:
         try:
@@ -142,7 +146,7 @@ def approval_upload_excel(request):
             success=False,
             )
         except Exception:
-            pass
+            logger.exception("[commission.approval] audit failed: missing excel_file")
         return _json_error("엑셀 파일이 전달되지 않았습니다.", status=400)
 
     temp = save_temp_upload(excel_file)
@@ -187,7 +191,7 @@ def approval_upload_excel(request):
                 success=True,
             )
         except Exception:
-            pass
+            logger.exception("[commission.approval] audit failed: upload success")
 
         return _json_ok(
             "✅ 업로드가 완료되었습니다.",
@@ -213,7 +217,7 @@ def approval_upload_excel(request):
                 success=False,
             )
         except Exception:
-            pass
+            logger.exception("[commission.approval] audit failed: value error")
         return _json_error(str(ve), status=400)
 
     except Exception as e:
@@ -226,7 +230,7 @@ def approval_upload_excel(request):
                 success=False,
             )
         except Exception:
-            pass
+            logger.exception("[commission.approval] audit failed: upload exception")
         return _json_error(f"⚠️ 업로드 실패: {e}", status=500)
 
     finally:

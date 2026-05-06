@@ -86,7 +86,10 @@ def _parse_surety_bond_detail(detail: str) -> tuple[int, int]:
         if m_debt:   debt   = int(m_debt.group(1).replace(",", ""))
         if m_surety: surety = int(m_surety.group(1).replace(",", ""))
     except Exception:
-        pass
+        logger.exception(
+            "[collect] surety bond detail parse failed detail=%r",
+            detail,
+        )
     return debt, surety
 
 

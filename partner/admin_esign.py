@@ -12,11 +12,16 @@ audit/admin.py 패턴 준수:
   - has_delete_permission: superuser만 허용
 """
 
+import logging
+
 from django.contrib import admin
 from django.utils.html import format_html
 from django.urls import reverse
 
 from partner.models import EfficiencySignRequest, EfficiencyConfirmSign
+
+
+logger = logging.getLogger(__name__)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -209,4 +214,4 @@ try:
     if not custom_admin_site.is_registered(EfficiencyConfirmSign):
         custom_admin_site.register(EfficiencyConfirmSign, EfficiencyConfirmSignAdmin)
 except Exception:
-    pass
+    logger.exception("[partner.admin_esign] custom_admin_site registration failed")

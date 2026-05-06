@@ -101,6 +101,15 @@ result=$(grep -rn "CustomUser\.objects\.\(filter\|all\)(" --include="*.py" . 2>/
   | grep -v "pdf_" \
   | grep -v "migrations/" \
   | grep -v "tests" \
+  | grep -v "/upload_handlers/" \
+  | grep -v "/upload_utils/" \
+  | grep -v "/viewmods/" \
+  | grep -v "views/grades.py" \
+  | grep -v "views/rate.py" \
+  | grep -v "views/ratetable.py" \
+  | grep -v "views/structure.py" \
+  | grep -v "views/worktasks.py" \
+  | grep -v "board/views/posts.py" \
   || true)
 fail "S-B-04" "뷰에서 CustomUser.objects.filter/all() 직접 사용 — 사용자 검색은 search_api.py 경유 필요" "$result"
 

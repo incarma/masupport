@@ -384,7 +384,7 @@ def ajax_rate_userlist_upload(request):
             try:
                 default_storage.delete(file_path)
             except Exception:
-                pass
+                logger.exception("[partner.ratetable_upload] temp file delete failed file_path=%s", file_path)
 
 
 @require_GET

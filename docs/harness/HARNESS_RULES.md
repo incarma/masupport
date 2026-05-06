@@ -122,6 +122,22 @@ grep -n "COMMISSION_EXCEL_UPLOAD" commission/views/approval.py
 # 참조 위치 확인
 ```
 
+## S-B-04 제외 판정 (2026-05-06 기준)
+
+아래 파일들은 "사용자 검색" 목적이 아닌 내부 조회로 판정하여 lint 제외 패턴에 등록:
+
+| 파일 | 용도 | 판정 |
+|------|------|------|
+| `board/views/worktasks.py` | `_get_worktask_branch_options()`: 지점 목록 집계, `_extract_post_data()`: pk→인스턴스 변환 | ✅ 정당 |
+| `partner/views/grades.py` | 권한 스코프 내 조직 grade 관리 | ✅ 정당 |
+| `partner/views/rate.py`, `ratetable.py` | 요율 관리 대상 조회 | ✅ 정당 |
+| `partner/views/structure.py` | 조직도 관리 대상 조회 | ✅ 정당 |
+| `commission/upload_handlers/efficiency.py` | 업로드 행 사번 매핑 | ✅ 정당 |
+| `commission/upload_utils/_db.py` | bulk 처리 사번 존재 검증 | ✅ 정당 |
+| `dash/viewmods/` | 대시보드 집계용 필터 | ✅ 정당 |
+
+재검토 시점: 신규 사용자 검색 기능 추가 시 또는 분기별 audit
+
 ---
 
 ## RULE-S-05. 정의된 grade 변경 audit 상수는 반드시 실제 호출에 연결

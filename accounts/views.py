@@ -216,7 +216,7 @@ def upload_progress_view(request: HttpRequest) -> JsonResponse:
         try:
             download_url = reverse("admin:upload_users_result", args=[task_id])
         except Exception:
-            pass
+            access_logger.exception("ADMIN_UPLOAD_RESULT_REVERSE failed task_id=%s", task_id)
 
     return JsonResponse(
         {
@@ -301,11 +301,11 @@ class SessionCloseLoginView(LoginView):
         try:
             _ = form.errors
         except Exception:
-            pass
+            access_logger.exception("FORM_ERRORS_EVALUATION failed")
         try:
             form._errors.pop(NON_FIELD_ERRORS, None)
         except Exception:
-            pass
+            access_logger.exception("NON_FIELD_ERRORS_POP failed")
         form.add_error(None, ValidationError(message, code=code))
 
     def _audit_safe(self, request, action: str, **kwargs) -> None:

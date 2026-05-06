@@ -1416,41 +1416,41 @@
   color: #005BAC;
 }
 
-.confirm-file-name-input {
+#esign-confirm .confirm-file-name-input {
   max-width: 260px;
 }
 
 /* Esign input colgroup */
-.esign-col-affiliation { width: 140px; }
-.esign-col-month { width: 120px; }
-.esign-col-category { width: 100px; }
-.esign-col-amount { width: 140px; }
-.esign-col-person { width: 200px; }
-.esign-col-content { width: 380px; }
-.esign-col-remove { width: 70px; }
+#esign-confirm .esign-col-affiliation { width: 140px; }
+#esign-confirm .esign-col-month { width: 120px; }
+#esign-confirm .esign-col-category { width: 100px; }
+#esign-confirm .esign-col-amount { width: 140px; }
+#esign-confirm .esign-col-person { width: 200px; }
+#esign-confirm .esign-col-content { width: 380px; }
+#esign-confirm .esign-col-remove { width: 70px; }
 
 /* Structure main colgroup */
-.structure-col-rq { width: 120px; }
-.structure-col-tg { width: 120px; }
-.structure-col-branch { width: 210px; }
-.structure-col-rank { width: 120px; }
-.structure-col-or { width: 40px; }
-.structure-col-memo { width: 260px; }
-.structure-col-date { width: 120px; }
-.structure-col-del { width: 60px; }
+#manage-structure .structure-col-rq { width: 120px; }
+#manage-structure .structure-col-tg { width: 120px; }
+#manage-structure .structure-col-branch { width: 210px; }
+#manage-structure .structure-col-rank { width: 120px; }
+#manage-structure .structure-col-or { width: 40px; }
+#manage-structure .structure-col-memo { width: 260px; }
+#manage-structure .structure-col-date { width: 120px; }
+#manage-structure .structure-col-del { width: 60px; }
 
 /* Esign sign modal */
-.esign-sign-table {
+#esign-confirm .esign-sign-table {
   min-width: 700px;
   font-size: 12px;
 }
 
-.esign-sign-col-no { width: 40px; }
-.esign-sign-col-month { width: 80px; }
-.esign-sign-col-amount { width: 90px; }
-.esign-sign-col-person { width: 100px; }
+#esign-confirm .esign-sign-col-no { width: 40px; }
+#esign-confirm .esign-sign-col-month { width: 80px; }
+#esign-confirm .esign-sign-col-amount { width: 90px; }
+#esign-confirm .esign-sign-col-person { width: 100px; }
 
-.esign-sign-label {
+#esign-confirm .esign-sign-label {
   font-size: 13px;
 }
 
