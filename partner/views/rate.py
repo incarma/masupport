@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.db.models import Q
@@ -27,6 +29,9 @@ from .utils import (
     resolve_branch_for_write,
     resolve_part_for_write,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 def _to_str(v) -> str:
@@ -217,7 +222,7 @@ def rate_save(request):
                 success=True,
             )
         except Exception:
-            pass
+            logger.exception("[partner.rate] audit failed: rate_save success")
 
         return json_ok({"saved_count": saved})
 
@@ -238,7 +243,7 @@ def rate_save(request):
                 success=False,
             )
         except Exception:
-            pass
+            logger.exception("[partner.rate] audit failed: rate_save failure")
         raise
 
 
@@ -278,7 +283,7 @@ def rate_delete(request):
             success=True,
         )
     except Exception:
-        pass
+        logger.exception("[partner.rate] audit failed: rate_delete id=%s", getattr(rc, "id", None))
 
     rc.delete()
 

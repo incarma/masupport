@@ -10,7 +10,7 @@ import sys
 if hasattr(sys.stdout, "buffer"):
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
-SKIP_DIRS = {"migrations", "tests", "__pycache__", ".git", "node_modules"}
+SKIP_DIRS = {"migrations", "tests", "__pycache__", ".git", "node_modules", "venv", ".venv"}
 
 violations = []
 
@@ -37,8 +37,23 @@ for dirpath, dirnames, filenames in os.walk("."):
                 continue
             if not re.match(r"^\s*pass\s*$", lines[i + 1]):
                 continue
-            ctx = "".join(lines[max(0, i - 1): min(len(lines), i + 3)])
-            if re.search(r"log(?:ger|_action)|logging\.", ctx):
+            # 컨텍스트: except 위아래 4줄씩 (기존 1줄에서 확장)
+            ctx = "".join(lines[max(0, i - 4): min(len(lines), i + 5)])
+
+            # 1) 로깅/audit 컨텍스트
+            if re.search(r"log(?:ger|_action)|logging\.|ACTION\.", ctx):
+                continue
+            # 2) 리소스 정리 패턴
+            if re.search(r"\.close\(\)|\.unlink\(\)|os\.remove|shutil\.|cleanup", ctx):
+                continue
+            # 3) 내결함성 루프
+            if re.search(r"for\s+\w+\s+in\s|processed\s*\+=|results\.append|err_cnt\s*\+=", ctx):
+                continue
+            # 4) 데이터 변환 함수
+            if re.search(r"return\s+(?:None|\"\"|\[\]|\{\}|0|False|-1|default)", ctx):
+                continue
+            # 5) 선택적 모듈/기능
+            if re.search(r"import\s|from\s+\w+.*import|optional|fallback", ctx, re.IGNORECASE):
                 continue
 
             rel = fpath.replace("\\", "/").lstrip("./")

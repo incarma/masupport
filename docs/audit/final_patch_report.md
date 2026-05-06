@@ -155,3 +155,133 @@ System check identified no issues (0 silenced).
 | Q-03 | `commission/views/api_deposit_impl.py` | JSON 헬퍼 SSOT alias | ⏳ 미커밋 |
 
 > ⏳ 미커밋 7개 파일 (`git diff HEAD`): 배포 전 커밋 필요
+
+---
+
+## STEP 6~9 추가 패치 요약
+
+> 갱신일: 2026-05-06
+> 최종 커밋: 313c298
+
+### 전체 RULE 최종 상태표
+
+| RULE ID | 내용 | 최종 상태 | 처리 STEP | 잔존 이슈 |
+|---------|------|---------|---------|---------|
+| RULE-S-01 | grade 변경 audit 로그 | ✅ | STEP 1 | — |
+| RULE-S-02 | 계정 업로드 audit 로그 | ✅ | STEP 1 | — |
+| RULE-S-03 | @csrf_exempt 제거 | ✅ | STEP 1 | — |
+| RULE-S-04 | ACTION 상수 추가 | ✅ | STEP 1 | — |
+| RULE-S-05 | grade audit 상수 연결 | ⚠️ | STEP 1 | `ACCOUNTS_GRADE_UPDATE` 사용처 0건 잔존 — row별 grade 변경 집계 미구현 |
+| S-E-02 | worktask 다운로드 audit | ✅ | STEP 6 | — |
+| S-F-04 | ForcePassword 설정 | ✅ | STEP 6 | `.env.prod`에 `FORCE_PASSWORD_CHANGE_ENABLED=True` 및 SCOPE_* 설정 필요 |
+| RULE-Q-01 | CSRF 공통 유틸 (21개) | ⚠️ | STEP 2+7 | `comment_edit.js:67` — false positive (form POST용 hidden input `name` 속성, CSRF 재구현 아님) |
+| RULE-Q-02 | CSS 스코프 수정 | ⚠️ | STEP 3+8 | `board.css` 10건, `partner.css` 22건, `index.css :root`, `commission.css` collect 19건 잔존 |
+| RULE-Q-03 | JSON 헬퍼 중복 제거 | ✅ | STEP 4 | — |
+| Q-F-05 | board/task 이름 혼동 | ✅ | STEP 9 | — |
+
+---
+
+### run_all.sh 최종 결과 (커밋 313c298 / 2026-05-06 20:33:56)
+
+#### [1/4] 보안 위반 탐지
+
+```
+❌ [S-B-04] 뷰에서 CustomUser.objects.filter/all() 직접 사용 — 21건
+   (이번 패치 범위 외 — 구조적 리팩토링 별도 작업 필요)
+❌ [S-S-05] 상수 'ACCOUNTS_GRADE_UPDATE' 정의됨 → log_action 호출 없음 (0건)
+   (이번 패치 범위 외 — row별 grade 변경 집계 미구현)
+→ ❌ 보안 위반 2건 (모두 이번 패치 범위 외)
+```
+
+#### [2/4] 코드 품질 위반 탐지
+
+```
+❌ [Q-01] static/js/board/common/comment_edit.js:67: csrfInput.name = "csrfmiddlewaretoken";
+   → false positive: form POST용 hidden input name 속성 설정 (CSRF 재구현 아님)
+❌ [Q-02a] static/css/apps/index.css:6: :root { (이번 범위 아님)
+❌ [Q-02b] commission.css 전역 클래스 19건 — collect 관련 (이번 범위 아님)
+❌ [URL-01] JS 내 URL 하드코딩 폴백 패턴 19건 (이번 범위 아님)
+→ 이번 패치 범위 외 / false positive
+```
+
+#### [3/4] CSS 스코프 위반 탐지
+
+```
+[NG] board.css: .cn-loading-overlay 등 10건 (이번 범위 아님)
+[NG] partner.css: .esign-col-*, .structure-col-* 등 22건 (이번 범위 아님)
+[OK] base.css: 금지 패턴 없음
+[NG] index.css: :root (이번 범위 아님)
+→ manual.css :root 위반 ✅ 해소됨 (STEP 8)
+→ 잔존 CSS 스코프 위반 33건 (모두 이번 범위 아님)
+```
+
+#### [4/4] Celery task 이름 정합성
+
+```
+beat_schedule 9건 ↔ @shared_task(name=) 15건 — 불일치 0건
+  [generate-monthly-worktasks] -> board.tasks.generate_monthly_worktasks
+    등록 위치: board/tasks/worktask_tasks.py:37 ✅ (STEP 9 이동 완료)
+  [notify-due-worktasks] -> board.tasks.notify_due_worktasks
+    등록 위치: board/tasks/worktask_tasks.py:76 ✅ (STEP 9 이동 완료)
+[OK] Celery task 이름 점검 통과
+```
+
+---
+
+### 잔존 이슈 및 향후 과제
+
+| 항목 | 우선순위 | 설명 | 담당 제안 |
+|------|---------|------|---------|
+| `ACCOUNTS_GRADE_UPDATE` 미사용 (S-S-05) | 중 | `process_users_excel_task`에서 row별 grade 변경 집계 후 `log_action` 추가 | accounts 담당 |
+| `S-B-04` CustomUser 직접 조회 21건 | 저 | 검색 목적 뷰만 `search_api.py` 경유, 내부 조회는 개별 판단 | 구조적 리팩토링 (별도 스프린트) |
+| `comment_edit.js:67` false positive | 해소 불필요 | form POST용 hidden input name 속성 — CSRF 재구현 아님, lint 과잉 매칭 | lint 예외처리 or 주석 추가 |
+| `commission.css` collect 전역 클래스 19건 | 저 | `#collect-home` 스코프 하위로 이동 | commission 담당 |
+| `board.css` CSS-SCOPE-01 위반 10건 | 저 | `#collect-notice` 관련 규칙을 `.board-scope` 내부로 이동 | board 담당 |
+| `partner.css` CSS-SCOPE-02 위반 22건 | 저 | `.esign-col-*`, `.structure-col-*` 등을 각 ID 스코프 하위로 이동 | partner 담당 |
+| `index.css :root` CSS-SCOPE-04 위반 | 저 | `:root` 변수를 페이지 루트 ID 하위로 이동 | 공통 담당 |
+
+---
+
+### STEP 6~9 변경 파일 전체 목록
+
+| STEP | 파일 | 변경 유형 | 커밋 |
+|------|------|---------|------|
+| STEP 6 | `board/views/worktasks.py` | worktask_att_download audit log 4개 분기 추가 | 313c298 |
+| STEP 6 | `web_ma/settings.py` | FORCE_PASSWORD_CHANGE 주석 추가 | 313c298 |
+| STEP 6 | `docs/harness/DEPLOY_CHECKLIST.md` | S-F-04 체크 항목 2건 추가 | 313c298 |
+| STEP 7 | `static/js/commission/collect_notice.js` | CSRF SSOT (ESM import) | 313c298 |
+| STEP 7 | `static/js/dash/sales_upload.js` | CSRF SSOT (ESM import) | 313c298 |
+| STEP 7 | `static/js/board/common/comment_edit.js` | CSRF SSOT (window.csrfToken) | 313c298 |
+| STEP 7 | `static/js/board/common/detail_inline_update.js` | CSRF SSOT (window.csrfToken) | 313c298 |
+| STEP 7 | `static/js/board/common/inline_update.js` | CSRF SSOT (window.csrfToken) | 313c298 |
+| STEP 7 | `static/js/commission/approval_excel_upload.js` | CSRF SSOT (window.csrfToken) | 313c298 |
+| STEP 7 | `static/js/landing/index.js` | CSRF SSOT (window.csrfToken) | 313c298 |
+| STEP 7 | `static/js/manual/_shared.js` | CSRF SSOT (window.csrfToken) | 313c298 |
+| STEP 7 | `static/js/manual/create_manual_modal.js` | CSRF SSOT (window.csrfToken) | 313c298 |
+| STEP 7 | `static/js/partner/manage_table.js` | CSRF 헤더 방식 전환 | 313c298 |
+| STEP 7 | 템플릿 10개 | csrf_window.js 추가 | 313c298 |
+| STEP 8 | `static/css/apps/manual.css` | :root → #manual-detail 스코프 이동 | 313c298 |
+| STEP 9 | `board/task.py` | deprecation re-export 래퍼로 교체 | 313c298 |
+| STEP 9 | `board/tasks/__init__.py` | worktask_tasks re-export 추가 | 313c298 |
+| STEP 9 | `board/tasks/worktask_tasks.py` | 신규 생성 (task.py에서 이동) | 313c298 |
+| STEP 9 | `web_ma/celery.py` | 주석 파일명 수정 | 313c298 |
+
+---
+
+### 배포 전 최종 체크리스트
+
+DEPLOY_CHECKLIST.md 기준 이번 패치(STEP 1~9) 전체 해당 항목:
+
+- [ ] `python manage.py check` 통과 ← **확인됨**: `System check identified no issues (0 silenced)`
+- [ ] `python manage.py collectstatic --noinput` 실행 (JS 21개 파일, CSS 3개 파일, template 20개 파일 변경)
+- [ ] `migrate` 불필요 (모델 변경 없음)
+- [ ] Celery worker 재시작 필요 (`accounts/tasks.py`, `board/tasks/worktask_tasks.py` 변경)
+- [ ] Celery beat 재시작 권장 (`web_ma/celery.py` 주석 수정, beat_schedule 변경 없음)
+- [ ] `.env.prod`에 `FORCE_PASSWORD_CHANGE_ENABLED=True` 확인 → [S-F-04]
+- [ ] `FORCE_PASSWORD_CHANGE_SCOPE_BRANCHES`, `SCOPE_PARTS`, `SCOPE_CHANNELS` 중 하나 이상 설정 확인 → [S-F-04]
+- [ ] 배포 후 3종 계정(superuser / head / basic) 검증:
+  - WorkTask 첨부 다운로드 → audit log 기록 확인 (성공/403/404 각 분기)
+  - commission 업로드 페이지 → CSRF 오류 없음 확인
+  - partner grade 변경 → audit log 기록 확인
+  - manual 에디터 → comment/section/block AJAX CSRF 정상 동작 확인
+- [ ] 서버 로그에 `AttributeError(ACTION.XXX)` 없음 확인

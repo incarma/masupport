@@ -6,6 +6,11 @@ from ipaddress import ip_address, ip_network
 from urllib.parse import parse_qsl, urlencode
 
 from django.conf import settings
+import logging
+
+
+logger = logging.getLogger(__name__)
+
 
 SENSITIVE_KEYS = {
     "password", "passwd", "pwd",
@@ -68,7 +73,7 @@ def mask_querystring(raw_qs: str) -> str:
                 out.append((k, mask_value(v)))
         return urlencode(out, doseq=True)
     except Exception:
-        # 파싱 실패 시 통째로 마스킹
+        logger.exception("[audit.utils] mask_querystring parse failed")
         return "***"
 
 
@@ -93,6 +98,7 @@ def get_client_ip(request) -> str:
         remote_ip = ip_address(remote_addr)
         trusted = any(remote_ip in ip_network(cidr, strict=False) for cidr in trusted_cidrs)
     except Exception:
+        logger.exception("[audit.utils] invalid remote_addr=%s", remote_addr)
         trusted = False
 
     if not trusted:
@@ -116,6 +122,6 @@ def get_client_ip(request) -> str:
             ip_address(xrip.strip())
             return xrip.strip()
         except Exception:
-            pass
+            logger.exception("[audit.utils] invalid HTTP_X_REAL_IP=%s", xrip)
 
     return remote_addr

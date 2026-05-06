@@ -9,17 +9,17 @@
  0) Shared tokens / layout helpers
 ========================================================== */
 /* 채권관리(deposit_home): 기존 폭 유지 */
-.deposit-maxw { max-width: 1100px; }
+#deposit-home .deposit-maxw { max-width: 1100px; }
 
 /* 환수관리(collect_home): partner 앱과 동일한 wide 레이아웃 */
-.collect-wide {
+#collect-home .collect-wide {
   width: 86vw;
   max-width: none;
   margin-left: calc(-43vw + 50%);
 }
 
 @media (max-width: 576px) {
-  .collect-wide {
+  #collect-home .collect-wide {
     width: 100%;
     margin-left: 0;
   }
@@ -166,7 +166,7 @@
 /* ------------------------------
  2-1) 가로 스크롤 래퍼
 ------------------------------ */
-.commission-table-scroll{
+#collect-home .commission-table-scroll{
   overflow-x:auto;
   -webkit-overflow-scrolling:touch;
   padding-bottom:6px;
@@ -176,14 +176,14 @@
  2-2) nowrap 테이블 (폭은 콘텐츠 기준)
  - approval 테이블은 "내용이 길어도 줄바꿈 없이" 가로 스크롤로 보는 정책
 ------------------------------ */
-.commission-nowrap-table{
+#collect-home .commission-nowrap-table{
   width:max-content;
   min-width:100%;
   table-layout:auto;
 }
 
-.commission-nowrap-table th,
-.commission-nowrap-table td{
+#collect-home .commission-nowrap-table th,
+#collect-home .commission-nowrap-table td{
   white-space:nowrap;
   word-break:keep-all;
   overflow:visible;
@@ -192,7 +192,7 @@
 }
 
 /* money-cell은 전역(base.css)에도 있지만, approval에서 확실히 고정 */
-.commission-nowrap-table .money-cell{
+#collect-home .commission-nowrap-table .money-cell{
   white-space:nowrap !important;
 }
 
@@ -206,32 +206,25 @@
   - collect-filter-btn: 조회 버튼 컨테이너
   - 모바일: wrap 허용
 ---------------------------------------------------------- */
-.collect-filter-bar {
+#collect-home .collect-filter-bar {
   display: flex;
   flex-wrap: nowrap;
   gap: 8px;
   align-items: flex-end;
 }
 
-/* 월도: 가장 좁게 */
-.collect-filter-bar .collect-filter-item:nth-child(1) { flex: 0 0 110px; }
-/* 부문 */
-.collect-filter-bar .collect-filter-item:nth-child(2) { flex: 0 0 160px; }
-/* 부서 */
-.collect-filter-bar .collect-filter-item:nth-child(3) { flex: 0 0 150px; }
-/* 영업가족 */
-.collect-filter-bar .collect-filter-item:nth-child(4) { flex: 1 1 160px; min-width: 120px; max-width: 220px; }
-/* 조회 버튼 */
-.collect-filter-bar .collect-filter-btn               { flex: 0 0 72px; }
-
-/* select 폰트 통일 */
-.collect-filter-bar .form-select { font-size: .875rem; }
+#collect-home .collect-filter-bar .collect-filter-item:nth-child(1) { flex: 0 0 110px; }
+#collect-home .collect-filter-bar .collect-filter-item:nth-child(2) { flex: 0 0 160px; }
+#collect-home .collect-filter-bar .collect-filter-item:nth-child(3) { flex: 0 0 150px; }
+#collect-home .collect-filter-bar .collect-filter-item:nth-child(4) { flex: 1 1 160px; min-width: 120px; max-width: 220px; }
+#collect-home .collect-filter-bar .collect-filter-btn               { flex: 0 0 72px; }
+#collect-home .collect-filter-bar .form-select { font-size: .875rem; }
 
 /* 모바일: 2열 wrap */
 @media (max-width: 576px) {
-  .collect-filter-bar { flex-wrap: wrap; }
-  .collect-filter-bar .collect-filter-item,
-  .collect-filter-bar .collect-filter-btn { flex: 1 1 calc(50% - 4px); }
+  #collect-home .collect-filter-bar { flex-wrap: wrap; }
+  #collect-home .collect-filter-bar .collect-filter-item,
+  #collect-home .collect-filter-bar .collect-filter-btn { flex: 1 1 calc(50% - 4px); }
 }
 
 /* ----------------------------------------------------------
@@ -281,22 +274,22 @@
 }
 
 /* 음수 금액 강조 */
-.amount-negative {
+#collect-home .amount-negative {
     color: #dc3545;
     font-weight: 600;
 }
 
 /* 사번 셀 클릭 UX */
-.collect-emp-id-cell {
+#collect-home .collect-emp-id-cell {
     cursor: pointer;
     color: #005BAC;
     font-weight: 600;
     white-space: nowrap;
 }
-.collect-emp-id-cell:hover { text-decoration: underline; }
+#collect-home .collect-emp-id-cell:hover { text-decoration: underline; }
 
 /* 최신 피드백 셀 말줄임 */
-.collect-feedback-cell {
+#collect-home .collect-feedback-cell {
     display: block;
     max-width: 180px;
     overflow: hidden;
@@ -305,21 +298,23 @@
     cursor: pointer;
     color: #005BAC;
 }
-.collect-feedback-cell:hover { text-decoration: underline; }
+
+#collect-home .collect-feedback-cell:hover { text-decoration: underline; }
 
 /* 피드백 모달 이력 목록 구분선 */
-.collect-feedback-item {
+#collect-home .collect-feedback-item {
     border-bottom: 1px solid var(--border-soft);
     padding: 10px 0;
 }
-.collect-feedback-item:last-child { border-bottom: none; }
+
+#collect-home .collect-feedback-item:last-child { border-bottom: none; }
 
 /* 수정·삭제 버튼 소형화 */
-.collect-feedback-actions { display: flex; gap: 4px; }
-.collect-feedback-actions .btn { font-size: 11px; padding: 2px 7px; }
+#collect-home .collect-feedback-actions { display: flex; gap: 4px; }
+#collect-home .collect-feedback-actions .btn { font-size: 11px; padding: 2px 7px; }
 
 /* 수정됨 표시 */
-.collect-feedback-modified {
+#collect-home .collect-feedback-modified {
     font-size: 11px;
     color: #6c757d;
     font-style: italic;
@@ -343,7 +338,7 @@
 }
 
 /* 드랍다운 select 소형화 */
-.collect-dropdown-select {
+#collect-home .collect-dropdown-select {
   font-size: 0.8rem;
   padding: 2px 6px;
   min-width: 110px;
@@ -369,7 +364,7 @@
 #collectTableBody .collect-dropdown-select.val-yellow { color: #b45309; font-weight: 600; }
 
 /* 안내 문구 */
-.collect-notice {
+#collect-home .collect-notice {
   background: #f8f9fa;
   border-left: 3px solid #005BAC;
   border-radius: 4px;
@@ -378,10 +373,12 @@
   color: #333;
   margin-bottom: 12px;
 }
-.collect-notice-row {
+
+#collect-home .collect-notice-row {
   line-height: 1.8;
 }
-.collect-notice-label {
+
+#collect-home .collect-notice-label {
   font-weight: 700;
   color: #005BAC;
   margin-right: 6px;
@@ -391,16 +388,16 @@
   CSP strict helpers - Commission
 ========================================================== */
 
-.commission-title {
+#collect-home .commission-title {
   color: #003f7d;
 }
 
-.collect-filter-item-wide {
+#collect-home .collect-filter-item-wide {
   flex: 1 1 200px;
   max-width: 280px;
 }
 
-.feedback-list-scroll {
+#collect-home .feedback-list-scroll {
   max-height: 300px;
   overflow-y: auto;
 }

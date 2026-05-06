@@ -1568,7 +1568,7 @@
 
 /* 로딩 오버레이 — position:fixed 전체화면
    collect_notice.html의 inline style="" 대체 */
-.cn-loading-overlay {
+.board-scope .cn-loading-overlay {
   position: fixed;
   inset: 0;
   background: rgba(255, 255, 255, .65);
@@ -1585,16 +1585,16 @@
 ---------------------------------------------------------- */
 
 /* 대상자 표시 텍스트 */
-#collect-notice .cn-target-display  { font-size: 0.95rem; }
+.board-scope #collect-notice .cn-target-display  { font-size: 0.95rem; }
 
 /* 행 없음 안내 문구 */
-#collect-notice .cn-row-empty       { font-size: 0.9rem; }
+.board-scope #collect-notice .cn-row-empty       { font-size: 0.9rem; }
 
 /* 파일 선택 label (label이 버튼 역할 — cursor 필요) */
-#collect-notice .cn-file-label      { cursor: pointer; }
+.board-scope #collect-notice .cn-file-label      { cursor: pointer; }
 
 /* 파일명 span — flex-grow 환경에서 말줄임 보장 */
-#collect-notice .cn-filename {
+.board-scope #collect-notice .cn-filename {
   font-size: 0.85rem;
   min-width: 0;
   overflow: hidden;
@@ -1603,18 +1603,18 @@
 }
 
 /* 연도 셀렉트 고정폭 */
-#collect-notice .cn-sel-year  { width: 80px; }
+.board-scope #collect-notice .cn-sel-year  { width: 80px; }
 
 /* 월 셀렉트 고정폭 */
-#collect-notice .cn-sel-month { width: 65px; }
+.board-scope #collect-notice .cn-sel-month { width: 65px; }
 
 /* 다운로드 결과 요약 텍스트 */
-#collect-notice .cn-download-info   { font-size: 0.9rem; }
+.board-scope #collect-notice .cn-download-info   { font-size: 0.9rem; }
 
 /* 완료 카드 제목 (초록) */
-#collect-notice .cn-success-title   { color: #198754; }
+.board-scope #collect-notice .cn-success-title   { color: #198754; }
 
 /* 다운로드 카드 강조 테두리 */
-#collect-notice #noticeDownloadCard {
+.board-scope #collect-notice #noticeDownloadCard {
   border: 1.5px solid #198754 !important;
 }
