@@ -69,6 +69,14 @@ _COLLECT_API_NAMES = frozenset({
      "api_collect_dropdown_feedback_save",
  })
 
+# Collect Notice export
+_COLLECT_NOTICE_EXPORTS = {
+    "collect_notice_export_excel": (
+        "commission.views.collect_notice_export",
+        "collect_notice_export_excel",
+    ),
+}
+
 # 2) upload (deposit)
 _UPLOAD = {
     "upload_excel": ("commission.views.api_upload", "upload_excel"),
@@ -110,6 +118,14 @@ def __getattr__(name: str) -> Any:
     if name in _COLLECT_API_NAMES:
         from commission.views import api_collect as _api_collect
         return getattr(_api_collect, name)
+    
+    # -------------------------------------------------------------------------
+    # Collect Notice Excel Export
+    # -------------------------------------------------------------------------
+    if name in _COLLECT_NOTICE_EXPORTS:
+        mod_path, attr = _COLLECT_NOTICE_EXPORTS[name]
+        mod = _import_first(mod_path)
+        return getattr(mod, attr)
 
     # -------------------------------------------------------------------------
     # Upload (Deposit SSOT)
@@ -158,6 +174,7 @@ __all__ = [
     "approval_home",
     "support_home",
     "collect_notice",
+    "collect_notice_export_excel",
     # upload
     "upload_excel",
     "approval_upload_excel",

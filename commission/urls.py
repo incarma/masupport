@@ -57,7 +57,13 @@ urlpatterns = [
 
     # =========================================================================
     # Collect Notice (환수내역 안내자료)
-    # superuser 전용 · 클라이언트 전용 xlsx 생성 · 서버 파일 전송 없음
+    # - 페이지: 기존 URL name 유지
+    # - 엑셀 생성: openpyxl 서버 생성 API 신규 추가
     # =========================================================================
     path("collect/notice/", views.collect_notice, name="collect_notice"),
+    path(
+        "collect/notice/export/",
+        views.collect_notice_export_excel,
+        name="collect_notice_export_excel",
+    ),
 ]

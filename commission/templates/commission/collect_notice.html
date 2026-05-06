@@ -13,11 +13,13 @@
 <!-- =========================================================================
    루트 요소 — JS Boot 계약 (dataset SSOT)
    data-search-user-url : 대상자 검색 모달 API URL
+   data-export-url      : openpyxl 서버 생성 API URL
    data-current-year    : 연도 셀렉트 초기값
    data-current-user-grade : 등급 (JS 방어용)
    ========================================================================= -->
 <div class="container my-4" id="collect-notice"
      data-search-user-url="{{ accounts_search_url }}"
+     data-export-url="{% url 'commission:collect_notice_export_excel' %}"
      data-current-year="{{ current_year }}"
      data-current-user-grade="{{ request.user.grade }}">
 
@@ -109,6 +111,9 @@
         <button type="button" class="btn btn-success" id="btnDownloadResult">
           📥 엑셀 다운로드
         </button>
+        <button type="button" class="btn btn-outline-danger" id="btnDownloadPdfResult">
+          📄 PDF 다운로드
+        </button>
         <button type="button" class="btn btn-outline-secondary btn-sm" id="btnResetDownload">
           초기화
         </button>
@@ -134,12 +139,11 @@
 {% block extra_js %}
 <!-- =========================================================================
    JS 로드 순서
-   1) SheetJS 0.18.5 — raw xlsx 파싱 + 결과 xlsx 생성 (단일 라이브러리)
-      ※ ExcelJS 제거 — unsafe-eval CSP 위반으로 이 프로젝트에서 사용 불가
-   2) CommissionCommon 공용 유틸
-   3) collect_notice.js (ESM)
+   1) CommissionCommon 공용 유틸
+   2) collect_notice.js (ESM)
+      - 원본 파일은 서버로 전송
+      - 결과 xlsx는 openpyxl 서버 생성
    ========================================================================= -->
-<script src="{% static 'vendor/xlsx/0.18.5/xlsx.full.min.js' %}"></script>
 <script src="{% static 'js/commission/_dom.js' %}{% if STATIC_VERSION %}?v={{ STATIC_VERSION }}{% endif %}"></script>
 <script src="{% static 'js/commission/_format.js' %}{% if STATIC_VERSION %}?v={{ STATIC_VERSION }}{% endif %}"></script>
 <script src="{% static 'js/commission/collect_notice.js' %}{% if STATIC_VERSION %}?v={{ STATIC_VERSION }}{% endif %}"

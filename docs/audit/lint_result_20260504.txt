@@ -1,0 +1,48 @@
+========================================
+ django_ma Harness Lint 결과
+ 실행일시: 2026-05-04 17:34:49
+ 기준 커밋: d90b143
+========================================
+
+────────────────────────────────────────
+[1/4] 보안 위반 탐지
+────────────────────────────────────────
+========================================
+ 보안 위반 탐지 (HARNESS_RULES.md)
+========================================
+
+❌ [S-B-04] 뷰에서 CustomUser.objects.filter/all() 직접 사용 — 사용자 검색은 search_api.py 경유 필요
+     ./board/views/posts.py:173:            CustomUser.objects.filter(id=OuterRef("user_id")).values("channel")[:1]
+     ./board/views/worktasks.py:58:        qs = CustomUser.objects.filter(is_active=True)
+     ./board/views/worktasks.py:590:    related  = list(CustomUser.objects.filter(pk__in=uid_list)) if uid_list else []
+     ./commission/upload_handlers/efficiency.py:99:    qs = CustomUser.objects.filter(pk__in=bucket.keys())
+     ./commission/upload_utils/_db.py:17:    qs = CustomUser.objects.filter(pk__in=ids).values_list("pk", flat=True)
+     ./dash/viewmods/api_upload.py:112:                        user = CustomUser.objects.filter(id=emp_id).first()
+     ./dash/viewmods/api_upload.py:169:                        user = CustomUser.objects.filter(id=emp_id).first()
+     ./dash/viewmods/pages.py:481:                CustomUser.objects.filter(branch=my_branch)
+     ./dash/viewmods/pages.py:517:            CustomUser.objects.filter(part=p)
+     ./partner/views/grades.py:66:        CustomUser.objects.filter(id__in=missing_ids)
+     ./partner/views/grades.py:98:    leader_base_qs = CustomUser.objects.filter(grade__in=MIDDLE_GRADES, status="재직")
+     ./partner/views/grades.py:116:            users_all = CustomUser.objects.filter(
+     ./partner/views/grades.py:140:        users_all = CustomUser.objects.filter(branch=selected_branch, status="재직").order_by("name", "id")
+     ./partner/views/grades.py:211:            cu = CustomUser.objects.filter(id=user_id).first()
+     ./partner/views/grades.py:302:            base_qs = CustomUser.objects.filter(part=selected_part, branch=selected_branch, status="재직")
+     ./partner/views/grades.py:311:            base_qs = CustomUser.objects.filter(branch=fixed_branch, status="재직")
+     ./partner/views/rate.py:162:            target = CustomUser.objects.filter(id=target_id).first()
+     ./partner/views/ratetable.py:217:        CustomUser.objects.filter(branch=branch, is_active=True)
+     ./partner/views/ratetable.py:331:        qs = CustomUser.objects.filter(branch=branch, is_active=True, id__in=emp_ids)
+     ./partner/views/structure.py:145:            target = CustomUser.objects.filter(id=target_id).first()
+
+❌ [S-S-05] 상수 'ACCOUNTS_GRADE_UPDATE' 정의됨 → log_action 호출 없음 (감사 기록 공백)
+     위치: audit/constants.py 에 정의됨, 실제 사용처 0건
+
+========================================
+❌ 보안 위반 2건 발견 — docs/harness/HARNESS_RULES.md 확인 필요
+
+────────────────────────────────────────
+[2/4] 코드 품질 위반 탐지
+────────────────────────────────────────
+========================================
+ 코드 품질 위반 탐지 (QUALITY_RULES.md)
+========================================
+
