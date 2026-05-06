@@ -149,6 +149,7 @@
 
 {% block extra_js %}
 <!-- 공통 유틸 -->
+<script src="{% static 'js/common/csrf_window.js' %}?v={% now 'U' %}"></script>
 <script src="{% static 'js/common/part_branch_selector.js' %}?v={% now 'U' %}"></script>
 <script src="{% static 'js/common/search_user_modal.js' %}?v={% now 'U' %}"></script>
 <script src="{% static 'js/common/prevent_form_submit.js' %}?v={% now 'U' %}"></script>

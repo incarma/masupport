@@ -6,16 +6,6 @@
 window.EsignFetch = (function () {
   let _lastGroups = [];
 
-  // ─── CSRF 헬퍼 ───────────────────────────────────────────────
-  // TODO RULE-Q-01: csrf_window.js 로드 확인 후 window.csrfToken 으로 전환 필요
-  function getCsrf() {
-    return (
-      document.cookie.match(/csrftoken=([^;]+)/)?.[1] ||
-      document.querySelector("[name=csrfmiddlewaretoken]")?.value ||
-      ""
-    );
-  }
-
   // ─── 유틸 ────────────────────────────────────────────────────
   function fmtAmount(v) {
     if (!v && v !== 0) return "";
@@ -275,7 +265,7 @@ window.EsignFetch = (function () {
         credentials: "same-origin",
         headers: {
           "Content-Type":     "application/json",
-          "X-CSRFToken":      getCsrf(),
+          "X-CSRFToken":      window.csrfToken,
           "X-Requested-With": "XMLHttpRequest",
         },
         body: JSON.stringify({ updates }),

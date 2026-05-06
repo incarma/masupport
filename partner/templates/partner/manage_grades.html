@@ -286,6 +286,7 @@
 <script src="{% static 'vendor/xlsx/0.18.5/xlsx.full.min.js' %}"></script>
 
 <!-- ✅ manage_grades 전용 JS (channel→part→branch 포함) -->
+<script src="{% static 'js/common/csrf_window.js' %}?v={% now 'U' %}"></script>
 <script src="{% static 'js/partner/manage_grades/index.js' %}?v=20260125_01"></script>
 
 {% endblock %}

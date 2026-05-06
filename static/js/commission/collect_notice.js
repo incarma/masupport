@@ -62,11 +62,13 @@ function _init() {
 
     if (btn.id === "btnAddRow") {
       _addRow();
+    } else if (btn.id === "btnAddManualRow") {
+      _addManualRow();
     } else if (btn.id === "btnMakeNotice") {
       _onMakeNotice();
     } else if (btn.id === "btnDownloadResult") {
       _onDownload();
-      } else if (btn.id === "btnDownloadPdfResult") {
+    } else if (btn.id === "btnDownloadPdfResult") {
       _onDownloadPdf();
     } else if (btn.id === "btnResetDownload") {
       _resetDownload();
@@ -77,8 +79,19 @@ function _init() {
         _syncEmptyState();
         _resetDownload();
       }
+    } else if (btn.classList.contains("manual-row-delete")) {
+      const row = btn.closest(".manual-input-row");
+      if (row) {
+        row.remove();
+        _syncManualEmptyState();
+        _resetDownload();
+      }
     }
   });
+
+  // 수기 입력 숫자/율 포맷은 입력 중 즉시 정규화한다.
+  root.addEventListener("input", _onManualInput);
+  root.addEventListener("change", _onManualChange);
 }
 
 function _initTitleYmSelects() {
@@ -189,6 +202,176 @@ function _getRows() {
 
 
 // ─────────────────────────────────────────────────────────────────────────────
+// 5. 수기 입력 행 추가 / 검증 / 포맷
+// ─────────────────────────────────────────────────────────────────────────────
+
+function _addManualRow() {
+  const tpl = document.getElementById("manualInputRowTemplate");
+  const tbody = document.getElementById("manualInputTbody");
+  if (!tpl || !tbody) return;
+
+  const fragment = tpl.content.cloneNode(true);
+  const row = fragment.querySelector(".manual-input-row");
+  const ymInput = row.querySelector(".manual-ym");
+
+  // 기본 월도는 제목 카드의 기준 연월과 동일하게 세팅
+  if (ymInput) ymInput.value = _titleYm();
+
+  tbody.appendChild(fragment);
+  _syncManualEmptyState();
+  _resetDownload();
+}
+
+function _syncManualEmptyState() {
+  const empty = document.getElementById("manualInputEmpty");
+  if (!empty) return;
+  empty.hidden = _getManualRows().length > 0;
+}
+
+function _getManualRows() {
+  return Array.from(document.querySelectorAll("#manualInputTbody .manual-input-row"));
+}
+
+function _digitsOnly(value) {
+  return String(value || "").replace(/[^\d]/g, "");
+}
+
+/**
+ * 음수 허용 숫자 정규화
+ * - 맨 앞 "-" 1개만 허용
+ * - 나머지 문자는 제거
+ */
+function _signedDigits(value) {
+  const raw = String(value || "").trim();
+  const negative = raw.startsWith("-");
+  const digits = raw.replace(/[^\d]/g, "");
+
+  if (!digits) {
+    return negative ? "-" : "";
+  }
+
+  return negative ? `-${digits}` : digits;
+}
+
+function _commaDigits(value) {
+  const digits = _digitsOnly(value);
+  if (!digits) return "";
+  return Number(digits).toLocaleString("ko-KR");
+}
+
+/**
+ * 음수 허용 콤마 포맷
+ * 예:
+ * -1000 -> -1,000
+ * 2500  -> 2,500
+ */
+function _commaSignedDigits(value) {
+  const normalized = _signedDigits(value);
+
+  if (!normalized || normalized === "-") {
+    return normalized;
+  }
+
+  const negative = normalized.startsWith("-");
+  const num = Number(normalized);
+
+  if (!Number.isFinite(num)) {
+    return "";
+  }
+
+  const formatted = Math.abs(num).toLocaleString("ko-KR");
+  return negative ? `-${formatted}` : formatted;
+}
+
+function _normalizeRateInput(value) {
+  const raw = String(value || "").replace(/[^\d.]/g, "");
+  if (!raw) return "";
+
+  let n = Number(raw);
+  if (!Number.isFinite(n)) return "";
+  if (n < 0) n = 0;
+  if (n > 100) n = 100;
+
+  // 10.5 같은 입력은 허용하되 불필요한 0은 제거
+  const text = Number.isInteger(n) ? String(n) : String(n).replace(/0+$/, "").replace(/\.$/, "");
+  return `${text}%`;
+}
+
+function _onManualInput(e) {
+  const el = e.target;
+  if (!el) return;
+
+  if (el.classList.contains("manual-money-like")) {
+    /**
+     * 지급금액(환수금액) 컬럼만 음수 허용
+     * 나머지 숫자 컬럼은 기존 정책 유지
+     */
+    if (el.classList.contains("manual-amount")) {
+      el.value = _commaSignedDigits(el.value);
+    } else {
+      el.value = _commaDigits(el.value);
+    }
+
+    _resetDownload();
+    return;
+  }
+
+  if (el.classList.contains("manual-rate-like")) {
+    const cursorAtEnd = el.selectionStart === el.value.length;
+    el.value = _normalizeRateInput(el.value);
+    if (cursorAtEnd) el.selectionStart = el.selectionEnd = el.value.length;
+    _resetDownload();
+  }
+}
+
+function _onManualChange(e) {
+  const el = e.target;
+  if (!el) return;
+
+  if (el.closest(".manual-input-row")) {
+    _resetDownload();
+  }
+}
+
+function _readManualValue(row, selector) {
+  return String(row.querySelector(selector)?.value || "").trim();
+}
+
+function _collectManualRowsOrThrow() {
+  const rows = _getManualRows();
+  const out = [];
+
+  for (const row of rows) {
+    const item = {
+      ym: _readManualValue(row, ".manual-ym"),
+      item_type: _readManualValue(row, ".manual-item-type"),
+      pay_refund: _readManualValue(row, ".manual-pay-refund"),
+      product_name: _readManualValue(row, ".manual-product-name"),
+      policy_no: _readManualValue(row, ".manual-policy-no"),
+      contractor: _readManualValue(row, ".manual-contractor"),
+      payment_type: _readManualValue(row, ".manual-payment-type"),
+      receipt_date: _readManualValue(row, ".manual-receipt-date"),
+      round_no: _readManualValue(row, ".manual-round-no"),
+      premium: _readManualValue(row, ".manual-premium"),
+      rate: _readManualValue(row, ".manual-rate"),
+      amount: _readManualValue(row, ".manual-amount"),
+      contract_date: _readManualValue(row, ".manual-contract-date"),
+      recruiter: _readManualValue(row, ".manual-recruiter"),
+      payer: _readManualValue(row, ".manual-payer"),
+    };
+
+    if (!item.ym || !item.pay_refund || !item.product_name || !item.amount) {
+      throw new Error("수기 입력은 월도, 지급/환수, 상품명, 지급금액을 모두 입력해야 합니다.");
+    }
+
+    out.push(item);
+  }
+
+  return out;
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
 // 5. 다운로드 카드
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -228,7 +411,11 @@ async function _onMakeNotice() {
   if (!empId) { alert("대상자를 먼저 선택해주세요."); return; }
 
   const rows = _getRows();
-  if (rows.length === 0) { alert("내역 파일 행을 1개 이상 추가해주세요."); return; }
+  const manualRows = _getManualRows();
+  if (rows.length === 0 && manualRows.length === 0) {
+    alert("내역 파일 또는 수기 입력 행을 1개 이상 추가해주세요.");
+    return;
+  }
 
   for (const row of rows) {
     const fi = row.querySelector(".notice-row-file-input");
@@ -242,7 +429,8 @@ async function _onMakeNotice() {
 
   try {
     // Step 4: 서버 openpyxl 생성 요청
-    const fd = _buildExportFormData(rows);
+    const manualPayload = _collectManualRowsOrThrow();
+    const fd = _buildExportFormData(rows, manualPayload);
     const { blob, filename, rowCount } = await _postNoticeExport(fd);
     storeResult(blob, filename, rowCount);
   } catch (err) {
@@ -306,7 +494,7 @@ function _getCSRFToken() {
  );
 }
 
-function _buildExportFormData(rows) {
+function _buildExportFormData(rows, manualPayload = []) {
   const name   = document.getElementById("targetName")?.value.trim() || "";
   const branch = document.getElementById("targetBranch")?.value.trim() || "";
   const empId  = document.getElementById("targetEmpId")?.value.trim() || "";
@@ -327,6 +515,9 @@ function _buildExportFormData(rows) {
     fd.append("file_yms", _rowYm(row));
     fd.append("notice_files", file, file.name);
   });
+
+  // 수기 입력 데이터는 JSON 문자열로 서버에 전달한다.
+  fd.set("manual_rows", JSON.stringify(manualPayload));
 
   return fd;
 }
@@ -393,8 +584,9 @@ async function _onDownloadPdf() {
   }
 
   const rows = _getRows();
-  if (rows.length === 0) {
-    alert("내역 파일 행을 1개 이상 추가해주세요.");
+  const manualRows = _getManualRows();
+  if (rows.length === 0 && manualRows.length === 0) {
+    alert("내역 파일 또는 수기 입력 행을 1개 이상 추가해주세요.");
     return;
   }
 
@@ -410,7 +602,8 @@ async function _onDownloadPdf() {
   overlay.hidden = false;
 
   try {
-    const fd = _buildExportFormData(rows);
+    const manualPayload = _collectManualRowsOrThrow();
+    const fd = _buildExportFormData(rows, manualPayload);
     fd.set("output", "pdf");
 
     const { blob, filename } = await _postNoticeExport(fd);

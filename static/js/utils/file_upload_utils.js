@@ -48,29 +48,6 @@
   /* ===========================================================================
    * CSRF helpers
    * =========================================================================== */
-  // TODO RULE-Q-01: csrf_window.js 로드 확인 후 window.csrfToken 으로 전환 필요
-  function getCookie(name) {
-    var value = "; " + (document.cookie || "");
-    var parts = value.split("; " + name + "=");
-    if (parts.length === 2) return parts.pop().split(";").shift();
-    return "";
-  }
-
-  function getCSRFToken(form) {
-    // 1) form 내부 hidden input 우선
-    var input = form ? qs('input[name="csrfmiddlewaretoken"]', form) : null;
-    var v1 = str(input && input.value);
-    if (v1) return v1;
-
-    // 2) 문서 내 전역 csrf input
-    var any = qs('input[name="csrfmiddlewaretoken"]');
-    var v2 = str(any && any.value);
-    if (v2) return v2;
-
-    // 3) cookie fallback
-    return str(getCookie("csrftoken"));
-  }
-
   function buildHeaders(csrf) {
     var h = { "X-Requested-With": "XMLHttpRequest" };
     // FormData 사용 시 Content-Type을 직접 지정하지 않음
@@ -281,8 +258,7 @@
           formData.append(config.attachmentsKey, file);
         });
 
-        var csrf = getCSRFToken(form);
-        var headers = buildHeaders(csrf);
+        var headers = buildHeaders(window.csrfToken);
 
         fetch(form.action || window.location.href, {
           method: "POST",

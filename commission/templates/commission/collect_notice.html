@@ -91,17 +91,102 @@
                   title="행 삭제">✕</button>
         </div>
       </div>
+    </div>
+  </div>
 
+  <!-- ③ 수기 입력 카드 -->
+  <div class="card shadow-sm border-0 rounded-4 mb-3" id="noticeManualCard">
+    <div class="card-body p-3">
+
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+          <h5 class="fw-bold mb-1 commission-title">수기 입력</h5>
+          <div class="text-muted small">
+            월도, 지급/환수, 상품명, 지급금액은 필수입니다. 증권번호/계약자/모집자/지급자는 최종자료 제작 시 자동 마스킹됩니다.
+          </div>
+        </div>
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="btnAddManualRow">
+          + 수기 행 추가
+        </button>
+      </div>
+
+      <div class="table-responsive commission-table-scroll">
+        <table class="table table-sm table-bordered align-middle text-center commission-nowrap-table" id="manualInputTable">
+          <thead class="table-light">
+            <tr>
+              <th>월도</th>
+              <th>항목구분</th>
+              <th>지급/환수</th>
+              <th>상품명</th>
+              <th>증권번호</th>
+              <th>계약자</th>
+              <th>수납구분</th>
+              <th>영수일</th>
+              <th>회차</th>
+              <th>영수보험료</th>
+              <th>지급율(환수율)</th>
+              <th>지급금액(환수금액)</th>
+              <th>보험계약일</th>
+              <th>모집자</th>
+              <th>지급자</th>
+              <th>삭제</th>
+            </tr>
+          </thead>
+          <tbody id="manualInputTbody">
+            <tr id="manualInputEmpty">
+              <td colspan="16" class="text-muted py-3">
+                '+ 수기 행 추가'를 눌러 수기 입력 행을 추가하세요.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 수기 입력 행 템플릿 — JS가 cloneNode로 복제, hidden 상태 유지 -->
+      <template id="manualInputRowTemplate">
+        <tr class="manual-input-row">
+          <td><input type="month" class="form-control form-control-sm manual-ym" required></td>
+          <td><input type="text" class="form-control form-control-sm manual-item-type" maxlength="50"></td>
+          <td>
+            <select class="form-select form-select-sm manual-pay-refund" required>
+              <option value="">선택</option>
+              <option value="지급">지급</option>
+              <option value="환수">환수</option>
+            </select>
+          </td>
+          <td><input type="text" class="form-control form-control-sm manual-product-name" required maxlength="200"></td>
+          <td><input type="text" class="form-control form-control-sm manual-policy-no" maxlength="80"></td>
+          <td><input type="text" class="form-control form-control-sm manual-contractor" maxlength="50"></td>
+          <td><input type="text" class="form-control form-control-sm manual-payment-type" maxlength="50"></td>
+          <td><input type="date" class="form-control form-control-sm manual-receipt-date"></td>
+          <td><input type="text" inputmode="numeric" class="form-control form-control-sm manual-round-no manual-money-like"></td>
+          <td><input type="text" inputmode="numeric" class="form-control form-control-sm manual-premium manual-money-like"></td>
+          <td><input type="text" inputmode="decimal" class="form-control form-control-sm manual-rate manual-rate-like"></td>
+          <td><input type="text" inputmode="numeric" class="form-control form-control-sm manual-amount manual-money-like" required></td>
+          <td><input type="date" class="form-control form-control-sm manual-contract-date"></td>
+          <td><input type="text" class="form-control form-control-sm manual-recruiter" maxlength="50"></td>
+          <td><input type="text" class="form-control form-control-sm manual-payer" maxlength="50"></td>
+          <td>
+            <button type="button" class="btn btn-outline-danger btn-sm manual-row-delete" title="수기 행 삭제">✕</button>
+          </td>
+        </tr>
+      </template>
+
+    </div>
+  </div>
+
+  <!-- ④ 제작 실행 카드 -->
+  <div class="card shadow-sm border-0 rounded-4 mb-3">
+    <div class="card-body p-3">
       <div class="d-grid">
         <button type="button" class="btn btn-primary" id="btnMakeNotice">
           안내자료 제작
         </button>
       </div>
-
     </div>
   </div>
 
-  <!-- ③ 다운로드 카드 (초기 hidden) -->
+  <!-- ⑤ 다운로드 카드 (초기 hidden) -->
   <div class="card shadow-sm border-0 rounded-4 mb-3"
        id="noticeDownloadCard" hidden>
     <div class="card-body p-3">

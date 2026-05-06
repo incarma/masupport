@@ -224,5 +224,6 @@
 
 {% block extra_js %}
 <script src="{% static 'vendor/chartjs/chart.umd.min.js' %}?v={% now 'U' %}"></script>
+<script src="{% static 'js/common/csrf_window.js' %}?v={% now 'U' %}"></script>
 <script src="{% static 'js/dash/dash_retention_page.js' %}?v={% now 'U' %}"></script>
 {% endblock %}

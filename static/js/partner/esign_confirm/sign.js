@@ -8,16 +8,6 @@ window.EsignSign = (function () {
 
   let _modalInstance = null;
 
-  // ── CSRF 헬퍼 (ES Module 미사용 — 쿠키 직접 읽기) ───────────
-  // TODO RULE-Q-01: csrf_window.js 로드 확인 후 window.csrfToken 으로 전환 필요
-  function getCsrf() {
-    return (
-      document.cookie.match(/csrftoken=([^;]+)/)?.[1] ||
-      document.querySelector("[name=csrfmiddlewaretoken]")?.value ||
-      ""
-    );
-  }
-
   // ── Bootstrap Modal 인스턴스 (지연 생성) ─────────────────────
   function getModal() {
     if (_modalInstance) return _modalInstance;
@@ -132,7 +122,7 @@ window.EsignSign = (function () {
         credentials: "same-origin",
         headers: {
           "Content-Type":     "application/json",
-          "X-CSRFToken":      getCsrf(),
+          "X-CSRFToken":      window.csrfToken,
           "X-Requested-With": "XMLHttpRequest",
         },
         body: JSON.stringify({}),
@@ -208,7 +198,7 @@ window.EsignSign = (function () {
         credentials: "same-origin",
         headers: {
           "Content-Type":     "application/json",
-          "X-CSRFToken":      getCsrf(),
+          "X-CSRFToken":      window.csrfToken,
           "X-Requested-With": "XMLHttpRequest",
         },
         body: JSON.stringify({ sign_request_id: requestId }),

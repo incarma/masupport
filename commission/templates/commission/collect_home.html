@@ -506,6 +506,7 @@
         src="{% static 'js/commission/collect_home.js' %}{% if STATIC_VERSION %}?v={{ STATIC_VERSION }}{% endif %}">
 </script>
 
+<script src="{% static 'js/common/csrf_window.js' %}?v={% now 'U' %}"></script>
 <script src="{% static 'js/excel_upload.js' %}{% if STATIC_VERSION %}?v={{ STATIC_VERSION }}{% endif %}"></script>
 
 {% endblock %}

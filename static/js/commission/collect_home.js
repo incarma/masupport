@@ -26,6 +26,7 @@
 // ============================================================
 // 0) Boot Guard — root 없으면 즉시 종료
 // ============================================================
+import { getCSRFToken } from "../../common/manage/csrf.js";
 const root = document.getElementById("collect-home");
 if (!root) throw new Error("[collect_home] #collect-home not found");
 
@@ -68,16 +69,6 @@ const state = {
 // ============================================================
 // 3) 유틸 함수
 // ============================================================
-
-// TODO RULE-Q-01: csrf_window.js 로드 확인 후 window.csrfToken 으로 전환 필요
-function getCSRF() {
-  return (
-    window.csrfToken ||
-    document.querySelector("[name=csrfmiddlewaretoken]")?.value ||
-    document.cookie.match(/csrftoken=([^;]+)/)?.[1] ||
-    ""
-  );
-}
 
 function esc(v) {
   return String(v ?? "")
@@ -122,7 +113,7 @@ async function apiPost(url, payload = {}) {
     credentials: "same-origin",
     headers: {
       "Content-Type":     "application/json",
-      "X-CSRFToken":      getCSRF(),
+      "X-CSRFToken":      getCSRFToken(),
       "X-Requested-With": "XMLHttpRequest",
     },
     body: JSON.stringify(payload),

@@ -19,16 +19,6 @@ window.EsignSave = (function () {
   let _lastClickedRole = null;
   let _lastClickedRow  = null;
 
-  // ── CSRF 헬퍼 ────────────────────────────────────────────────
-  // TODO RULE-Q-01: csrf_window.js 로드 확인 후 window.csrfToken 으로 전환 필요
-  function getCsrf() {
-    return (
-      document.cookie.match(/csrftoken=([^;]+)/)?.[1] ||
-      document.querySelector("[name=csrfmiddlewaretoken]")?.value ||
-      ""
-    );
-  }
-
   // ── 시작월도/종료월도 옵션 생성 (현재 기준 ±13개월) ──────────
   function buildYmOptions() {
     const now  = new Date();
@@ -316,7 +306,7 @@ window.EsignSave = (function () {
         credentials: "same-origin",
         headers: {
           "Content-Type":     "application/json",
-          "X-CSRFToken":      getCsrf(),
+          "X-CSRFToken":      window.csrfToken,
           "X-Requested-With": "XMLHttpRequest",
         },
         body: JSON.stringify({ month: ym, part, branch, rows }),
