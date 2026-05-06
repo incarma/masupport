@@ -26,7 +26,7 @@
 // ============================================================
 // 0) Boot Guard — root 없으면 즉시 종료
 // ============================================================
-import { getCSRFToken } from "../../common/manage/csrf.js";
+import { getCSRFToken } from "../common/manage/csrf.js";
 const root = document.getElementById("collect-home");
 if (!root) throw new Error("[collect_home] #collect-home not found");
 

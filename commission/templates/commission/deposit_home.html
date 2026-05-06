@@ -758,6 +758,7 @@
 ></script>
 
 <!-- 엑셀 업로드 공용 JS (모달 결과 표시 포함) -->
+<script src="{% static 'js/common/csrf_window.js' %}?v={% now 'U' %}"></script>
 <script
   src="{% static 'js/excel_upload.js' %}{% if STATIC_VERSION %}?v={{ STATIC_VERSION }}{% endif %}"
 ></script>
