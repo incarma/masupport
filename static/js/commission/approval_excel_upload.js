@@ -53,11 +53,6 @@
   /* ==========================================================
    * 3) Form helpers
    * ========================================================== */
-  const getCSRFToken = () => {
-    const inp = form.querySelector('input[name="csrfmiddlewaretoken"]');
-    return inp ? inp.value : "";
-  };
-
   const isSubmitting = () => form.dataset.submitting === "1";
 
   const setSubmitting = (on) => {
@@ -160,7 +155,7 @@
     const res = await fetch(form.action, {
       method: "POST",
       headers: {
-        "X-CSRFToken": getCSRFToken(),
+        "X-CSRFToken": window.csrfToken,
         "X-Requested-With": "XMLHttpRequest",
       },
       body: fd,

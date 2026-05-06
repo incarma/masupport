@@ -1,3 +1,5 @@
+import { getCSRFToken } from "../common/manage/csrf.js";
+
 /**
  * static/js/commission/collect_notice.js
  * ──────────────────────────────────────
@@ -485,14 +487,6 @@ function _rate(v) {
 // 8. 서버 openpyxl 생성 요청
 // ─────────────────────────────────────────────────────────────────────────────
 
-function _getCSRFToken() {
-  return (
-    window.csrfToken ||
-    document.querySelector("[name=csrfmiddlewaretoken]")?.value ||
-    document.cookie.match(/csrftoken=([^;]+)/)?.[1] ||
-    ""
- );
-}
 
 function _buildExportFormData(rows, manualPayload = []) {
   const name   = document.getElementById("targetName")?.value.trim() || "";
@@ -507,7 +501,6 @@ function _buildExportFormData(rows, manualPayload = []) {
   fd.set("target_branch", branch);
   fd.set("title_year", YYYY);
   fd.set("title_month", MM);
-  fd.set("csrfmiddlewaretoken", _getCSRFToken());
 
   rows.forEach((row) => {
     const file = row.querySelector(".notice-row-file-input")?.files?.[0];
@@ -551,7 +544,7 @@ async function _postNoticeExport(formData) {
     method: "POST",
     credentials: "same-origin",
     headers: {
-      "X-CSRFToken": _getCSRFToken(),
+      "X-CSRFToken": getCSRFToken(),
       "X-Requested-With": "XMLHttpRequest",
     },
     body: formData,

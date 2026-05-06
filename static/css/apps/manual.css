@@ -9,13 +9,10 @@
  0) Manual wide layout tokens
  - wrapper(.container) 구조가 바뀌어도 중앙정렬이 안정적으로 유지되도록
 ========================================================== */
-:root{
-  --manual-wide-width: 72vw;
-  --manual-wide-max: 1200px; /* 필요 시 조절 */
-}
-
-/* wide layout */
+/* wide layout — 변수를 #manual-detail 스코프에 선언; .subnav-inner도 동일 DOM 하위에서 상속 */
 #manual-detail{
+  --manual-wide-width: 72vw;
+  --manual-wide-max: 1200px;
   width: var(--manual-wide-width);
   max-width: var(--manual-wide-max);
   margin-left: auto;

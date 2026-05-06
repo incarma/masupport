@@ -10,10 +10,6 @@
     const S = window.ManualShared || {};
 
     const toStr = S.toStr || ((v) => String(v ?? "").trim());
-    const getCSRFTokenFromForm = S.getCSRFTokenFromForm || ((formEl) => {
-      const el = formEl?.querySelector?.('input[name="csrfmiddlewaretoken"]');
-      return toStr(el?.value || "");
-    });
     const setBtnLoading = S.setBtnLoading || ((btn, isLoading, loadingText, defaultText) => {
       if (!btn) return;
       if (isLoading) {
@@ -78,7 +74,7 @@
       if (!title) return showErrorBox(errBox, "매뉴얼 이름을 입력해주세요.");
       if (title.length > 80) return showErrorBox(errBox, "80자 이하여야 합니다.");
 
-      const csrf = getCSRFTokenFromForm(form);
+      const csrf = window.csrfToken;
       const access = toStr(form.querySelector('input[name="manualAccess"]:checked')?.value);
 
       setBtnLoading(btn, true, "생성중...");

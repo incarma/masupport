@@ -23,9 +23,8 @@
     }
   }
 
-  function getCSRFTokenFromForm(formEl) {
-    const el = formEl?.querySelector?.('input[name="csrfmiddlewaretoken"]');
-    return toStr(el?.value || "");
+  function getCSRFTokenFromForm(_formEl) {
+    return window.csrfToken || "";
   }
 
   function setBtnLoading(btn, isLoading, loadingText, defaultText) {

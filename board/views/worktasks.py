@@ -38,6 +38,8 @@ from board.models import WorkCategory, WorkTask, WorkTaskAttachment, WorkTaskCom
 from board.services.holidays import get_holidays_between, resolve_next_business_day
 from board.services import worktasks as wt_svc
 from board.services.comments import handle_comments_actions
+from audit.services import log_action
+from audit.constants import ACTION
 
 logger = logging.getLogger(__name__)
 
@@ -392,7 +394,19 @@ def worktask_att_download(request, att_id: int):
 
     ❌ att.file.url 직접 노출 절대 금지
     """
-    att = get_object_or_404(WorkTaskAttachment, pk=att_id)
+    # ① 첨부파일 존재 확인
+    try:
+        att = WorkTaskAttachment.objects.get(pk=att_id)
+    except WorkTaskAttachment.DoesNotExist:
+        try:
+            log_action(
+                request,
+                ACTION.TASK_ATTACHMENT_DOWNLOAD,
+                meta={"pk": att_id, "success": False, "reason": "not_found"},
+            )
+        except Exception:
+            logger.exception("audit log 기록 실패 — worktask_att_download (404)")
+        raise Http404("첨부파일을 찾을 수 없습니다.")
 
     # ② 소유자 격리
     if att.task.owner_id != request.user.pk:
@@ -400,6 +414,16 @@ def worktask_att_download(request, att_id: int):
             "WorkTaskAttachment 소유자 불일치: att_pk=%s task_owner=%s requester=%s",
             att_id, att.task.owner_id, request.user.pk,
         )
+        try:
+            log_action(
+                request,
+                ACTION.TASK_ATTACHMENT_DOWNLOAD,
+                obj=att,
+                meta={"filename": getattr(att.file, "name", "unknown"),
+                      "success": False, "reason": "permission_denied"},
+            )
+        except Exception:
+            logger.exception("audit log 기록 실패 — worktask_att_download (403)")
         return HttpResponseForbidden("접근 권한이 없습니다.")
 
     # ③ RFC5987 파일명 (한글 깨짐 방지)
@@ -415,7 +439,27 @@ def worktask_att_download(request, att_id: int):
         fh = att.file.open("rb")
     except Exception:
         logger.exception("첨부파일 열기 실패: att_pk=%s path=%r", att_id, att.file.name)
+        try:
+            log_action(
+                request,
+                ACTION.TASK_ATTACHMENT_DOWNLOAD,
+                obj=att,
+                meta={"filename": getattr(att.file, "name", "unknown"),
+                      "success": False, "reason": "file_open_failed"},
+            )
+        except Exception:
+            logger.exception("audit log 기록 실패 — worktask_att_download (500)")
         return HttpResponseServerError("파일을 열 수 없습니다.")
+
+    try:
+        log_action(
+            request,
+            ACTION.TASK_ATTACHMENT_DOWNLOAD,
+            obj=att,
+            meta={"filename": att.file.name, "success": True},
+        )
+    except Exception:
+        logger.exception("audit log 기록 실패 — worktask_att_download")
 
     response = FileResponse(fh, as_attachment=True)
     response["Content-Disposition"] = disposition

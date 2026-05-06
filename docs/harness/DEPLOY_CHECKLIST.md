@@ -11,6 +11,8 @@
 - [ ] 신규 migration이 있으면 `migrate` 실행 계획 확인 (운영 DB 영향 범위 검토)
 - [ ] Celery `beat_schedule` 신규 task가 있으면 `@shared_task(name=)` 값과 일치하는가 → [Q-D-04](../audit/quality_checklist.md)
 - [ ] `.env.prod`에 민감 정보(`SECRET_KEY`, DB 비밀번호 등) 하드코딩 없음 확인 → [S-F-01](../audit/security_checklist.md)
+- [ ] `.env.prod`에 `FORCE_PASSWORD_CHANGE_ENABLED=True` 확인 → [S-F-04](../audit/security_checklist.md)
+- [ ] `FORCE_PASSWORD_CHANGE_SCOPE_BRANCHES`, `SCOPE_PARTS`, `SCOPE_CHANNELS` 중 하나 이상 설정 확인 → [S-F-04](../audit/security_checklist.md)
 
 ---
 

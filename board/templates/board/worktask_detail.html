@@ -203,6 +203,7 @@
 
 {% block extra_js %}
 <script src="{% static 'js/common/confirm_submit.js' %}?v={% now 'U' %}"></script>
+<script src="{% static 'js/common/csrf_window.js' %}?v={% now 'U' %}"></script>
 <script src="{% static 'js/board/common/comment_edit.js' %}?v=20260104"></script>
 <script type="module" src="{% static 'js/board/worktask_detail.js' %}"></script>
 {% endblock %}

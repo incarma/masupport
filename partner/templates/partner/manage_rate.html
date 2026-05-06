@@ -4,11 +4,8 @@
 {% block title %}요율변경{% endblock %}
 
 {% block extra_head %}
-  <!-- jQuery / DataTables -->
+  <!-- jQuery (Bootstrap modal 의존) -->
   <script src="{% static 'vendor/jquery/3.7.1/jquery.min.js' %}"></script>
-  <link href="{% static 'vendor/datatables/1.13.8/css/dataTables.bootstrap5.min.css' %}" rel="stylesheet">
-  <script src="{% static 'vendor/datatables/1.13.8/js/jquery.dataTables.min.js' %}"></script>
-  <script src="{% static 'vendor/datatables/1.13.8/js/dataTables.bootstrap5.min.js' %}"></script>
 {% endblock %}
 
 {% block app_css %}
@@ -306,13 +303,13 @@
     </div>
   </div>
 
-  <!-- 캐시 버스터 -->
+  <!-- 캐시 버스터 — CSP 위반 방지: json_script 경유 -->
   {% now "U" as cache_bust %}
-  <script>
-    window.STATIC_VERSION = "{{ cache_bust }}";
-  </script>
+  {{ cache_bust|json_script:"static-version" }}
+
 
   <!-- 공용/페이지 스크립트 -->
+  <script src="{% static 'js/common/csrf_window.js' %}?v={{ cache_bust }}"></script>
   <script src="{% static 'js/common/part_branch_selector.js' %}?v={{ cache_bust }}"></script>
   <script type="module" src="{% static 'js/common/manage_boot.js' %}?v={{ cache_bust }}"></script>
   <script type="module" src="{% static 'js/partner/manage_rate/index.js' %}?v={{ cache_bust }}"></script>
@@ -326,7 +323,6 @@
   <script src="{% static 'js/common/json_boot_bridge.js' %}?v={{ cache_bust }}"
           data-json-id="current-user"
           data-window-name="currentUser"></script>
-  <script src="{% static 'js/common/csrf_window.js' %}?v={{ cache_bust }}"></script>
-
-  {% include 'components/search_user_modal.html' with search_url='/api/accounts/search-user/' %}
+          
+  {% include 'components/search_user_modal.html' with search_url='/accounts/api/search-user/' %}
 {% endblock %}

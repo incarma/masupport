@@ -88,16 +88,6 @@
       btnOpen.focus();
     }
 
-    function getCsrfToken() {
-      var cookie = document.cookie
-        .split('; ')
-        .find(function (row) {
-          return row.indexOf('csrftoken=') === 0;
-        });
-
-      return cookie ? cookie.split('=')[1] : '';
-    }
-
     btnOpen.addEventListener('click', openModal);
     btnClose.addEventListener('click', closeModal);
     backdrop.addEventListener('click', closeModal);
@@ -155,7 +145,7 @@
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
-          'X-CSRFToken': getCsrfToken(),
+          'X-CSRFToken': window.csrfToken,
           'X-Requested-With': 'XMLHttpRequest'
         },
         credentials: 'same-origin',
