@@ -42,19 +42,22 @@ def _team_affiliation(a: str, b: str, c: str) -> str:
 def _can_use_target(user, target: CustomUser, branch: str) -> bool:
     grade = getattr(user, "grade", "")
     target_branch = _to_str(getattr(target, "branch", ""))
+    user_branch = _to_str(getattr(user, "branch", ""))
+    branch = _to_str(branch)
 
     if grade == "superuser":
         return True
 
-    if target_branch != _to_str(branch):
+    if target_branch != branch:
         return False
 
     if grade == "head":
-        return target_branch == _to_str(getattr(user, "branch", ""))
+        return target_branch == user_branch
 
     if grade == "leader":
-        allowed_ids = set(str(x) for x in get_level_team_filter_user_ids(user))
-        return str(target.id) == str(user.id) or str(target.id) in allowed_ids
+        # manage-rate 검색 모달은 scope=branch 기준으로 대상자를 노출한다.
+        # 저장 권한도 동일하게 본인 지점 범위로 맞춘다.
+        return target_branch == user_branch
 
     return False
 

@@ -171,6 +171,7 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="{% static 'js/common/csrf_window.js' %}?v={% now 'U' %}"></script>
 <script src="{% static 'js/board/common/status_ui.js' %}?v=20260128"></script>
 <script src="{% static 'js/board/common/inline_update.js' %}?v=20260128"></script>
 <script src="{% static 'js/board/task_list.js' %}?v=20260128"></script>

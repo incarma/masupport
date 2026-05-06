@@ -96,7 +96,7 @@ app.conf.beat_schedule = {
     
     # ------------------------------------------------------------------
     # WorkTask 반복 자동생성 — 매달 1일 00:10
-    # board/tasks.py: generate_monthly_worktasks
+    # board/tasks/worktask_tasks.py: generate_monthly_worktasks
     # ------------------------------------------------------------------
     "generate-monthly-worktasks": {
         "task":     "board.tasks.generate_monthly_worktasks",
@@ -105,7 +105,7 @@ app.conf.beat_schedule = {
 
     # ------------------------------------------------------------------
     # WorkTask 마감 알림 이메일 — 매일 08:00
-    # board/tasks.py: notify_due_worktasks
+    # board/tasks/worktask_tasks.py: notify_due_worktasks
     # ------------------------------------------------------------------
     "notify-due-worktasks": {
         "task":     "board.tasks.notify_due_worktasks",

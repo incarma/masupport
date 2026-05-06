@@ -1,4 +1,6 @@
 // django_ma/static/js/dash/sales_upload.js
+import { getCSRFToken } from "../common/manage/csrf.js";
+
 (function () {
   const root = document.getElementById('dash-sales');
   if (!root) return;
@@ -8,11 +10,6 @@
   const fileInput = document.getElementById('salesExcelFile');
   const resultBox = document.getElementById('salesUploadResult');
   const submitBtn = document.getElementById('salesUploadSubmitBtn');
-
-  function getCSRFToken() {
-    const el = form.querySelector('input[name="csrfmiddlewaretoken"]');
-    return el ? el.value : '';
-  }
 
   function renderResult(ok, payload) {
     if (!resultBox) return;

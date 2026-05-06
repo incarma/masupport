@@ -41,10 +41,6 @@
     return res.json().catch(() => null);
   }
 
-  function getCsrfFromForm(form) {
-    return form?.querySelector("input[name='csrfmiddlewaretoken']")?.value || "";
-  }
-
   function isHtmlResponse(res) {
     return (res.headers.get("content-type") || "").toLowerCase().includes("text/html");
   }
@@ -126,7 +122,7 @@
   }
 
   async function sendUpdate({ updateUrl, form, actionType, value }) {
-    const csrf = getCsrfFromForm(form);
+    const csrf = window.csrfToken;
     if (!csrf) throw new Error("CSRF 토큰을 찾을 수 없습니다.");
 
     const body = new URLSearchParams();

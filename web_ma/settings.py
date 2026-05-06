@@ -250,6 +250,9 @@ LOGOUT_REDIRECT_URL = "/"
 # - 스코프 리스트는 우선 환경변수 기반으로 시작하되,
 #   정책엔진(should_enforce)은 향후 DB scope 모델로 확장 가능하게 설계합니다.
 # =============================================================================
+# ⚠️ 운영 배포 시 .env.prod에 FORCE_PASSWORD_CHANGE_ENABLED=True 필수
+# FORCE_PASSWORD_CHANGE_SCOPE_BRANCHES, SCOPE_PARTS, SCOPE_CHANNELS 중
+# 하나 이상이 설정되어야 실제 강제 적용됨
 FORCE_PASSWORD_CHANGE_ENABLED = config(
     "FORCE_PASSWORD_CHANGE_ENABLED",
     default=False,
@@ -271,6 +274,8 @@ FORCE_PASSWORD_CHANGE_URL_WHITELIST_NAMES = _csv_set(
 FORCE_PASSWORD_CHANGE_SCOPE_BRANCHES = _csv_set(config("FORCE_PASSWORD_CHANGE_SCOPE_BRANCHES", default=""))
 FORCE_PASSWORD_CHANGE_SCOPE_PARTS = _csv_set(config("FORCE_PASSWORD_CHANGE_SCOPE_PARTS", default=""))
 FORCE_PASSWORD_CHANGE_SCOPE_CHANNELS = _csv_set(config("FORCE_PASSWORD_CHANGE_SCOPE_CHANNELS", default=""))
+# 주의: SCOPE_* 설정이 모두 비어있으면 should_enforce()는 False 반환
+# (강제 적용 없음). 전체 적용 원하면 scope를 "*"로 설정
 
 # ✅ 차단 우선(deny-first)
 FORCE_PASSWORD_CHANGE_DENY_BRANCHES = _csv_set(config("FORCE_PASSWORD_CHANGE_DENY_BRANCHES", default=""))

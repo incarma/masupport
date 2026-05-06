@@ -21,14 +21,17 @@ logger = logging.getLogger(__name__)
 
 @require_GET
 @login_required
-@grade_required("superuser", "head")
+@grade_required("superuser", "head", "leader", forbidden_template=None)
 def ajax_table_fetch(request):
     branch = (request.GET.get("branch") or "").strip()
     user = request.user
 
+    if user.grade != "superuser":
+        branch = (getattr(user, "branch", "") or "").strip()
+
     if not branch:
         return json_err("지점(branch) 정보가 없습니다.", status=400)
-    if user.grade != "superuser" and branch != user.branch:
+    if user.grade != "superuser" and branch != (getattr(user, "branch", "") or "").strip():
         return json_err("다른 지점 테이블에는 접근할 수 없습니다.", status=403)
 
     try:

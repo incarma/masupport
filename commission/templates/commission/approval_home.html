@@ -191,6 +191,7 @@
 <script src="{% static 'js/commission/_net_json.js' %}{% if STATIC_VERSION %}?v={{ STATIC_VERSION }}{% else %}?v=20260226_01{% endif %}"></script>
 <script src="{% static 'js/commission/_modals.js' %}{% if STATIC_VERSION %}?v={{ STATIC_VERSION }}{% else %}?v=20260226_01{% endif %}"></script>
 
+<script src="{% static 'js/common/csrf_window.js' %}?v={% now 'U' %}"></script>
 <script src="{% static 'js/commission/approval_excel_upload.js' %}"></script>
 <script src="{% static 'js/commission/approval_home_export.js' %}{% if STATIC_VERSION %}?v={{ STATIC_VERSION }}{% else %}?v=20260226_01{% endif %}"></script>
 {% endblock %}

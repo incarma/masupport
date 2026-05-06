@@ -330,11 +330,14 @@ document.addEventListener("DOMContentLoaded", () => {
         const formData = new FormData();
         formData.append("excel_file", file);
         formData.append("branch", b);
-        formData.append("csrfmiddlewaretoken", getCSRFToken());
 
         showLoading("업로드 중...");
         try {
-          const res = await fetch(u.rateUpload, { method: "POST", body: formData });
+          const res = await fetch(u.rateUpload, {
+            method: "POST",
+            headers: { "X-CSRFToken": getCSRFToken(), "X-Requested-With": "XMLHttpRequest" },
+            body: formData,
+          });
           const data = await readJsonOrThrow(res, "업로드 실패");
 
           if (isSuccessJson(data)) {

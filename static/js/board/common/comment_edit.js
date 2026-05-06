@@ -36,12 +36,6 @@
     return root.querySelector(sel);
   }
 
-  function getCsrfToken() {
-    const v = qs("#commentEditCsrfToken")?.value;
-    if (v && v !== "NOTPROVIDED") return v;
-    return qs("input[name='csrfmiddlewaretoken']")?.value || "";
-  }
-
   function getOldText(container) {
     const p = qs("p.comment-text", container) || qs("p", container);
     // innerText는 줄바꿈 유지에 유리
@@ -154,7 +148,7 @@
   }
 
   function enterEditMode(container, commentId, oldText) {
-    const csrf = getCsrfToken();
+    const csrf = window.csrfToken;
     if (!csrf) {
       alert("CSRF 토큰을 찾지 못했습니다. 새로고침 후 다시 시도해주세요.");
       restoreStatic(container, oldText);

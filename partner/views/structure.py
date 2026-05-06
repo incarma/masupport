@@ -99,20 +99,23 @@ def _build_leader_scope_q(user) -> Q:
 def _can_use_target(user, target: CustomUser, branch: str) -> bool:
     grade = getattr(user, "grade", "")
     target_branch = _safe_str(getattr(target, "branch", ""))
+    scope_branch = _safe_str(branch)
 
     if grade == "superuser":
         return True
 
-    if target_branch != _safe_str(branch):
+    if not scope_branch:
+        scope_branch = _safe_str(getattr(user, "branch", ""))
+
+    if target_branch != scope_branch:
         return False
 
     if grade == "head":
         return target_branch == _safe_str(getattr(user, "branch", ""))
 
     if grade == "leader":
-        allowed_ids = set(str(x) for x in get_level_team_filter_user_ids(user))
-        return str(target.id) == str(user.id) or str(target.id) in allowed_ids
-
+        return target_branch == _safe_str(getattr(user, "branch", ""))
+    
     return False
 
 

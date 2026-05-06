@@ -235,6 +235,7 @@
 {% block extra_js %}
 <!-- Comment edit + inline update + status ui -->
 <script src="{% static 'js/common/confirm_submit.js' %}?v={% now 'U' %}"></script>
+<script src="{% static 'js/common/csrf_window.js' %}?v={% now 'U' %}"></script>
 <script src="{% static 'js/board/common/status_ui.js' %}?v=20260127"></script>
 <script src="{% static 'js/board/common/comment_edit.js' %}?v=20260104"></script>
 <script src="{% static 'js/board/common/detail_inline_update.js' %}?v=20260104"></script>

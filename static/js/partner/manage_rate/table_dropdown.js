@@ -91,11 +91,11 @@ export function applyTableDropdownToRow(rowEl, tables = []) {
     const sel = document.createElement("select");
     sel.name = name;
     sel.className = "form-select form-select-sm";
+    sel.dataset.keepValue = keepValue;
 
     if (input && input.parentNode) input.parentNode.replaceChild(sel, input);
     else rowEl.appendChild(sel);
 
-    if (keepValue) sel.value = keepValue;
     return sel;
   };
 
@@ -106,7 +106,7 @@ export function applyTableDropdownToRow(rowEl, tables = []) {
      Fill options (table name only)
   --------------------------- */
   const fillOptions = (sel) => {
-    const current = sel.value || "";
+    const current = sel.value || sel.dataset.keepValue || "";
     sel.innerHTML = `<option value="">선택</option>`;
 
     for (const t of tables) {
@@ -116,7 +116,18 @@ export function applyTableDropdownToRow(rowEl, tables = []) {
       sel.appendChild(opt);
     }
 
-    if (current) sel.value = current;
+    if (current) {
+      const exists = Array.from(sel.options).some((opt) => opt.value === current);
+      if (!exists) {
+        const opt = document.createElement("option");
+        opt.value = current;
+        opt.textContent = current;
+        sel.appendChild(opt);
+      }
+      sel.value = current;
+    }
+
+    delete sel.dataset.keepValue;
   };
 
   fillOptions(afterFSelect);
