@@ -3,17 +3,15 @@
  * ──────────────────────────────────────
  * 환수내역 안내자료 제작 페이지 전용 JS (ESM, type="module")
  *
- * [라이브러리]
- *   window.XLSX : SheetJS 0.18.5 — raw xlsx 파싱 + 결과 xlsx 생성 (단일)
- *   ※ ExcelJS 제거 — unsafe-eval CSP 위반으로 이 프로젝트에서 사용 불가
+ * [서버 생성 정책]
+ *   - 원본 엑셀 파일은 FormData로 서버 전송
+ *   - 서버에서 openpyxl로 파싱/마스킹/서식 적용/xlsx 생성
+ *   - 클라이언트는 결과 blob을 다운로드 카드에 연결
  *
- * [스타일 정책]
- *   SheetJS 커뮤니티 버전은 테두리/배경색 미지원.
- *   A1 제목(bold), 3행 헤더(bold)만 적용 가능한 범위에서 구현.
- *   데이터 정확성이 스타일보다 우선.
- *
- * [서버 통신 / CSRF]
- *   없음 — 클라이언트 전용 처리
+ * [보안/통신]
+ *   - same-origin credentials
+ *   - X-CSRFToken
+ *   - X-Requested-With
  */
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -40,6 +38,7 @@ window.addEventListener("pageshow", (e) => {
 
 const YEAR_RANGE   = 3;
 const CURRENT_YEAR = parseInt(root.dataset.currentYear, 10) || new Date().getFullYear();
+const EXPORT_URL   = root.dataset.exportUrl || "";
 
 let _rowCounter = 0;
 let _blobUrl    = null;
@@ -67,6 +66,8 @@ function _init() {
       _onMakeNotice();
     } else if (btn.id === "btnDownloadResult") {
       _onDownload();
+      } else if (btn.id === "btnDownloadPdfResult") {
+      _onDownloadPdf();
     } else if (btn.id === "btnResetDownload") {
       _resetDownload();
     } else if (btn.classList.contains("notice-row-delete")) {
@@ -240,22 +241,10 @@ async function _onMakeNotice() {
   overlay.hidden = false;
 
   try {
-    // Step 4: SheetJS 파싱 + 전처리
-    const allRows = await _parseAndMergeRows(rows);
-    if (allRows.length === 0) {
-      alert("처리할 데이터가 없습니다.\n(지급금액이 모두 0이거나 유효 데이터가 없습니다.)");
-      return;
-    }
-
-    // Step 5: SheetJS xlsx 생성
-    const name   = document.getElementById("targetName")  .value.trim();
-    const branch = document.getElementById("targetBranch").value.trim();
-    const baseYm = _titleYm();
-    const [YYYY, MM] = baseYm.split("-");
-
-    const { blob, filename } = _buildXlsx(allRows, { name, branch, YYYY, MM });
-    storeResult(blob, filename, allRows.length);
-
+    // Step 4: 서버 openpyxl 생성 요청
+    const fd = _buildExportFormData(rows);
+    const { blob, filename, rowCount } = await _postNoticeExport(fd);
+    storeResult(blob, filename, rowCount);
   } catch (err) {
     console.error("[collect_notice] 제작 오류:", err);
     alert(`안내자료 제작 중 오류가 발생했습니다.\n${err.message || err}`);
@@ -305,214 +294,146 @@ function _rate(v) {
 
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 8. SheetJS 파싱 및 전처리
+// 8. 서버 openpyxl 생성 요청
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function _parseAndMergeRows(rows) {
-  const merged = [];
+function _getCSRFToken() {
+  return (
+    window.csrfToken ||
+    document.querySelector("[name=csrfmiddlewaretoken]")?.value ||
+    document.cookie.match(/csrftoken=([^;]+)/)?.[1] ||
+    ""
+ );
+}
+
+function _buildExportFormData(rows) {
+  const name   = document.getElementById("targetName")?.value.trim() || "";
+  const branch = document.getElementById("targetBranch")?.value.trim() || "";
+  const empId  = document.getElementById("targetEmpId")?.value.trim() || "";
+  const baseYm = _titleYm();
+  const [YYYY, MM] = baseYm.split("-");
+
+  const fd = new FormData();
+  fd.set("target_emp_id", empId);
+  fd.set("target_name", name);
+  fd.set("target_branch", branch);
+  fd.set("title_year", YYYY);
+  fd.set("title_month", MM);
+  fd.set("csrfmiddlewaretoken", _getCSRFToken());
+
+  rows.forEach((row) => {
+    const file = row.querySelector(".notice-row-file-input")?.files?.[0];
+    if (!file) return;
+    fd.append("file_yms", _rowYm(row));
+    fd.append("notice_files", file, file.name);
+  });
+
+  return fd;
+}
+
+function _filenameFromContentDisposition(headerValue) {
+  const h = String(headerValue || "");
+ const star = h.match(/filename\*=UTF-8''([^;]+)/i);
+  if (star?.[1]) {
+    try { return decodeURIComponent(star[1]); } catch { return star[1]; }
+  }
+  const plain = h.match(/filename="([^"]+)"/i);
+  return plain?.[1] || "";
+}
+
+async function _readErrorMessage(res) {
+  const ct = (res.headers.get("content-type") || "").toLowerCase();
+  if (ct.includes("application/json")) {
+    const data = await res.json().catch(() => null);
+    return data?.message || `요청 실패 (${res.status})`;
+  }
+  const text = await res.text().catch(() => "");
+  return text || `요청 실패 (${res.status})`;
+}
+
+async function _postNoticeExport(formData) {
+  if (!EXPORT_URL) {
+    throw new Error("서버 생성 URL이 설정되지 않았습니다.");
+  }
+
+  const res = await fetch(EXPORT_URL, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: {
+      "X-CSRFToken": _getCSRFToken(),
+      "X-Requested-With": "XMLHttpRequest",
+    },
+    body: formData,
+  });
+
+  if (!res.ok) {
+    throw new Error(await _readErrorMessage(res));
+  }
+
+  const blob = await res.blob();
+  const filename =
+    _filenameFromContentDisposition(res.headers.get("Content-Disposition")) ||
+    "환수내역.xlsx";
+  const rowCount = Number(res.headers.get("X-Collect-Notice-Row-Count") || "0");
+
+  return { blob, filename, rowCount };
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PDF 다운로드
+// - 서버에서 동일한 원본 파일로 xlsx 생성 후 PDF 변환
+// - A4 가로 / 모든 열 1페이지 맞춤 설정은 서버 openpyxl 인쇄설정에서 처리
+// ─────────────────────────────────────────────────────────────────────────────
+async function _onDownloadPdf() {
+  const empId = document.getElementById("targetEmpId").value.trim();
+  if (!empId) {
+    alert("대상자를 먼저 선택해주세요.");
+    return;
+  }
+
+  const rows = _getRows();
+  if (rows.length === 0) {
+    alert("내역 파일 행을 1개 이상 추가해주세요.");
+    return;
+  }
+
   for (const row of rows) {
-    const file    = row.querySelector(".notice-row-file-input").files[0];
-    const ym      = _rowYm(row);
-    const rawRows = await _parseXlsx(file);
-    merged.push(..._cleanRows(rawRows, ym));
-  }
-  merged.sort((a, b) => a._ym.localeCompare(b._ym));
-  return merged;
-}
-
-function _parseXlsx(file) {
-  return new Promise((resolve, reject) => {
-    const reader  = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const wb   = window.XLSX.read(e.target.result, { type: "array" });
-        const ws   = wb.Sheets[wb.SheetNames[0]];
-        const data = window.XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
-        resolve(data);
-      } catch (err) {
-        reject(new Error(`파일 파싱 실패: ${file.name} — ${err.message}`));
-      }
-    };
-    reader.onerror = () => reject(new Error(`파일 읽기 실패: ${file.name}`));
-    reader.readAsArrayBuffer(file);
-  });
-}
-
-/**
- * 전처리 규칙 (가이드맵 §2-3 + §9-1 정정):
- *   1) 헤더 행(index 0) 제거
- *   2) "전체 N건" 합계 행 제거
- *   3) 지급금액(index 12) = 0 또는 빈 값 행 제거
- *
- * 열 매핑:
- *   idx  1 → 항목구분  idx  4 → 상품명     idx  5 → 증권번호(마스킹)
- *   idx  6 → 계약자(마스킹)  idx  7 → 수납구분  idx  8 → 영수일
- *   idx  9 → 회차     idx 10 → 영수보험료  idx 11 → 지급율
- *   idx 12 → 지급금액(§9-1 정정)  idx 13 → 보험계약일
- *   idx 14 → 모집자(마스킹)  idx 15 → 지급자(마스킹)
- */
-function _cleanRows(rawRows, ym) {
-  const result = [];
-  for (let i = 0; i < rawRows.length; i++) {
-    const row = rawRows[i];
-    if (i === 0) continue;
-    if (/^전체\s*\d+\s*건/.test(String(row[0] ?? "").trim())) continue;
-    const pay = row[12];
-    if (pay === "" || pay === null || pay === undefined) continue;
-    if (typeof pay === "number" && pay === 0) continue;
-    if (String(pay).trim() === "0") continue;
-
-    result.push({
-      _ym:      ym,
-      항목구분:  _str(row[1]),
-      상품명:    _str(row[4]),
-      증권번호:  _maskPolicy(_str(row[5])),
-      계약자:    _maskName(_str(row[6])),
-      수납구분:  _str(row[7]),
-      영수일:    _str(row[8]),
-      회차:      _str(row[9]),
-      영수보험료: _money(row[10]),
-      지급율:    _rate(row[11]),
-      지급금액:  _money(row[12]),
-      보험계약일: _str(row[13]),
-      모집자:    _maskName(_stripParenId(_str(row[14]))),
-      지급자:    _maskName(_stripParenId(_str(row[15]))),
-    });
-  }
-  return result;
-}
-
-
-// ─────────────────────────────────────────────────────────────────────────────
-// 9. SheetJS xlsx 생성 (ExcelJS 대체)
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * SheetJS로 결과 xlsx 생성.
- *
- * 구조:
- *   1행: 제목 (A1 — A1:N1 병합, bold 적용 가능 범위)
- *   2행: 빈 행
- *   3행: 헤더 (14열, bold)
- *   4행~: 데이터
- *
- * 스타일 한계 (SheetJS 커뮤니티):
- *   - bold/폰트크기 : 부분 지원 (xlsx 파일에 적용되나 Excel 렌더 보장 불가)
- *   - 테두리/배경색 : 미지원 (ExcelJS 필요, 현재 CSP 제약으로 사용 불가)
- *
- * @param {object[]} rows
- * @param {{name:string, branch:string, YYYY:string, MM:string}} meta
- * @returns {{blob: Blob, filename: string}}
- */
-function _buildXlsx(rows, { name, branch, YYYY, MM }) {
-  const XLSX     = window.XLSX;
-  const wb       = XLSX.utils.book_new();
-
-  // ── 헤더 정의 ────────────────────────────────────────────────────────────
-  const HEADERS = [
-    "월도", "항목구분", "상품명", "증권번호", "계약자",
-    "수납구분", "영수일", "회차", "영수보험료", "지급율(환수율)",
-    "지급금액(환수금액)", "보험계약일", "모집자", "지급자",
-  ];
-
-  // ── 워크시트 데이터 조립 ──────────────────────────────────────────────────
-  // 1행: 제목
-  const titleText = `${branch} ${name} ${YYYY}년 ${_pad2(MM)}월 기준 환수내역`;
-
-  // 3행: 헤더
-  // 4행~: 데이터
-  const dataRows = rows.map((d) => [
-    d._ym,        // A: 월도
-    d.항목구분,    // B
-    d.상품명,      // C
-    d.증권번호,    // D
-    d.계약자,      // E
-    d.수납구분,    // F
-    d.영수일,      // G
-    d.회차,        // H
-    d.영수보험료,  // I
-    d.지급율,      // J
-    d.지급금액,    // K
-    d.보험계약일,  // L
-    d.모집자,      // M
-    d.지급자,      // N
-  ]);
-
-  // aoa_to_sheet: 2D 배열 → 워크시트
-  const aoaData = [
-    [titleText, "", "", "", "", "", "", "", "", "", "", "", "", ""], // 1행: 제목
-    [],                                                              // 2행: 빈 행
-    HEADERS,                                                         // 3행: 헤더
-    ...dataRows,                                                     // 4행~: 데이터
-  ];
-
-  const ws = XLSX.utils.aoa_to_sheet(aoaData);
-
-  // ── 컬럼 폭 설정 ──────────────────────────────────────────────────────────
-  ws["!cols"] = [
-    { wch: 10 },  // A 월도
-    { wch: 12 },  // B 항목구분
-    { wch: 50 },  // C 상품명
-    { wch: 18 },  // D 증권번호
-    { wch: 10 },  // E 계약자
-    { wch: 10 },  // F 수납구분
-    { wch: 13 },  // G 영수일
-    { wch:  7 },  // H 회차
-    { wch: 14 },  // I 영수보험료
-    { wch: 12 },  // J 지급율
-    { wch: 15 },  // K 지급금액
-    { wch: 13 },  // L 보험계약일
-    { wch: 10 },  // M 모집자
-    { wch: 10 },  // N 지급자
-  ];
-
-  // ── A1:N1 병합 (제목 행) ──────────────────────────────────────────────────
-  ws["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 13 } }];
-
-  // ── A1 제목 셀 스타일 (bold, 16pt) ───────────────────────────────────────
-  // SheetJS 커뮤니티 버전에서 스타일 객체를 직접 주입하는 방식
-  // (xlsx 파일 내 XML에 반영되나 Excel의 렌더링 보장은 PRO 버전 기준)
-  if (ws["A1"]) {
-    ws["A1"].s = {
-      font: { bold: true, sz: 16, name: "맑은 고딕" },
-      alignment: { horizontal: "left", vertical: "center" },
-    };
-  }
-
-  // ── 3행 헤더 셀 스타일 (bold) ─────────────────────────────────────────────
-  const colLetters = "ABCDEFGHIJKLMN".split("");
-  colLetters.forEach((col) => {
-    const cellAddr = `${col}3`;
-    if (ws[cellAddr]) {
-      ws[cellAddr].s = {
-        font: { bold: true, sz: 10, name: "맑은 고딕" },
-        alignment: { horizontal: "center", vertical: "center" },
-      };
+    const fi = row.querySelector(".notice-row-file-input");
+    if (!fi.files || !fi.files[0]) {
+      alert(`${_rowYm(row)} 행의 파일을 선택해주세요.`);
+      return;
     }
-  });
+  }
 
-  // ── 행 높이 설정 ──────────────────────────────────────────────────────────
-  ws["!rows"] = [
-    { hpt: 22 }, // 1행: 제목
-    { hpt: 6  }, // 2행: 빈 행
-    { hpt: 18 }, // 3행: 헤더
-  ];
+  const overlay = document.getElementById("loadingOverlay");
+  overlay.hidden = false;
 
-  // ── 워크북에 시트 추가 + Blob 생성 ───────────────────────────────────────
-  XLSX.utils.book_append_sheet(wb, ws, "환수내역");
+  try {
+    const fd = _buildExportFormData(rows);
+    fd.set("output", "pdf");
 
-  const wbOut   = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-  const blob    = new Blob([wbOut], {
-    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  });
-  const filename = `환수내역_${name}_${YYYY}년${_pad2(MM)}월.xlsx`;
+    const { blob, filename } = await _postNoticeExport(fd);
 
-  return { blob, filename };
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename || "환수내역.pdf";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (err) {
+    console.error("[collect_notice] PDF 다운로드 오류:", err);
+    alert(`PDF 다운로드 중 오류가 발생했습니다.\n${err.message || err}`);
+  } finally {
+    overlay.hidden = true;
+  }
 }
 
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 10. 데이터 정규화 / 마스킹
+// 9. 데이터 정규화 / 마스킹
 // ─────────────────────────────────────────────────────────────────────────────
 
 function _str(v) {
