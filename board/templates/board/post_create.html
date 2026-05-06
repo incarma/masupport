@@ -42,6 +42,7 @@
 
 {% block extra_js %}
 <!-- Upload UI + Submit Lock -->
+<script src="{% static 'js/common/csrf_window.js' %}?v={% now 'U' %}"></script>
 <script src="{% static 'js/utils/file_upload_utils.js' %}"></script>
 <script src="{% static 'js/board/form_submit_lock.js' %}?v=20260104_2"></script>
 {% endblock %}

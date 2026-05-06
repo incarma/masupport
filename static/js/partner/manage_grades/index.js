@@ -35,13 +35,6 @@
         .replaceAll('"', "&quot;")
         .replaceAll("'", "&#039;");
     },
-    // TODO RULE-Q-01: csrf_window.js 로드 확인 후 window.csrfToken 으로 전환 필요
-    getCookie(name) {
-      const value = `; ${document.cookie || ""}`;
-      const parts = value.split(`; ${name}=`);
-      if (parts.length === 2) return parts.pop().split(";").shift();
-      return "";
-    },
     buildUrl(base, params) {
       const url = new URL(base, window.location.origin);
       Object.entries(params || {}).forEach(([k, v]) => {
@@ -149,14 +142,6 @@
   /* =========================================================
    * 3) Network / CSRF / fetch wrappers
    * ========================================================= */
-  function getCSRFToken() {
-    const input =
-      U.qs('#csrfForm input[name="csrfmiddlewaretoken"]') ||
-      U.qs('input[name="csrfmiddlewaretoken"]');
-    const fromInput = U.str(input?.value);
-    return fromInput || U.str(U.getCookie("csrftoken"));
-  }
-
   async function readJson(res) {
     const status = Number(res?.status || 0);
     const contentType = String(res?.headers?.get?.("content-type") || "").toLowerCase();
@@ -199,12 +184,11 @@
   }
 
   function buildPostHeaders() {
-    const csrf = getCSRFToken();
     const headers = {
       "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
       "X-Requested-With": "XMLHttpRequest",
     };
-    if (csrf) headers["X-CSRFToken"] = csrf;
+    if (window.csrfToken) headers["X-CSRFToken"] = window.csrfToken;
     return headers;
   }
 

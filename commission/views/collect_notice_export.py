@@ -17,6 +17,7 @@ Collect Notice Excel Export View
 """
 
 import logging
+import json
 
 from django.http import HttpResponse
 from django.views.decorators.http import require_POST
@@ -47,6 +48,7 @@ def collect_notice_export_excel(request):
     - title_month: 제목 기준 월
     - file_yms[]: 각 파일의 기준 연월(YYYY-MM)
     - notice_files[]: 원본 엑셀 파일들
+    - manual_rows: 수기 입력 행 JSON 문자열
 
     응답:
     - 성공: xlsx attachment
@@ -61,12 +63,24 @@ def collect_notice_export_excel(request):
     file_yms = request.POST.getlist("file_yms")
     files = request.FILES.getlist("notice_files")
     output = (request.POST.get("output") or "xlsx").strip().lower()
+    manual_rows_raw = (request.POST.get("manual_rows") or "[]").strip()
 
     if not target_emp_id:
         return _json_error("대상자를 먼저 선택해주세요.", status=400)
+    
+    if output not in {"xlsx", "pdf"}:
+        return _json_error("출력 형식이 올바르지 않습니다.", status=400)
 
-    if not files:
-        return _json_error("내역 파일을 1개 이상 선택해주세요.", status=400)
+    try:
+        manual_rows = json.loads(manual_rows_raw)
+    except json.JSONDecodeError:
+        return _json_error("수기 입력 데이터 형식이 올바르지 않습니다.", status=400)
+
+    if not isinstance(manual_rows, list):
+        return _json_error("수기 입력 데이터는 배열 형식이어야 합니다.", status=400)
+
+    if not files and not manual_rows:
+        return _json_error("내역 파일 또는 수기 입력 행을 1개 이상 추가해주세요.", status=400)
 
     if len(file_yms) != len(files):
         return _json_error("파일 기준 연월 정보와 파일 개수가 일치하지 않습니다.", status=400)
@@ -84,6 +98,7 @@ def collect_notice_export_excel(request):
                 title_year=title_year,
                 title_month=title_month,
                 sources=sources,
+                manual_rows=manual_rows,
             )
             content_type = "application/pdf"
         else:
@@ -93,6 +108,7 @@ def collect_notice_export_excel(request):
                 title_year=title_year,
                 title_month=title_month,
                 sources=sources,
+                manual_rows=manual_rows,
             )
             content_type = XLSX_MIME
     except ValueError as exc:

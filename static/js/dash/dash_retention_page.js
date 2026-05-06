@@ -13,16 +13,6 @@
   if (!root || root.dataset.inited === "1") return;
   root.dataset.inited = "1";
 
-  /* ── CSRF ────────────────────────────────────────────── */
-  // TODO RULE-Q-01: csrf_window.js 로드 확인 후 window.csrfToken 으로 전환 필요
-  function getCSRF() {
-    if (window.csrfToken) return window.csrfToken;
-    const el = document.querySelector("[name=csrfmiddlewaretoken]");
-    if (el) return el.value;
-    const m = document.cookie.match(/csrftoken=([^;]+)/);
-    return m ? m[1] : "";
-  }
-
   /* ── URL (boot div dataset SSOT) ─────────────────────── */
   const API_URL    = root.dataset.retentionApiUrl    || "/dash/api/retention/";
   const UPLOAD_URL = root.dataset.uploadUrl          || "/dash/api/retention/upload/";
@@ -486,7 +476,7 @@
           const res  = await fetch(UPLOAD_URL, {
             method:      "POST",
             credentials: "same-origin",
-            headers:     { "X-Requested-With": "XMLHttpRequest", "X-CSRFToken": getCSRF() },
+            headers:     { "X-Requested-With": "XMLHttpRequest", "X-CSRFToken": window.csrfToken },
             body:        fd,
           });
           const json = await res.json();

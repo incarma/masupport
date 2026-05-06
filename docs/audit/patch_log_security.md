@@ -46,3 +46,55 @@ System check identified no issues (0 silenced).
 
 ## 미완료 항목 및 사유
 없음. 5개 RULE 전체 완료.
+
+---
+
+# 재검증 — 2026-05-06
+> 커밋: be12619
+> 검증자: 보안 패치 담당
+
+## 파일별 현재 상태 재확인
+
+| 파일 | 확인 결과 |
+|------|---------|
+| `audit/constants.py` | `COMMISSION_EXCEL_UPLOAD` (line 80), `PARTNER_LEADER_ADD` (line 71), `PARTNER_LEADER_DELETE` (line 72), `ACCOUNTS_EXCEL_UPLOAD` (line 83) 모두 존재 ✅ |
+| `partner/views/subadmin.py` | `log_action(PARTNER_LEADER_ADD)` (line 67), `log_action(PARTNER_LEADER_DELETE)` (line 152) 적용 확인 ✅ |
+| `accounts/tasks.py` | `log_action(None, ACTION.ACCOUNTS_EXCEL_UPLOAD, ...)` (line 486) 적용 확인 ✅ |
+| `commission/views/api_upload.py` | `@csrf_exempt` 없음 ✅ |
+| `commission/views/approval.py` | `@csrf_exempt` 없음, `ACTION.COMMISSION_EXCEL_UPLOAD` 유효 ✅ |
+
+## python manage.py check 결과
+```
+System check identified no issues (0 silenced).
+```
+
+## security_lint.sh 결과 (위반 2건 잔존)
+
+```
+❌ [S-B-04] CustomUser.objects.filter() 직접 사용 — 21개 위치
+❌ [S-S-05] ACCOUNTS_GRADE_UPDATE 정의만 되고 사용처 0건
+```
+
+| 위반 | 판단 | 조치 |
+|------|------|------|
+| S-B-04 | 이번 패치 범위 외 (STEP 1에 미포함) | 별도 리팩토링 작업 필요 |
+| S-S-05 (ACCOUNTS_GRADE_UPDATE) | RULE-S-02 "grade 변경 건이 있으면 별도 기록" 미구현 | `process_users_excel_task`에 row별 grade 변경 카운트 추적 후 `log_action(ACTION.ACCOUNTS_GRADE_UPDATE)` 추가 필요 — 별도 STEP으로 처리 |
+
+## 회귀 점검 결과 (9항목)
+| 항목 | 결과 |
+|------|------|
+| 권한 스코프 변경 여부 | 이상 없음 |
+| URL namespace 깨짐 여부 | 이상 없음 |
+| 템플릿 dataset/DOM id 변경 | 이상 없음 |
+| 첨부 다운로드 정책 위반 | 이상 없음 |
+| 업로드 레지스트리 영향 | 이상 없음 |
+| DataTables 정책 깨짐 | 이상 없음 |
+| CSS 스코프 누수 | 이상 없음 |
+| 운영 환경 영향 | 이상 없음 |
+| JSON 응답 형식 변경 | 이상 없음 |
+
+## 미완료 항목
+| 항목 | 우선순위 | 설명 |
+|------|---------|------|
+| `ACCOUNTS_GRADE_UPDATE` 미사용 | 중간 | RULE-S-05 부분 미완 — 엑셀 업로드 시 grade 변경 row 수 집계 후 별도 audit log 기록 필요 |
+| S-B-04 `CustomUser.objects.filter()` 직접 사용 | 낮음 | 검색 목적이 아닌 내부 업무 로직 조회가 포함되어 있어 별도 판단 필요 |

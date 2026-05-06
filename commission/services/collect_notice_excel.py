@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
 from io import BytesIO
+from contextlib import suppress
 import shutil
 import subprocess
 import tempfile
@@ -28,7 +29,6 @@ from typing import Any, Iterable
 from openpyxl import Workbook, load_workbook
 from openpyxl.worksheet.page import PageMargins
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
-from openpyxl.utils import get_column_letter
 
 
 # =============================================================================
@@ -38,6 +38,7 @@ from openpyxl.utils import get_column_letter
 HEADERS: list[str] = [
     "월도",
     "항목구분",
+    "지급/환수",
     "상품명",
     "증권번호",
     "계약자",
@@ -55,24 +56,25 @@ HEADERS: list[str] = [
 SHEET_NAME = "환수내역"
 FONT_NAME = "맑은 고딕"
 HEADER_FILL = PatternFill(fill_type="solid", fgColor="F2F2F2")
-RIGHT_ALIGN_DATA_COLS = {9, 10, 11}  # I/J/K: 영수보험료, 지급율, 지급금액
+RIGHT_ALIGN_DATA_COLS = {10, 11, 12}  # J/K/L: 영수보험료, 지급율, 지급금액
 
 # 사용자 요구사항 기준 열 너비
 COLUMN_WIDTHS: dict[str, float] = {
     "A": 10,   # 월도
     "B": 10,   # 항목구분
-    "C": 40,  # 상품명
-    "D": 15,  # 증권번호
-    "E": 10,   # 계약자
-    "F": 10,   # 수납구분
-    "G": 10,   # 영수일
-    "H": 5,   # 회차
-    "I": 10,   # 영수보험료
-    "J": 15,  # 지급율(환수율)
-    "K": 15,  # 지급금액(환수금액)
-    "L": 10,   # 보험계약일
-    "M": 10,   # 모집자
-    "N": 10,   # 지급자
+    "C": 10,   # 지급/환수
+    "D": 40,   # 상품명
+    "E": 15,   # 증권번호
+    "F": 10,   # 계약자
+    "G": 10,   # 수납구분
+    "H": 10,   # 영수일
+    "I": 5,    # 회차
+    "J": 10,   # 영수보험료
+    "K": 15,   # 지급율(환수율)
+    "L": 15,   # 지급금액(환수금액)
+    "M": 10,   # 보험계약일
+    "N": 10,   # 모집자
+    "O": 10,   # 지급자
 }
 
 
@@ -119,6 +121,7 @@ def build_collect_notice_excel(
     title_year: str,
     title_month: str,
     sources: list[NoticeSourceFile],
+    manual_rows: list[dict[str, Any]] | None = None,
 ) -> NoticeWorkbookResult:
     """
     환수내역 안내자료 xlsx 생성.
@@ -136,11 +139,13 @@ def build_collect_notice_excel(
         title_year=title_year,
         title_month=title_month,
         sources=sources,
+        manual_rows=manual_rows or [],
     )
 
     rows: list[dict[str, str]] = []
     for src in sources:
         rows.extend(_clean_rows(_iter_first_sheet_rows(src.file), src.ym))
+    rows.extend(_normalize_manual_rows(manual_rows or []))
 
     rows.sort(key=lambda r: r.get("_ym", ""))
 
@@ -178,6 +183,7 @@ def build_collect_notice_pdf(
     title_year: str,
     title_month: str,
     sources: list[NoticeSourceFile],
+    manual_rows: list[dict[str, Any]] | None = None,
 ) -> NoticePdfResult:
     """
     환수내역 안내자료 PDF 생성.
@@ -198,6 +204,7 @@ def build_collect_notice_pdf(
         title_year=title_year,
         title_month=title_month,
         sources=sources,
+        manual_rows=manual_rows or [],
     )
 
     pdf_content = _convert_xlsx_bytes_to_pdf(
@@ -224,6 +231,7 @@ def _validate_meta(
     title_year: str,
     title_month: str,
     sources: list[NoticeSourceFile],
+    manual_rows: list[dict[str, Any]],
 ) -> None:
     if not str(target_name or "").strip():
         raise ValueError("대상자 이름이 없습니다. 대상자를 다시 선택해주세요.")
@@ -238,8 +246,8 @@ def _validate_meta(
     if month < 1 or month > 12:
         raise ValueError("제목 기준 월은 1~12 범위여야 합니다.")
 
-    if not sources:
-        raise ValueError("내역 파일을 1개 이상 선택해주세요.")
+    if not sources and not manual_rows:
+        raise ValueError("내역 파일 또는 수기 입력 행을 1개 이상 추가해주세요.")
 
     for src in sources:
         if not re.fullmatch(r"\d{4}-\d{2}", src.ym or ""):
@@ -257,6 +265,12 @@ def _iter_first_sheet_rows(uploaded_file: Any) -> Iterable[tuple[Any, ...]]:
     - read_only=True: 대용량 파일 메모리 사용 최소화
     - data_only=True: 수식 셀은 계산된 값 기준
     """
+    name = getattr(uploaded_file, "name", "unknown")
+    ext = Path(str(name)).suffix.lower()
+    if ext not in {".xlsx", ".xlsm"}:
+        raise ValueError(f"지원하지 않는 엑셀 형식입니다: {name}")
+
+    wb = None
     try:
         uploaded_file.seek(0)
         wb = load_workbook(uploaded_file, read_only=True, data_only=True)
@@ -264,13 +278,10 @@ def _iter_first_sheet_rows(uploaded_file: Any) -> Iterable[tuple[Any, ...]]:
         for row in ws.iter_rows(values_only=True):
             yield tuple(row)
     except Exception as exc:
-        name = getattr(uploaded_file, "name", "unknown")
         raise ValueError(f"파일 파싱 실패: {name}") from exc
     finally:
-        try:
+        with suppress(Exception):
             wb.close()  # type: ignore[name-defined]
-        except Exception:
-            pass
 
 
 def _cell(row: tuple[Any, ...], idx: int) -> Any:
@@ -306,6 +317,7 @@ def _clean_rows(raw_rows: Iterable[tuple[Any, ...]], ym: str) -> list[dict[str, 
             {
                 "_ym": ym,
                 "항목구분": _to_str(_cell(row, 1)),
+                "지급환수": _to_str(_cell(row, 2)),  # raw C열: 지급/환수
                 "상품명": _to_str(_cell(row, 4)),
                 "증권번호": _mask_policy(_to_str(_cell(row, 5))),
                 "계약자": _mask_name(_to_str(_cell(row, 6))),
@@ -318,6 +330,68 @@ def _clean_rows(raw_rows: Iterable[tuple[Any, ...]], ym: str) -> list[dict[str, 
                 "보험계약일": _to_str(_cell(row, 13)),
                 "모집자": _mask_name(_strip_paren_id(_to_str(_cell(row, 14)))),
                 "지급자": _mask_name(_strip_paren_id(_to_str(_cell(row, 15)))),
+            }
+        )
+
+    return result
+
+
+def _normalize_manual_rows(manual_rows: list[dict[str, Any]]) -> list[dict[str, str]]:
+    """
+    수기 입력 행을 결과 Workbook row 구조로 정규화한다.
+
+    규칙:
+    - 필수: 월도, 지급/환수, 상품명, 지급금액
+    - 지급/환수: 지급 또는 환수만 허용
+    - 증권번호/계약자/모집자/지급자는 원본 파일 처리와 동일하게 마스킹
+    """
+    result: list[dict[str, str]] = []
+
+    for idx, row in enumerate(manual_rows, start=1):
+        if not isinstance(row, dict):
+            raise ValueError(f"수기 입력 {idx}행 형식이 올바르지 않습니다.")
+
+        ym = _to_str(row.get("ym"))
+        pay_refund = _to_str(row.get("pay_refund"))
+        product_name = _to_str(row.get("product_name"))
+        amount_raw = row.get("amount")
+
+        if not ym or not pay_refund or not product_name or not _to_str(amount_raw):
+            raise ValueError(f"수기 입력 {idx}행의 필수값(월도/지급·환수/상품명/지급금액)을 확인해주세요.")
+
+        if not re.fullmatch(r"\d{4}-\d{2}", ym):
+            raise ValueError(f"수기 입력 {idx}행의 월도 형식이 올바르지 않습니다.")
+
+        if pay_refund not in {"지급", "환수"}:
+            raise ValueError(f"수기 입력 {idx}행의 지급/환수 값은 '지급' 또는 '환수'만 가능합니다.")
+
+        amount_num = _to_number(amount_raw)
+        if amount_num is None:
+            raise ValueError(f"수기 입력 {idx}행의 지급금액은 숫자여야 합니다.")
+
+        rate_raw = _to_str(row.get("rate"))
+        if rate_raw:
+            rate_num = _to_number(rate_raw)
+            if rate_num is None or rate_num < 0 or rate_num > 100:
+                raise ValueError(f"수기 입력 {idx}행의 지급율은 0~100 범위여야 합니다.")
+
+        result.append(
+            {
+                "_ym": ym,
+                "항목구분": _to_str(row.get("item_type")),
+                "지급환수": pay_refund,
+                "상품명": product_name,
+                "증권번호": _mask_policy(_to_str(row.get("policy_no"))),
+                "계약자": _mask_name(_to_str(row.get("contractor"))),
+                "수납구분": _to_str(row.get("payment_type")),
+                "영수일": _to_str(row.get("receipt_date")),
+                "회차": _money(row.get("round_no")),
+                "영수보험료": _money(row.get("premium")),
+                "지급율": _rate(row.get("rate")),
+                "지급금액": _money(amount_raw),
+                "보험계약일": _to_str(row.get("contract_date")),
+                "모집자": _mask_name(_strip_paren_id(_to_str(row.get("recruiter")))),
+                "지급자": _mask_name(_strip_paren_id(_to_str(row.get("payer")))),
             }
         )
 
@@ -361,6 +435,7 @@ def _build_workbook(
         values = [
             item["_ym"],
             item["항목구분"],
+            item["지급환수"],
             item["상품명"],
             item["증권번호"],
             item["계약자"],

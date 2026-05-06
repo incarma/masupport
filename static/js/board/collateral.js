@@ -34,16 +34,6 @@
     return (ctx || document).querySelector(sel);
   }
 
-  /* ── CSRF 토큰 탐색 (SSOT 우선순위) ─────────────────── */
-  // TODO RULE-Q-01: csrf_window.js 로드 확인 후 window.csrfToken 으로 전환 필요
-  function getCSRF() {
-    if (window.csrfToken) return window.csrfToken;
-    var h = qs("[name=csrfmiddlewaretoken]");
-    if (h) return h.value;
-    var m = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
-    return m ? decodeURIComponent(m[1]) : "";
-  }
-
   /* ── 금액 포맷 유틸 ──────────────────────────────────── */
   /** 정수 → "1,234,567" */
   function fmt(val) {
@@ -333,7 +323,7 @@
       credentials: "same-origin",
       headers: {
         "Content-Type":     "application/json",
-        "X-CSRFToken":      getCSRF(),
+        "X-CSRFToken":      window.csrfToken,
         "X-Requested-With": "XMLHttpRequest",
       },
       body: JSON.stringify(payload),
@@ -382,7 +372,7 @@
       credentials: "same-origin",
       headers: {
         "Content-Type":     "application/json",
-        "X-CSRFToken":      getCSRF(),
+        "X-CSRFToken":      window.csrfToken,
         "X-Requested-With": "XMLHttpRequest",
       },
       body: JSON.stringify({}),
