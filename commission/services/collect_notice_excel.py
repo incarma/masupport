@@ -56,6 +56,7 @@ HEADERS: list[str] = [
 SHEET_NAME = "환수내역"
 FONT_NAME = "맑은 고딕"
 HEADER_FILL = PatternFill(fill_type="solid", fgColor="F2F2F2")
+SUMMARY_FILL = PatternFill(fill_type="solid", fgColor="E2EFDA")  # 합계 행 연한 초록
 RIGHT_ALIGN_DATA_COLS = {10, 11, 12}  # J/K/L: 영수보험료, 지급율, 지급금액
 
 # 사용자 요구사항 기준 열 너비
@@ -452,7 +453,14 @@ def _build_workbook(
         for col_idx, value in enumerate(values, start=1):
             ws.cell(row=row_idx, column=col_idx, value=value)
 
-    _apply_styles(ws, max_row=3 + len(rows), max_col=len(HEADERS))
+    # 합계 행: 지급금액(환수금액) 열 합산
+    total_amount = sum((_to_number(item["지급금액"]) or Decimal(0)) for item in rows)
+    summary_row_idx = 4 + len(rows)
+    ws.cell(row=summary_row_idx, column=1, value="합계")
+    ws.cell(row=summary_row_idx, column=12, value=f"{int(total_amount):,}")
+
+    _apply_styles(ws, max_row=summary_row_idx, max_col=len(HEADERS))
+    _apply_summary_row_styles(ws, row_idx=summary_row_idx, max_col=len(HEADERS))
     _apply_print_settings(ws)
     return wb
 
@@ -541,6 +549,21 @@ def _apply_styles(ws, *, max_row: int, max_col: int) -> None:
         cell.fill = HEADER_FILL
         cell.alignment = Alignment(horizontal="center", vertical="center")
         cell.border = border
+
+
+def _apply_summary_row_styles(ws, *, row_idx: int, max_col: int) -> None:
+    """합계 행: bold + 연한 초록 배경. 지급금액 열은 우측 정렬."""
+    thin = Side(style="thin", color="000000")
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+    for col_idx in range(1, max_col + 1):
+        cell = ws.cell(row=row_idx, column=col_idx)
+        cell.font = Font(name=FONT_NAME, size=10, bold=True)
+        cell.fill = SUMMARY_FILL
+        cell.border = border
+        if col_idx == 12:
+            cell.alignment = Alignment(horizontal="right", vertical="center")
+        else:
+            cell.alignment = Alignment(horizontal="center", vertical="center")
 
 
 # =============================================================================

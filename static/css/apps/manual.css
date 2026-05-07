@@ -158,13 +158,13 @@ a.manual-item.manual-editing { background: #fbfdff; }
   }
 }
 
-.manual-detail-title{ color: #003f7d; }
+#manual-detail .manual-detail-title{ color: #003f7d; }
 
 
 /* -----------------------
  3-1) Section header actions
 ------------------------ */
-.sec-card-actions{
+#manual-detail .sec-card-actions{
   position: absolute;
   top: 14px;
   right: 14px;
@@ -173,7 +173,7 @@ a.manual-item.manual-editing { background: #fbfdff; }
   z-index: 2;
 }
 
-.sec-title-row{
+#manual-detail .sec-title-row{
   display: flex;
   align-items: center;
   justify-content: flex-start;
@@ -182,7 +182,7 @@ a.manual-item.manual-editing { background: #fbfdff; }
   flex-wrap: wrap;
 }
 
-.sec-title{
+#manual-detail .sec-title{
   font-weight: 800;
   color: #003f7d;
   margin: 0;
@@ -191,12 +191,12 @@ a.manual-item.manual-editing { background: #fbfdff; }
   word-break: break-word;
 }
 
-.sec-title.empty{
+#manual-detail .sec-title.empty{
   color: #6c757d;
   font-weight: 700;
 }
 
-.sec-title-actions{
+#manual-detail .sec-title-actions{
   display: flex;
   gap: 6px;
   flex: 0 0 auto;
@@ -207,7 +207,7 @@ a.manual-item.manual-editing { background: #fbfdff; }
 /* -----------------------
  3-2) Block grid
 ------------------------ */
-.manual-block-grid{
+#manual-detail .manual-block-grid{
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 14px;
@@ -215,10 +215,10 @@ a.manual-item.manual-editing { background: #fbfdff; }
 }
 
 @media (max-width: 768px){
-  .manual-block-grid{ grid-template-columns: 1fr; }
+  #manual-detail .manual-block-grid{ grid-template-columns: 1fr; }
 }
 
-.manual-block-media{
+#manual-detail .manual-block-media{
   width: 100%;
   border-radius: 12px;
   border: 1px solid #e9ecef;
@@ -231,7 +231,7 @@ a.manual-item.manual-editing { background: #fbfdff; }
   justify-content: center;
 }
 
-.manual-block-thumb{
+#manual-detail .manual-block-thumb{
   width: 100%;
   height: auto;
   display: block;
@@ -240,12 +240,12 @@ a.manual-item.manual-editing { background: #fbfdff; }
   cursor: zoom-in;
 }
 
-.manual-block-text{
+#manual-detail .manual-block-text{
   width: 100%;
   overflow-wrap: anywhere;
 }
 
-.manual-block-actions{
+#manual-detail .manual-block-actions{
   display: flex;
   justify-content: flex-end;
   gap: 10px;

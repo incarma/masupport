@@ -1,6 +1,6 @@
 ========================================
  django_ma Harness Lint 결과
- 실행일시: 2026-05-06 22:20:52
+ 실행일시: 2026-05-06 22:22:23
  기준 커밋: 313c298
 ========================================
 
@@ -50,12 +50,8 @@
      static/js/partner/pdf_processing.js
      static/js/utils/file_upload_utils.js
 
-❌ [EX-01] except: pass 예외 삼키기 — logger 또는 log_action으로 처리 필요
-     commission/services/collect.py:88:     except Exception:
-     commission/services/collect.py:89:         pass
-
 ========================================
-❌ 품질 위반 1건 발견 — docs/harness/QUALITY_RULES.md 확인 필요
+✅ 품질 점검 통과
 
 ────────────────────────────────────────
 [3/4] Celery task 이름 정합성
@@ -108,7 +104,5 @@ beat_schedule 등록 task (9건):
 [OK] CSS 스코프 점검 통과
 
 ========================================
-❌ 점검 실패 — docs/harness/NEVER_DO.md 를 확인하세요
-
-  결과 저장 위치: docs/audit/lint_result_20260506.txt
+✅ 전체 점검 통과 — 커밋 진행 가능
 ========================================
