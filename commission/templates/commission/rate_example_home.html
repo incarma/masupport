@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}예시표{% endblock %}
+
+{% block app_css %}
+<link rel="stylesheet" href="{% static 'css/apps/commission.css' %}?v={% now 'U' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container my-4" id="rate-example-root"
+     data-upload-url="{{ upload_url }}"
+     data-user-grade="{{ request.user.grade }}">
+
+  <h3 class="fw-bold text-center mb-4" style="color:#003f7d">예시표</h3>
+
+  <!-- ── 보험사 목록 (json_script 주입 — CSP 안전) ─────────────────── -->
+  {{ life_insurers|json_script:"life-insurers-data" }}
+  {{ nonlife_insurers|json_script:"nonlife-insurers-data" }}
+
+  <!-- ── 필터 카드 ──────────────────────────────────────────────────── -->
+  <div class="card shadow border-0 rounded-4 p-3 mb-3">
+    <div class="row g-2 align-items-end">
+      <div class="col-6 col-md-2">
+        <label class="form-label mb-1 fw-semibold">손생구분</label>
+        <select class="form-select form-select-sm" id="re-filter-type">
+          <option value="">전체</option>
+          <option value="생명보험">생명보험</option>
+          <option value="손해보험">손해보험</option>
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label mb-1 fw-semibold">구분</label>
+        <select class="form-select form-select-sm" id="re-filter-cat">
+          <option value="">전체</option>
+          <option value="환산률/수정률">환산률/수정률</option>
+          <option value="지급률">지급률</option>
+        </select>
+      </div>
+      <div class="col-6 col-md-3">
+        <label class="form-label mb-1 fw-semibold">보험사</label>
+        <select class="form-select form-select-sm" id="re-filter-insurer">
+          <option value="">전체</option>
+        </select>
+      </div>
+      {% if is_superuser %}
+      <div class="col-6 col-md-2 ms-md-auto d-grid">
+        <button class="btn btn-success btn-sm"
+                data-bs-toggle="modal"
+                data-bs-target="#rateExampleUploadModal">
+          파일 추가
+        </button>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- ── 목록 카드 ──────────────────────────────────────────────────── -->
+  <div class="card shadow border-0 rounded-4 p-3 mb-3">
+    <div class="table-responsive">
+      <table class="table table-sm table-bordered align-middle" id="re-table">
+        <colgroup>
+          <col class="c-no">
+          <col class="c-type">
+          <col class="c-cat">
+          <col class="c-insurer">
+          <col>
+          <col class="c-date">
+          <col class="c-uploader">
+          <col class="c-dl">
+          {% if is_superuser %}<col class="c-del">{% endif %}
+        </colgroup>
+        <thead class="table-light">
+          <tr>
+            <th class="text-center">번호</th>
+            <th class="text-center">손생구분</th>
+            <th class="text-center">구분</th>
+            <th class="text-center">보험사</th>
+            <th>파일명</th>
+            <th class="text-center">등록일</th>
+            <th class="text-center">등록자</th>
+            <th class="text-center">다운로드</th>
+            {% if is_superuser %}<th class="text-center">삭제</th>{% endif %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for ex in examples %}
+          <tr>
+            <td class="text-center">{{ forloop.counter }}</td>
+            <td class="text-center">
+              {% if ex.insurer_type == "life" %}
+                <span class="re-badge-life">생명보험</span>
+              {% else %}
+                <span class="re-badge-nonlife">손해보험</span>
+              {% endif %}
+            </td>
+            <td class="text-center">{{ ex.get_category_display }}</td>
+            <td class="text-center">{{ ex.insurer }}</td>
+            <td>{{ ex.original_name|default:"-" }}</td>
+            <td class="text-center">{{ ex.created_at|date:"Y-m-d" }}</td>
+            <td class="text-center">{{ ex.uploaded_by.name|default:"-" }}</td>
+            <td class="text-center">
+              <a href="{% url 'commission:rate_example_download' ex.pk %}"
+                 class="btn btn-outline-primary btn-sm">
+                다운로드
+              </a>
+            </td>
+            {% if is_superuser %}
+            <td class="text-center">
+              <button class="btn btn-outline-danger btn-sm re-btn-delete"
+                      data-pk="{{ ex.pk }}"
+                      data-delete-url="{% url 'commission:rate_example_delete' ex.pk %}">
+                삭제
+              </button>
+            </td>
+            {% endif %}
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="{% if is_superuser %}9{% else %}8{% endif %}"
+                class="text-center text-muted py-3">
+              등록된 예시표가 없습니다.
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div><!-- /#rate-example-root -->
+
+<!-- ── 업로드 모달 (superuser 전용) ───────────────────────────────── -->
+{% if is_superuser %}
+<div class="modal fade" id="rateExampleUploadModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title fw-bold">예시표 파일 추가</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="re-upload-error" class="alert alert-danger d-none py-2 mb-3"></div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">손생구분</label>
+          <select class="form-select form-select-sm" id="re-modal-type">
+            <option value="">선택</option>
+            <option value="life">생명보험</option>
+            <option value="nonlife">손해보험</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">구분</label>
+          <select class="form-select form-select-sm" id="re-modal-cat">
+            <option value="">선택</option>
+            <option value="conv">환산률/수정률</option>
+            <option value="pay">지급률</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">보험사</label>
+          <select class="form-select form-select-sm" id="re-modal-insurer" disabled>
+            <option value="">손생구분을 먼저 선택하세요</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">파일 선택</label>
+          <input type="file" class="form-control form-control-sm" id="re-modal-file"
+                 accept=".pdf,.xls,.xlsx">
+          <div class="form-text">PDF, XLS, XLSX 형식만 허용 (최대 20MB)</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary btn-sm"
+                data-bs-dismiss="modal">취소</button>
+        <button type="button" class="btn btn-primary btn-sm" id="re-btn-save">저장</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<script src="{% static 'js/common/csrf_window.js' %}?v={% now 'U' %}"></script>
+<script src="{% static 'js/commission/rate_example_home.js' %}?v={% now 'U' %}"></script>
+{% endblock %}

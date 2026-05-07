@@ -591,3 +591,86 @@ class CollectDropdownFeedback(models.Model):
 
     def __str__(self) -> str:
         return f"[{self.feedback_type}] {self.emp_id} / {self.ym} / {self.value}"
+
+
+# =============================================================================
+# RateExample — 예시표 파일 메타 정보
+# =============================================================================
+class RateExample(models.Model):
+    """
+    예시표 파일 메타 정보.
+    ⚠️ file.url 직접 노출 금지 — 반드시 rate_example_download 뷰 경유.
+    """
+
+    # ── 손생 구분 ────────────────────────────────────────────
+    TYPE_LIFE    = "life"
+    TYPE_NONLIFE = "nonlife"
+    TYPE_CHOICES = [
+        (TYPE_LIFE,    "생명보험"),
+        (TYPE_NONLIFE, "손해보험"),
+    ]
+
+    # ── 구분 ─────────────────────────────────────────────────
+    CAT_CONV = "conv"   # 환산률/수정률
+    CAT_PAY  = "pay"    # 지급률
+    CAT_CHOICES = [
+        (CAT_CONV, "환산률/수정률"),
+        (CAT_PAY,  "지급률"),
+    ]
+
+    # ── 보험사 허용 목록 ─────────────────────────────────────
+    LIFE_INSURERS = [
+        "ABL", "DB", "IM", "KB", "교보", "농협", "동양",
+        "라이나", "메트", "미래", "삼성", "신한", "처브",
+        "카디프", "푸본현대", "하나", "한화", "흥국",
+    ]
+    NONLIFE_INSURERS = [
+        "AIG", "DB", "KB", "농협", "롯데", "메리츠",
+        "삼성", "한화", "현대", "흥국",
+    ]
+
+    # ── 허용 파일 형식 ────────────────────────────────────────
+    ALLOWED_EXTENSIONS = {".pdf", ".xls", ".xlsx"}
+    ALLOWED_MIME_TYPES = {
+        "application/pdf",
+        "application/vnd.ms-excel",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    }
+    MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB
+
+    # ── 필드 ─────────────────────────────────────────────────
+    insurer_type  = models.CharField(
+        max_length=10, choices=TYPE_CHOICES, verbose_name="손생구분"
+    )
+    category      = models.CharField(
+        max_length=10, choices=CAT_CHOICES, verbose_name="구분"
+    )
+    insurer       = models.CharField(max_length=30, verbose_name="보험사")
+    file          = models.FileField(
+        upload_to="commission/rate_examples/%Y/%m/",
+        verbose_name="첨부파일",
+    )
+    original_name = models.CharField(
+        max_length=255, blank=True, default="", verbose_name="원본파일명"
+    )
+    uploaded_by   = models.ForeignKey(
+        "accounts.CustomUser",
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="rate_examples_uploaded",
+        verbose_name="업로더",
+    )
+    created_at    = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering     = ["-created_at"]
+        verbose_name = "예시표"
+        indexes      = [
+            models.Index(fields=["insurer_type", "category", "insurer"]),
+        ]
+
+    def __str__(self):
+        return (
+            f"[{self.get_insurer_type_display()}]"
+            f" {self.insurer} - {self.get_category_display()}"
+        )

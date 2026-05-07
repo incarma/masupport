@@ -66,4 +66,16 @@ urlpatterns = [
         views.collect_notice_export_excel,
         name="collect_notice_export_excel",
     ),
+
+    # =========================================================================
+    # 예시표 (RateExample)
+    # =========================================================================
+    path("rate-examples/",
+         views.rate_example_home,     name="rate_example_home"),
+    path("rate-examples/upload/",
+         views.rate_example_upload,   name="rate_example_upload"),
+    path("rate-examples/<int:pk>/download/",
+         views.rate_example_download, name="rate_example_download"),
+    path("rate-examples/<int:pk>/delete/",
+         views.rate_example_delete,   name="rate_example_delete"),
 ]

@@ -3,13 +3,14 @@ from __future__ import annotations
 
 from typing import Tuple
 
+from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect, render
 from django.urls import NoReverseMatch, reverse
 from django.utils import timezone
 
 from accounts.decorators import grade_required
 from accounts.models import CustomUser
-from commission.models import ApprovalPending, DepositUploadLog, EfficiencyPayExcess, CollectRecord, CollectUploadLog
+from commission.models import ApprovalPending, DepositUploadLog, EfficiencyPayExcess, CollectRecord, CollectUploadLog, RateExample
 from commission.upload_handlers.registry import supported_upload_types
 from commission.services.collect import (
     get_available_yms,
@@ -17,6 +18,7 @@ from commission.services.collect import (
     get_available_bizmoons,
     date_to_ym,
 )
+from commission.services.rate_example import RateExampleService
 
 from .constants import EXCESS_THRESHOLD
 
@@ -321,3 +323,28 @@ def collect_notice(request):
         "current_year": _date.today().year,
     }
     return render(request, "commission/collect_notice.html", ctx)
+
+
+# =============================================================================
+# Rate Example Home (예시표) — superuser 전용
+# =============================================================================
+
+@login_required
+@grade_required("superuser")   # head 확장 시 이 줄만 수정
+def rate_example_home(request):
+    """
+    예시표 목록 페이지.
+    현재: superuser 전용.
+    추후 head 확장 시: @grade_required("superuser", "head") 로만 수정.
+    업로드/다운로드/삭제 API 뷰(api_rate_example.py)는 superuser 고정이므로
+    이 파일 수정만으로 분리가 완성된다.
+    """
+    examples = RateExampleService.list_all()
+    context = {
+        "examples":         examples,
+        "life_insurers":    RateExample.LIFE_INSURERS,
+        "nonlife_insurers": RateExample.NONLIFE_INSURERS,
+        "upload_url":       reverse("commission:rate_example_upload"),
+        "is_superuser":     request.user.grade == "superuser",
+    }
+    return render(request, "commission/rate_example_home.html", context)

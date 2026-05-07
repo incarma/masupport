@@ -470,3 +470,41 @@
     flex-basis: 100%;
   }
 }
+
+/* ── 예시표 페이지 (#rate-example-root 스코프) ───────────────── */
+#rate-example-root {
+  --re-badge-radius: 4px;
+}
+
+#rate-example-root .re-badge-life {
+  background-color: #e8f0fe;
+  color: #1a56db;
+  border-radius: var(--re-badge-radius);
+  padding: 2px 8px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+#rate-example-root .re-badge-nonlife {
+  background-color: #fef3c7;
+  color: #92400e;
+  border-radius: var(--re-badge-radius);
+  padding: 2px 8px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+#rate-example-root .c-no      { width: 48px; }
+#rate-example-root .c-type    { width: 90px; }
+#rate-example-root .c-cat     { width: 110px; }
+#rate-example-root .c-insurer { width: 80px; }
+#rate-example-root .c-date    { width: 90px; }
+#rate-example-root .c-uploader{ width: 72px; }
+#rate-example-root .c-dl      { width: 80px; }
+#rate-example-root .c-del     { width: 60px; }
+
+#rate-example-root table {
+  table-layout: fixed;
+}

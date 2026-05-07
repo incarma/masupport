@@ -57,6 +57,8 @@ _PAGES = {
     "collect_home": ("commission.views.pages", "collect_home"),
     # 환수내역 안내자료 제작 페이지 (superuser 전용, 클라이언트 전용 xlsx 생성)
     "collect_notice":      ("commission.views.pages", "collect_notice"),
+    # 예시표 페이지
+    "rate_example_home":   ("commission.views.pages", "rate_example_home"),
 }
 
 _COLLECT_API_NAMES = frozenset({
@@ -68,6 +70,13 @@ _COLLECT_API_NAMES = frozenset({
      "api_collect_feedback_delete",
      "api_collect_dropdown_feedback_save",
  })
+
+# Rate Example API (예시표 업로드/다운로드/삭제)
+_RATE_EXAMPLE_API = {
+    "rate_example_upload":   ("commission.views.api_rate_example", "rate_example_upload"),
+    "rate_example_download": ("commission.views.api_rate_example", "rate_example_download"),
+    "rate_example_delete":   ("commission.views.api_rate_example", "rate_example_delete"),
+}
 
 # Collect Notice export
 _COLLECT_NOTICE_EXPORTS = {
@@ -119,6 +128,14 @@ def __getattr__(name: str) -> Any:
         from commission.views import api_collect as _api_collect
         return getattr(_api_collect, name)
     
+    # -------------------------------------------------------------------------
+    # Rate Example API (예시표)
+    # -------------------------------------------------------------------------
+    if name in _RATE_EXAMPLE_API:
+        mod_path, attr = _RATE_EXAMPLE_API[name]
+        mod = _import_first(mod_path)
+        return getattr(mod, attr)
+
     # -------------------------------------------------------------------------
     # Collect Notice Excel Export
     # -------------------------------------------------------------------------
@@ -198,4 +215,9 @@ __all__ = [
     "api_collect_feedback_update",
     "api_collect_feedback_delete",
     "api_collect_dropdown_feedback_save",
+    # rate example
+    "rate_example_home",
+    "rate_example_upload",
+    "rate_example_download",
+    "rate_example_delete",
 ]
