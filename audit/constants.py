@@ -114,3 +114,8 @@ class ACTION:
     PARTNER_ESIGN_DELETE = "partner.esign.delete"
     PARTNER_ESIGN_PDF_DL = "partner.esign.pdf.download"
     PARTNER_ESIGN_PROCESS_DATE_UPDATE = "partner.esign.process_date.update"
+
+    # Commission / RateExample (예시표)
+    COMMISSION_RATE_EXAMPLE_UPLOAD   = "commission.rate_example.upload"
+    COMMISSION_RATE_EXAMPLE_DOWNLOAD = "commission.rate_example.download"
+    COMMISSION_RATE_EXAMPLE_DELETE   = "commission.rate_example.delete"
