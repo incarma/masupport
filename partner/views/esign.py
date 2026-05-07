@@ -26,24 +26,9 @@ from django.views.decorators.http import require_POST, require_http_methods
 
 from audit.services import log_action
 from audit.constants import ACTION
+from partner.views.responses import json_ok as _ok, json_err as _err
 
 logger = logging.getLogger(__name__)
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# JSON 응답 헬퍼 (프로젝트 공통 포맷)
-# ─────────────────────────────────────────────────────────────────────────────
-
-def _ok(data: dict | None = None, **kwargs) -> JsonResponse:
-    payload = {'status': 'success'}
-    if data:
-        payload.update(data)
-    payload.update(kwargs)
-    return JsonResponse(payload)
-
-
-def _err(message: str, status: int = 400) -> JsonResponse:
-    return JsonResponse({'status': 'error', 'message': message}, status=status)
 
 
 def _parse_json(request) -> tuple[dict | None, JsonResponse | None]:

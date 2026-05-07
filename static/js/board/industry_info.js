@@ -11,19 +11,6 @@
     const clickUrlTemplate = root.dataset.clickUrlTemplate || "";
     const prefMap = window.industryPrefMap || {};
 
-    function getCSRFToken() {
-      const raw = document.cookie || "";
-      if (!raw) return "";
-      const parts = raw.split(";").map((v) => v.trim()).filter(Boolean);
-      const values = [];
-      for (const part of parts) {
-        if (!part.startsWith("csrftoken=")) continue;
-        values.push(part.slice("csrftoken=".length));
-      }
-      if (!values.length) return "";
-      return decodeURIComponent(values[values.length - 1]);
-    }
-
     function buildUrl(template, articleId) {
       return template.replace("/0/", `/${articleId}/`);
     }
@@ -42,7 +29,7 @@
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-CSRFToken": getCSRFToken(),
+          "X-CSRFToken": window.csrfToken,
           "X-Requested-With": "XMLHttpRequest",
         },
         credentials: "same-origin",

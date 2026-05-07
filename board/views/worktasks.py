@@ -40,6 +40,7 @@ from board.services import worktasks as wt_svc
 from board.services.comments import handle_comments_actions
 from audit.services import log_action
 from audit.constants import ACTION
+from board.views._json import _json_ok as _ok
 
 logger = logging.getLogger(__name__)
 
@@ -81,9 +82,8 @@ def _get_worktask_branch_options(request) -> list[str]:
 # =============================================================================
 # JSON 응답 헬퍼 — 규약: {"ok": true/false, ...}
 # =============================================================================
-
-def _ok(**kwargs) -> JsonResponse:
-    return JsonResponse({"ok": True,  **kwargs})
+# _ok: board.views._json._json_ok (import alias)
+# _err: "error" 키 사용 — JS가 result.error 소비하므로 로컬 유지
 
 def _err(msg: str, status: int = 400) -> JsonResponse:
     return JsonResponse({"ok": False, "error": msg}, status=status)

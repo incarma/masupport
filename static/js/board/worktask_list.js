@@ -488,7 +488,7 @@ function _renderCalendar(root, items, view, holidays = {}) {
       const isSpan = item.display_type === "span";
       html.push(`
         <a class="worktask-calendar-item priority-${_escAttr(item.priority)}${isSpan ? " is-span" : ""}"
-           href="/board/worktasks/${encodeURIComponent(item.id)}/"
+           href="${_buildActionUrl(boot.dataset.detailUrl, item.id)}"
            title="${_escAttr(item.title)}">
           ${_escHtml(item.title)}
         </a>

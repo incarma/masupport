@@ -33,6 +33,7 @@ from ..policies import can_access_states_form, can_access_support_form
 from board.utils import generate_request_support as build_support
 from board.utils import generate_request_states as build_states
 from board.services.rate_limit import check_rate_limit, rate_limited_json
+from board.views._json import _json_err
 
 __all__ = [
     "support_form",
@@ -71,10 +72,6 @@ def _safe_action(name: str, default: str) -> str:
 
 def _is_ajax_request(request: HttpRequest) -> bool:
     return request.headers.get("X-Requested-With") == "XMLHttpRequest"
-
-
-def _json_err(message: str, *, status: int = 400) -> JsonResponse:
-    return JsonResponse({"ok": False, "message": message}, status=status)
 
 
 def _deny_form_access(request: HttpRequest, *, ajax_message: str, html_message: str, redirect_to: str, status: int = 403) -> HttpResponse:

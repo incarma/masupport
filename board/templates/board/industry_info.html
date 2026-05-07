@@ -199,5 +199,6 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="{% static 'js/common/csrf_window.js' %}?v={% now 'U' %}"></script>
 <script src="{% static 'js/board/industry_info.js' %}?v={% now 'U' %}"></script>
 {% endblock %}

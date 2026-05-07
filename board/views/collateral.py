@@ -20,25 +20,9 @@ from board.services.collateral import (
     save_collateral_eval,
 )
 from django.http import JsonResponse
+from board.views._json import _json_ok, _json_err as _json_error
 
 logger = logging.getLogger("board")
-
-
-# ── 로컬 JSON 응답 헬퍼 ────────────────────────────────────────────
-# commission/views/utils_json.py 와 동일 포맷 유지
-# board → commission 앱 간 직접 import는 의존성 위반이므로 로컬 정의
-def _json_ok(message=None, **extra):
-    payload = {"ok": True}
-    if message:
-        payload["message"] = message
-    payload.update(extra)
-    return JsonResponse(payload)
-
-
-def _json_error(message, status=400, **extra):
-    payload = {"ok": False, "message": message}
-    payload.update(extra)
-    return JsonResponse(payload, status=status)
 
 
 # ── 페이지 뷰 ─────────────────────────────────────────────────────
