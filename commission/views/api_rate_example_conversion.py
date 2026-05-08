@@ -55,6 +55,61 @@ def _format_decimal(value) -> str:
     return text
 
 
+def _format_rate_percent(value) -> str:
+    """
+    환산률/수정률 화면 표시용 포맷.
+
+    저장 정책:
+    - ABL/DB/IM 모두 DB에는 백분율 수치 기준 Decimal로 저장한다.
+      예: 100.0%, 126.0% → Decimal("100.0"), Decimal("126.0")
+    - 모달 출력 시에는 사용자에게 raw 의미가 명확하도록 '%'를 붙인다.
+
+    계산 정책:
+    - 보험료 × 환산률 × 지급률 × 수수료율 계산 시에는
+      row.year1 / Decimal("100") 형태로 비례 적용한다.
+    """
+    text = _format_decimal(value)
+    if not text:
+        return ""
+    return f"{text}%"
+
+
+def _format_percent_decimal(value) -> str:
+    """
+    백분율 기준으로 저장된 환산률 값을 화면 표시용 문자열로 변환한다.
+
+    사용 대상:
+    - IM normalizer는 raw 표시값이 126%인 경우 DB에 Decimal("126")으로 저장한다.
+    - 모달에서는 raw와 동일하게 "126%" 형태로 표시한다.
+
+    주의:
+    - 기존 ABL/DB는 기존 _format_decimal() 출력 정책을 유지한다.
+    - 계산 시에는 저장값 / 100으로 비례 적용한다.
+    """
+    if value is None:
+        return ""
+
+    text = format(value, "f")
+    if "." in text:
+        text = text.rstrip("0").rstrip(".")
+
+    if not text:
+        return ""
+    return f"{text}%"
+
+
+def _format_rate_value(row: RateExampleConversionRow, value) -> str:
+    """
+    보험사별 환산률 표시 정책.
+
+    - IM: raw 백분율 표시와 동일하게 126% 형태
+    - 그 외 기존 보험사: 기존 실수/정수 표시 정책 유지
+    """
+    if row.insurer == "IM":
+        return _format_percent_decimal(value)
+    return _format_decimal(value)
+
+
 def _format_dt(value) -> str:
     """마지막 업데이트 일시 표시용 포맷."""
     if not value:
@@ -100,10 +155,10 @@ def rate_example_conversion_list(request):
             "product_name": row.product_name,
             "plan_type": row.plan_type,
             "pay_period": row.pay_period,
-            "year1": _format_decimal(row.year1),
-            "year2": _format_decimal(row.year2),
-            "year3": _format_decimal(row.year3),
-            "year4": _format_decimal(row.year4),
+            "year1": _format_rate_percent(row.year1),
+            "year2": _format_rate_percent(row.year2),
+            "year3": _format_rate_percent(row.year3),
+            "year4": _format_rate_percent(row.year4),
             "source_sheet": row.source_sheet,
             "source_row_no": row.source_row_no,
         }

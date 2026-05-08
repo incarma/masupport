@@ -1,3 +1,4 @@
+# django_ma/commission/services/rate_example_normalizers/life_db.py
 from __future__ import annotations
 
 """
@@ -260,7 +261,7 @@ def _normalize_db_sheet(
     return rows
 
 
-def build_db_life_conversion_rows(
+def build_life_db_conversion_rows(
     example: RateExample,
     wb: Workbook,
 ) -> list[RateExampleConversionRow]:
