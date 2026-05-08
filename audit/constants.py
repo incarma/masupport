@@ -119,3 +119,4 @@ class ACTION:
     COMMISSION_RATE_EXAMPLE_UPLOAD   = "commission.rate_example.upload"
     COMMISSION_RATE_EXAMPLE_DOWNLOAD = "commission.rate_example.download"
     COMMISSION_RATE_EXAMPLE_DELETE   = "commission.rate_example.delete"
+    COMMISSION_RATE_EXAMPLE_NORMALIZE = "commission.rate_example.normalize"

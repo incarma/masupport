@@ -474,6 +474,16 @@
 /* ── 예시표 페이지 (#rate-example-root 스코프) ───────────────── */
 #rate-example-root {
   --re-badge-radius: 4px;
+  width: 86vw;
+  max-width: none;
+  margin-left: calc(-43vw + 50%);
+}
+
+@media (max-width: 576px) {
+  #rate-example-root {
+    width: 100%;
+    margin-left: 0;
+  }
 }
 
 #rate-example-root .re-badge-life {
@@ -507,4 +517,195 @@
 
 #rate-example-root table {
   table-layout: fixed;
+}
+
+/* 환산률/수정률 확인 모달 */
+#rate-example-root #rateExampleConvModal .re-conv-section-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #6c757d;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+}
+
+/* ==========================================================
+ 5) Rate Example Conv Modal
+ - 주의: rateExampleConvModal은 #rate-example-root 밖에 위치하므로
+   #rate-example-root 하위 선택자를 쓰면 적용되지 않는다.
+========================================================== */
+
+#rateExampleConvModal .modal-xl {
+  width: 96vw;
+  max-width: 1560px;
+}
+
+#rateExampleConvModal .re-conv-table-wrap {
+  max-height: 62vh;
+  overflow: auto;
+}
+
+#rateExampleConvModal #re-conv-table {
+  min-width: 1420px;
+  table-layout: fixed;
+  font-size: 0.66rem !important;
+}
+
+#rateExampleConvModal #re-conv-table th,
+#rateExampleConvModal #re-conv-table td,
+#rateExampleConvModal #re-conv-table span,
+#rateExampleConvModal #re-conv-table button {
+  font-size: 0.66rem !important;
+  line-height: 1.18 !important;
+}
+
+#rateExampleConvModal #re-conv-table th,
+#rateExampleConvModal #re-conv-table td {
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  vertical-align: middle;
+  word-break: keep-all !important;
+  overflow-wrap: normal !important;
+  padding: 0.22rem 0.32rem;
+}
+
+#rateExampleConvModal #re-conv-table th:nth-child(1),
+#rateExampleConvModal #re-conv-table td:nth-child(1) { width: 70px; }
+
+#rateExampleConvModal #re-conv-table th:nth-child(2),
+#rateExampleConvModal #re-conv-table td:nth-child(2) { width: 96px; }
+
+#rateExampleConvModal #re-conv-table th:nth-child(3),
+#rateExampleConvModal #re-conv-table td:nth-child(3) { width: 86px; }
+
+#rateExampleConvModal #re-conv-table th:nth-child(4),
+#rateExampleConvModal #re-conv-table td:nth-child(4) {
+  width: 460px;
+}
+
+#rateExampleConvModal #re-conv-table th:nth-child(5),
+#rateExampleConvModal #re-conv-table td:nth-child(5) { width: 104px; }
+
+#rateExampleConvModal #re-conv-table th:nth-child(6),
+#rateExampleConvModal #re-conv-table td:nth-child(6) { width: 90px; }
+
+#rateExampleConvModal #re-conv-table th:nth-child(7),
+#rateExampleConvModal #re-conv-table td:nth-child(7),
+#rateExampleConvModal #re-conv-table th:nth-child(8),
+#rateExampleConvModal #re-conv-table td:nth-child(8),
+#rateExampleConvModal #re-conv-table th:nth-child(9),
+#rateExampleConvModal #re-conv-table td:nth-child(9),
+#rateExampleConvModal #re-conv-table th:nth-child(10),
+#rateExampleConvModal #re-conv-table td:nth-child(10) {
+  width: 108px;
+  min-width: 108px;
+}
+
+#rateExampleConvModal #re-conv-table .re-rate-num {
+  font-variant-numeric: tabular-nums;
+  overflow: hidden !important;
+  text-overflow: clip !important;
+  white-space: nowrap !important;
+}
+
+#rateExampleConvModal .re-conv-meta {
+  font-size: 0.78rem;
+  color: #6c757d;
+}
+
+#rateExampleConvModal .re-conv-filter-bar {
+  display: flex;
+  flex-wrap: nowrap !important;
+  gap: 6px;
+  align-items: flex-end;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+#rateExampleConvModal .re-conv-filter-item {
+  flex: 0 0 108px;
+  min-width: 108px;
+}
+
+#rateExampleConvModal .re-conv-filter-product {
+  flex: 0 0 230px;
+  min-width: 230px;
+}
+
+#rateExampleConvModal .re-conv-filter-keyword {
+  flex: 0 0 230px;
+  min-width: 230px;
+}
+
+#rateExampleConvModal .re-conv-filter-item .form-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #5b6b7a;
+}
+
+#rateExampleConvModal .re-conv-filter-item .form-select,
+#rateExampleConvModal .re-conv-filter-item .form-control {
+  font-size: 0.78rem;
+  height: 29px;
+  padding-top: 0.2rem;
+  padding-bottom: 0.2rem;
+}
+
+#rateExampleConvModal .re-sort-btn {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  font-weight: 700;
+  color: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+#rateExampleConvModal .re-sort-btn::after {
+  content: "↕";
+  margin-left: 4px;
+  font-size: 0.7rem;
+  color: #8a94a6;
+}
+
+#rateExampleConvModal .re-sort-btn.is-asc::after {
+  content: "▲";
+  color: #005BAC;
+}
+
+#rateExampleConvModal .re-sort-btn.is-desc::after {
+  content: "▼";
+  color: #005BAC;
+}
+
+#rateExampleConvModal .re-ellipsis-cell {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap !important;
+  word-break: keep-all !important;
+  overflow-wrap: normal !important;
+  cursor: pointer;
+}
+
+#rateExampleConvModal .re-ellipsis-cell:hover {
+  color: #005BAC;
+  text-decoration: underline;
+}
+
+#reCellFullTextModal .re-fulltext-body {
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 50vh;
+  overflow: auto;
+}
+
+@media (max-width: 768px) {
+  #rateExampleConvModal .re-conv-filter-bar {
+    flex-wrap: nowrap !important;
+  }
 }

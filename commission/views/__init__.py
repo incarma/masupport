@@ -76,6 +76,11 @@ _RATE_EXAMPLE_API = {
     "rate_example_upload":   ("commission.views.api_rate_example", "rate_example_upload"),
     "rate_example_download": ("commission.views.api_rate_example", "rate_example_download"),
     "rate_example_delete":   ("commission.views.api_rate_example", "rate_example_delete"),
+    # 환산률/수정률 정규화 데이터 조회 API
+    "rate_example_conversion_list": (
+        "commission.views.api_rate_example_conversion",
+        "rate_example_conversion_list",
+    ),
 }
 
 # Collect Notice export
@@ -220,4 +225,5 @@ __all__ = [
     "rate_example_upload",
     "rate_example_download",
     "rate_example_delete",
+    "rate_example_conversion_list",
 ]

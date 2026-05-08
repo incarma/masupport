@@ -705,20 +705,25 @@ def _find_libreoffice_binary() -> str:
 def _convert_xlsx_bytes_to_pdf(*, xlsx_content: bytes, xlsx_filename: str) -> bytes:
     """
     xlsx bytes를 LibreOffice headless로 PDF 변환한다.
+
+    주의:
+    - LibreOffice는 한글/비ASCII 파일명을 subprocess 인자로 받을 때
+      Windows 환경에서 --outdir을 무시하거나 PDF를 생성하지 않는 경우가 있다.
+    - 이를 방지하기 위해 ASCII-only 임시 파일명을 사용한다.
     """
     lo_bin = _find_libreoffice_binary()
 
     with tempfile.TemporaryDirectory(prefix="collect_notice_pdf_") as tmpdir:
         tmp_path = Path(tmpdir)
-        xlsx_path = tmp_path / _safe_filename_part(xlsx_filename)
-        if not xlsx_path.name.lower().endswith(".xlsx"):
-            xlsx_path = xlsx_path.with_suffix(".xlsx")
-
+        # 한글 파일명이 LibreOffice subprocess에 전달될 때 발생하는 인코딩 문제를 방지한다.
+        xlsx_path = tmp_path / "collect_notice_temp.xlsx"
         xlsx_path.write_bytes(xlsx_content)
 
         cmd = [
             lo_bin,
             "--headless",
+            "--norestore",
+            "--nofirststartwizard",
             "--convert-to",
             "pdf",
             "--outdir",
@@ -732,15 +737,16 @@ def _convert_xlsx_bytes_to_pdf(*, xlsx_content: bytes, xlsx_filename: str) -> by
                 check=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                timeout=60,
+                timeout=120,
             )
         except subprocess.TimeoutExpired as exc:
-            raise RuntimeError("PDF 변환 시간이 초과되었습니다.") from exc
+            raise RuntimeError("PDF 변환 시간이 초과되었습니다. (120초)") from exc
         except subprocess.CalledProcessError as exc:
             stderr = (exc.stderr or b"").decode("utf-8", errors="replace")
             stdout = (exc.stdout or b"").decode("utf-8", errors="replace")
-            raise RuntimeError(f"PDF 변환에 실패했습니다. stdout={stdout} stderr={stderr}") from exc
+            raise RuntimeError(f"PDF 변환에 실패했습니다.\nstdout={stdout}\nstderr={stderr}") from exc
 
+        # LibreOffice는 입력 파일과 같은 이름의 .pdf를 --outdir에 생성한다.
         pdf_path = xlsx_path.with_suffix(".pdf")
         if not pdf_path.exists():
             candidates = list(tmp_path.glob("*.pdf"))
@@ -749,6 +755,9 @@ def _convert_xlsx_bytes_to_pdf(*, xlsx_content: bytes, xlsx_filename: str) -> by
 
         if not pdf_path.exists():
             stdout = (completed.stdout or b"").decode("utf-8", errors="replace")
-            raise RuntimeError(f"PDF 파일이 생성되지 않았습니다. stdout={stdout}")
+            raise RuntimeError(
+                f"PDF 파일이 생성되지 않았습니다. "
+                f"LibreOffice 설치 상태를 확인하세요.\nstdout={stdout}"
+            )
 
         return pdf_path.read_bytes()

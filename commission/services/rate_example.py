@@ -57,12 +57,38 @@ class RateExampleService:
             original_name=uploaded_file.name,
             uploaded_by=actor,
         )
-        return {"ok": True, "instance": instance}
+        
+        # ── 정규화 처리 ─────────────────────────────────────────────
+        # 현재 지원 대상: 생명보험 / 환산률·수정률 / ABL / xlsx
+        # import를 함수 내부에 두어 models/services 순환 import 위험을 줄인다.
+        normalized_count = 0
+        try:
+            from commission.services.rate_example_normalizer import normalize_rate_example
+
+            normalized_count = normalize_rate_example(instance)
+        except Exception:
+            logger.exception(
+                "RateExample normalize failed: insurer_type=%s category=%s insurer=%s file=%s",
+                insurer_type,
+                category,
+                insurer,
+                getattr(uploaded_file, "name", ""),
+            )
+            raise
+
+        return {
+            "ok": True,
+            "instance": instance,
+            "normalized_count": normalized_count,
+        }
 
     @staticmethod
     @transaction.atomic
     def delete(instance, actor) -> None:
-        """파일 물리 삭제 + DB 레코드 삭제."""
+        """
+        파일 물리 삭제 + DB 레코드 삭제.
+        conversion_rows는 FK CASCADE로 함께 삭제된다.
+        """
         if instance.file:
             try:
                 instance.file.delete(save=False)
