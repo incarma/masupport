@@ -151,6 +151,31 @@
   // ── 모달: 손생 변경 → 보험사 드랍다운 교체 ────────────────────────────────
   const modalType = document.getElementById("re-modal-type");
   const modalInsurer = document.getElementById("re-modal-insurer");
+  const modalCat = document.getElementById("re-modal-cat");
+  const modalProductKindWrap = document.getElementById("re-modal-product-kind-wrap");
+  const modalProductKind = document.getElementById("re-modal-product-kind");
+
+  // ── KB 생명보험 환산률/수정률 상품 구분 활성화 ─────────────────────────
+  function updateKbProductKindVisibility() {
+    if (!modalProductKindWrap || !modalProductKind) return;
+
+    const insurerType = modalType?.value || "";
+    const category = modalCat?.value || "";
+    const insurer = modalInsurer?.value || "";
+
+    const shouldShow = (
+      insurerType === "life" &&
+      category === "conv" &&
+      insurer === "KB"
+    );
+
+    modalProductKindWrap.classList.toggle("d-none", !shouldShow);
+    modalProductKind.disabled = !shouldShow;
+
+    if (!shouldShow) {
+      modalProductKind.value = "";
+    }
+  }
 
   if (modalType && modalInsurer) {
     modalType.addEventListener("change", function () {
@@ -162,6 +187,7 @@
       if (list.length === 0) {
         modalInsurer.disabled = true;
         modalInsurer.innerHTML = '<option value="">손생구분을 먼저 선택하세요</option>';
+        updateKbProductKindVisibility();
         return;
       }
       modalInsurer.disabled = false;
@@ -171,7 +197,16 @@
         opt.textContent = name;
         modalInsurer.appendChild(opt);
       });
+      updateKbProductKindVisibility();
     });
+  }
+
+  if (modalCat) {
+    modalCat.addEventListener("change", updateKbProductKindVisibility);
+  }
+
+  if (modalInsurer) {
+    modalInsurer.addEventListener("change", updateKbProductKindVisibility);
   }
 
   // ── 환산률/수정률 모달: 손생 변경 → 보험사 드랍다운 교체 ──────────────────
@@ -371,18 +406,38 @@
       const insurerType = document.getElementById("re-modal-type")?.value || "";
       const category = document.getElementById("re-modal-cat")?.value || "";
       const insurer = modalInsurer?.value || "";
+      const productKind = modalProductKind?.value || "";
+      const normalizeMode = document.querySelector(
+        'input[name="normalize_mode"]:checked'
+      )?.value || "replace";
       const fileInput = document.getElementById("re-modal-file");
       const file = fileInput?.files[0];
 
       if (!insurerType) { showError("손생구분을 선택해 주세요."); return; }
       if (!category) { showError("구분을 선택해 주세요."); return; }
       if (!insurer) { showError("보험사를 선택해 주세요."); return; }
+      if (
+        insurerType === "life" &&
+        category === "conv" &&
+        insurer === "KB" &&
+        !productKind
+      ) {
+        showError("KB 상품 구분을 선택해 주세요.");
+        return;
+      }
       if (!file) { showError("파일을 선택해 주세요."); return; }
+
+      if (!["replace", "append"].includes(normalizeMode)) {
+        showError("기존 데이터 초기화 여부 값이 올바르지 않습니다.");
+        return;
+      }
 
       const fd = new FormData();
       fd.append("insurer_type", insurerType);
       fd.append("category", category);
       fd.append("insurer", insurer);
+      fd.append("product_kind", productKind);
+      fd.append("normalize_mode", normalizeMode);
       fd.append("file", file);
 
       btnSave.disabled = true;
@@ -608,7 +663,13 @@
   if (uploadModal) {
     uploadModal.addEventListener("show.bs.modal", function () {
       clearError();
-      const form = ["re-modal-type", "re-modal-cat", "re-modal-insurer", "re-modal-file"];
+      const form = [
+        "re-modal-type",
+        "re-modal-cat",
+        "re-modal-insurer",
+        "re-modal-product-kind",
+        "re-modal-file",
+      ];
       form.forEach(function (id) {
         const el = document.getElementById(id);
         if (!el) return;
@@ -619,6 +680,13 @@
         modalInsurer.disabled = true;
         modalInsurer.innerHTML = '<option value="">손생구분을 먼저 선택하세요</option>';
       }
+
+      const replaceMode = document.getElementById("re-modal-normalize-mode-replace");
+      if (replaceMode) {
+        replaceMode.checked = true;
+      }
+
+      updateKbProductKindVisibility();
     });
   }
   // ── 환산률/수정률 모달 초기화 (열릴 때 선택값 리셋) ──────────────────────

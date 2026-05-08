@@ -1,4 +1,4 @@
-# commission/services/rate_example_normalizer.py.py
+# commission/services/rate_example_normalizer.py
 from __future__ import annotations
 
 """
@@ -29,76 +29,19 @@ from commission.services.rate_example_normalizers.life_db import (
 from commission.services.rate_example_normalizers.life_im import (
     build_life_im_conversion_rows,
 )
+from commission.services.rate_example_normalizers.life_kb import (
+    build_life_kb_general_conversion_rows,
+)
 
 logger = logging.getLogger(__name__)
 
 
-def _coverage_type_for_abl_protection(product_name: str) -> str:
-    """상품명에 '종신' 포함 여부로 보종 분기."""
-    return "종신/CI" if "종신" in product_name else "기타(보장성)"
-
-
-def _normalize_abl_protection(example: RateExample, ws) -> Iterable[RateExampleConversionRow]:
-    """
-    ABL [주계약(보장성)_12개월 선지급] 시트 정규화.
-
-    사용자 규칙:
-    - 보험사: ABL
-    - 보종: 상품명에 '종신' 포함 시 종신/CI, 아니면 기타(보장성)
-    - 상품명: A열
-    - 구분: B열(형태)
-    - 납기: E열
-    - 1차년: F열
-    - 2차년: G열
-    - 3차년: H열
-    - 4차년: I열
-    """
-    rows: list[RateExampleConversionRow] = []
-    last_product = ""
-    last_plan = ""
-
-    for row_no in range(5, ws.max_row + 1):
-        product = _clean_text(ws.cell(row_no, 1).value) or last_product
-        plan = _clean_text(ws.cell(row_no, 2).value) or last_plan
-        pay_period = _clean_text(ws.cell(row_no, 5).value)
-
-        y1_raw = ws.cell(row_no, 6).value
-        y2_raw = ws.cell(row_no, 7).value
-        y3_raw = ws.cell(row_no, 8).value
-        y4_raw = ws.cell(row_no, 9).value
-
-        if _clean_text(ws.cell(row_no, 1).value):
-            last_product = product
-        if _clean_text(ws.cell(row_no, 2).value):
-            last_plan = plan
-
-        if not product and not pay_period and not _has_any_rate(y1_raw, y2_raw, y3_raw, y4_raw):
-            continue
-        if not pay_period and not _has_any_rate(y1_raw, y2_raw, y3_raw, y4_raw):
-            continue
-
-        rows.append(RateExampleConversionRow(
-            source_file=example,
-            source_sheet=SHEET_ABL_PROTECTION,
-            source_row_no=row_no,
-            insurer_type=example.insurer_type,
-            category=example.category,
-            insurer="ABL",
-            coverage_type=_coverage_type_for_abl_protection(product),
-            strategy_flag="",
-            product_name=product,
-            plan_type=plan,
-            pay_period=pay_period,
-            year1=_to_decimal(y1_raw),
-            year2=_to_decimal(y2_raw),
-            year3=_to_decimal(y3_raw),
-            year4=_to_decimal(y4_raw),
-        ))
-
-    return rows
-
-
-def normalize_rate_example(example: RateExample) -> int:
+def normalize_rate_example(
+    example: RateExample,
+    *,
+    product_kind: str = "",
+    normalize_mode: str = "replace",
+) -> int:
     """
     RateExample 업로드 파일을 정규화한다.
 
@@ -106,14 +49,19 @@ def normalize_rate_example(example: RateExample) -> int:
     - 생명보험 / 환산률·수정률 / ABL / xlsx
     - 생명보험 / 환산률·수정률 / DB / xlsx
     - 생명보험 / 환산률·수정률 / IM / xlsx
+    - 생명보험 / 환산률·수정률 / KB / 일반상품 / xlsx
 
     반환:
     - 생성된 RateExampleConversionRow 수
     """
+    normalize_mode = (normalize_mode or "replace").strip()
+    if normalize_mode not in {"replace", "append"}:
+        raise ValueError(f"Invalid normalize_mode: {normalize_mode}")
+
     if not (
         example.insurer_type == RateExample.TYPE_LIFE
         and example.category == RateExample.CAT_CONV
-        and example.insurer in {"ABL", "DB", "IM"}
+        and example.insurer in {"ABL", "DB", "IM", "KB"}
     ):
         return 0
 
@@ -150,12 +98,25 @@ def normalize_rate_example(example: RateExample) -> int:
     elif example.insurer == "IM":
         normalized_rows.extend(build_life_im_conversion_rows(example, wb))
 
-    # 동일 보험사/구분의 정규화 master는 최신 업로드 기준으로 교체한다.
-    RateExampleConversionRow.objects.filter(
-        insurer_type=example.insurer_type,
-        category=example.category,
-        insurer=example.insurer,
-    ).delete()
+    # ── KB 생명 환산률/수정률 정규화 ──────────────────────────────
+    # KB 일반상품 규칙:
+    # - "(주계약)"으로 표시된 테이블만 사용
+    # - "(특약)" 테이블은 제외
+    # - B/C/D/E/F/G/H/I/K 열 매핑
+    elif example.insurer == "KB":
+        if product_kind != "general":
+            return 0
+        normalized_rows.extend(build_life_kb_general_conversion_rows(example, wb))
+
+    # 동일 보험사/구분의 정규화 master 처리.
+    # - replace: 기존 방식. 기존 row 삭제 후 새 데이터 적재.
+    # - append: 기존 row 유지 후 새 데이터만 추가.
+    if normalize_mode == "replace":
+        RateExampleConversionRow.objects.filter(
+            insurer_type=example.insurer_type,
+            category=example.category,
+            insurer=example.insurer,
+        ).delete()
 
     if normalized_rows:
         RateExampleConversionRow.objects.bulk_create(normalized_rows, batch_size=500)

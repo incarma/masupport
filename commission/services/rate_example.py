@@ -32,7 +32,16 @@ class RateExampleService:
 
     @staticmethod
     @transaction.atomic
-    def create(*, insurer_type, category, insurer, uploaded_file, actor) -> dict:
+    def create(
+        *,
+        insurer_type,
+        category,
+        insurer,
+        uploaded_file,
+        actor,
+        product_kind: str = "",
+        normalize_mode: str = "replace",
+    ) -> dict:
         """
         Returns {"ok": True, "instance": RateExample}
              or {"ok": False, "message": str}
@@ -44,6 +53,42 @@ class RateExampleService:
             return {"ok": False, "message": "구분 값이 올바르지 않습니다."}
         if insurer not in _ALLOWED_INSURERS.get(insurer_type, set()):
             return {"ok": False, "message": "선택된 보험사가 허용 목록에 없습니다."}
+        
+        # ─────────────────────────────────────────────────────
+        # 정규화 데이터 저장 방식 검증
+        # - replace: 기존 방식 유지
+        # - append: 기존 row를 삭제하지 않고 새 row만 추가
+        # ─────────────────────────────────────────────────────
+        normalize_mode = (normalize_mode or "replace").strip()
+        if normalize_mode not in {"replace", "append"}:
+            return {
+                "ok": False,
+                "message": "기존 데이터 초기화 여부 값이 올바르지 않습니다.",
+            }
+        
+        # ─────────────────────────────────────────────────────
+        # KB 생명보험 환산률/수정률 상품 구분 검증
+        # - DB 모델 추가 없이 업로드 분기값으로만 사용
+        # - 현재는 일반상품만 지원
+        # ─────────────────────────────────────────────────────
+        if (
+            insurer_type == RateExample.TYPE_LIFE
+            and category == RateExample.CAT_CONV
+            and insurer == "KB"
+        ):
+            if product_kind not in {"general", "health"}:
+                return {
+                    "ok": False,
+                    "message": "KB 상품 구분 값이 올바르지 않습니다.",
+                }
+
+            if product_kind == "health":
+                return {
+                    "ok": False,
+                    "message": "KB 건강보험 정규화는 아직 지원되지 않습니다.",
+                }
+        else:
+            product_kind = ""
 
         err = RateExampleService._validate_file(uploaded_file)
         if err:
@@ -65,7 +110,11 @@ class RateExampleService:
         try:
             from commission.services.rate_example_normalizer import normalize_rate_example
 
-            normalized_count = normalize_rate_example(instance)
+            normalized_count = normalize_rate_example(
+                instance,
+                product_kind=product_kind,
+                normalize_mode=normalize_mode,
+            )
         except Exception:
             logger.exception(
                 "RateExample normalize failed: insurer_type=%s category=%s insurer=%s file=%s",
@@ -80,6 +129,8 @@ class RateExampleService:
             "ok": True,
             "instance": instance,
             "normalized_count": normalized_count,
+            "product_kind": product_kind,
+            "normalize_mode": normalize_mode,
         }
 
     @staticmethod
