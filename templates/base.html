@@ -102,7 +102,7 @@
                 href="#" id="partnerMenu" data-bs-toggle="dropdown">조직관리</a>
               <ul class="dropdown-menu" aria-labelledby="partnerMenu">
                 <!-- <li><a class="dropdown-item" href="{% url 'partner:esign_confirm' %}">지점효율(제작중)</a></li> -->
-                <li><a class="dropdown-item" href="{% url 'partner:join_form' %}">위촉서류(제작중)</a></li>
+                <!-- <li><a class="dropdown-item" href="{% url 'partner:join_form' %}">위촉서류(제작중)</a></li> -->
                 {% if user.grade == 'superuser' or user.grade == 'head' or user.grade == 'leader' %}
                   <li><a class="dropdown-item" href="{% url 'partner:manage_charts' %}">편제변경</a></li>
                   <li><a class="dropdown-item" href="{% url 'partner:manage_rate' %}">요율변경</a></li>
@@ -127,6 +127,7 @@
                   <li><a class="dropdown-item" href="{% url 'commission:collect_notice' %}">환수내역</a></li>
                   <li><a class="dropdown-item" href="{% url 'commission:deposit_home' %}">채권관리</a></li>
                   <li><a class="dropdown-item" href="{% url 'commission:approval_home' %}">수수료결재</a></li>
+                  <li><a class="dropdown-item" href="{% url 'commission:rate_example_home' %}">수수료예시표(제작중)</a></li>
                 {% endif %}
               </ul>
             </li>
@@ -302,6 +303,7 @@
                   <a class="d-block py-2" href="{% url 'commission:collect_notice' %}">환수내역</a>
                   <a class="d-block py-2" href="{% url 'commission:deposit_home' %}">채권관리</a>
                   <a class="d-block py-2" href="{% url 'commission:approval_home' %}">수수료결재</a>
+                  <a class="d-block py-2" href="{% url 'commission:rate_example_home' %}">수수료예시표(제작중)</a>
                 {% endif %}                
               </div>
             </div>
