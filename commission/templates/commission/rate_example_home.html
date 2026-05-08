@@ -12,6 +12,7 @@
 <div class="container-fluid my-4" id="rate-example-root"
      data-upload-url="{{ upload_url }}"
      data-conversion-list-url="{{ conversion_list_url }}"
+     data-conversion-strategy-update-url="{{ conversion_strategy_update_url }}"
      data-user-grade="{{ request.user.grade }}">
 
   <h3 class="fw-bold text-center mb-4 commission-title">예시표</h3>
@@ -83,7 +84,6 @@
             <th class="text-center">번호</th>
             <th class="text-center">손생구분</th>
             <th class="text-center">구분</th>
-            <th class="text-center">보험사</th>
             <th>파일명</th>
             <th class="text-center">등록일</th>
             <th class="text-center">등록자</th>
@@ -268,7 +268,6 @@
           <table class="table table-sm table-bordered align-middle mb-0" id="re-conv-table">
             <thead class="table-light">
               <tr>
-                <th class="text-center">보험사</th>
                 <th class="text-center">
                   <button type="button" class="re-sort-btn" data-sort-key="coverage_type">보종</button>
                 </th>
@@ -292,7 +291,7 @@
             </thead>
             <tbody id="re-conv-tbody">
               <tr>
-                <td colspan="10" class="text-center text-muted py-3">
+                <td colspan="9" class="text-center text-muted py-3">
                   손생구분과 보험사를 선택 후 조회해 주세요.
                 </td>
               </tr>

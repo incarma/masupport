@@ -32,6 +32,8 @@ from commission.views._excel_export import XLSX_MIME
 from commission.views.utils_json import _json_error, _set_attachment_filename
 
 logger = logging.getLogger(__name__)
+PDF_MIME = "application/pdf"
+PDF_MAGIC = b"%PDF"
 
 
 @require_POST
@@ -100,7 +102,7 @@ def collect_notice_export_excel(request):
                 sources=sources,
                 manual_rows=manual_rows,
             )
-            content_type = "application/pdf"
+            content_type = PDF_MIME
         else:
             result = build_collect_notice_excel(
                 target_name=target_name,
@@ -129,9 +131,22 @@ def collect_notice_export_excel(request):
             title_month,
             len(files),
         )
-        return _json_error("환수내역 엑셀 생성 중 오류가 발생했습니다.", status=500)
+        return _json_error("환수내역 안내자료 생성 중 오류가 발생했습니다.", status=500)
+
+    if output == "pdf" and not result.content.startswith(PDF_MAGIC):
+        logger.error(
+            "[collect_notice_export_excel] invalid pdf bytes target_emp_id=%s filename=%s size=%s",
+            target_emp_id,
+            result.filename,
+            len(result.content or b""),
+        )
+        return _json_error(
+            "PDF 변환 결과가 올바르지 않습니다. LibreOffice 변환 상태를 확인해주세요.",
+            status=500,
+        )
 
     resp = HttpResponse(result.content, content_type=content_type)
     _set_attachment_filename(resp, result.filename)
     resp["X-Collect-Notice-Row-Count"] = str(result.row_count)
+    resp["X-Collect-Notice-Output"] = output
     return resp

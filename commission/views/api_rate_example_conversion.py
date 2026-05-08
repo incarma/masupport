@@ -13,25 +13,45 @@ import logging
 
 from django.contrib.auth.decorators import login_required
 from django.utils import timezone
-from django.views.decorators.http import require_GET
+from django.views.decorators.http import require_GET, require_POST
 
 from accounts.decorators import grade_required
+from audit.constants import ACTION
+from audit.services import log_action
 from commission.models import RateExample, RateExampleConversionRow
 from commission.views.utils_json import _json_error, _json_ok
 
 logger = logging.getLogger(__name__)
 
 
+STRATEGY_CHOICES = {
+    "",
+    "전략상품1",
+    "전략상품2",
+    "전략상품3",
+    "전략상품4",
+}
+
+
 def _format_decimal(value) -> str:
     """
     Decimal 값을 과학적 표기법 없이 문자열로 변환한다.
-    예: Decimal("2.7E+2") → "270"
+    예:
+    - Decimal("2.7E+2") → "270.0"
+    - Decimal("0.3500") → "0.35"
     """
     if value is None:
         return ""
+    
     text = format(value, "f")
+
     if "." in text:
         text = text.rstrip("0").rstrip(".")
+    
+    # raw 환산률이 정수처럼 보여도 화면에서는 실수 형태로 명시한다.
+    if text and "." not in text:
+        text = f"{text}.0"
+    
     return text
 
 
@@ -75,7 +95,6 @@ def rate_example_conversion_list(request):
     rows = [
         {
             "id": row.id,
-            "insurer": row.insurer,
             "coverage_type": row.coverage_type,
             "strategy_flag": row.strategy_flag,
             "product_name": row.product_name,
@@ -99,5 +118,60 @@ def rate_example_conversion_list(request):
             "last_updated_at": _format_dt(getattr(latest_file, "created_at", None)),
             "last_updated_by": getattr(latest_uploader, "name", "") or "",
             "source_file_name": getattr(latest_file, "original_name", "") or "",
+        },
+    )
+
+
+@login_required
+@grade_required("superuser", forbidden_template=None)
+@require_POST
+def rate_example_conversion_strategy_update(request):
+    """
+    환산률/수정률 정규화 row의 전략유무 값을 저장한다.
+
+    - DB 구조 변경 없음: RateExampleConversionRow.strategy_flag 재사용
+    - 허용값 외 입력 차단
+    """
+    row_id = (request.POST.get("id") or "").strip()
+    strategy_flag = (request.POST.get("strategy_flag") or "").strip()
+
+    if not row_id.isdigit():
+        return _json_error("대상 행 정보가 올바르지 않습니다.", status=400)
+
+    if strategy_flag not in STRATEGY_CHOICES:
+        return _json_error("전략유무 값이 올바르지 않습니다.", status=400)
+
+    row = RateExampleConversionRow.objects.filter(pk=int(row_id)).first()
+    if not row:
+        return _json_error("대상 데이터를 찾을 수 없습니다.", status=404)
+
+    old_value = row.strategy_flag
+    row.strategy_flag = strategy_flag
+    row.save(update_fields=["strategy_flag"])
+
+    try:
+        log_action(
+            request,
+            ACTION.COMMISSION_RATE_EXAMPLE_STRATEGY_UPDATE,
+            obj=row,
+            meta={
+                "insurer_type": row.insurer_type,
+                "insurer": row.insurer,
+                "coverage_type": row.coverage_type,
+                "product_name": row.product_name,
+                "plan_type": row.plan_type,
+                "from": old_value,
+                "to": strategy_flag,
+            },
+            success=True,
+        )
+    except Exception:
+        logger.exception("rate_example_conversion strategy_update audit log failed")
+
+    return _json_ok(
+        "저장되었습니다.",
+        data={
+            "id": row.id,
+            "strategy_flag": row.strategy_flag,
         },
     )

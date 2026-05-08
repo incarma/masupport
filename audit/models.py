@@ -91,3 +91,29 @@ class AuditLog(models.Model):
 
     def __str__(self):
         return f"[{self.ts:%Y-%m-%d %H:%M:%S}] {self.action} ({'OK' if self.success else 'FAIL'})"
+
+
+# 예시표(RateExample) 관련 감사로그만 골라 볼 수 있는 proxy 모델
+_RATE_EXAMPLE_ACTIONS = (
+    "commission.rate_example.upload",
+    "commission.rate_example.download",
+    "commission.rate_example.delete",
+    "commission.rate_example.normalize",
+    "commission.rate_example.strategy_update",
+)
+
+
+class RateExampleAuditLogManager(models.Manager):
+    def get_queryset(self):
+        return super().get_queryset().filter(action__in=_RATE_EXAMPLE_ACTIONS)
+
+
+class RateExampleAuditLog(AuditLog):
+    """예시표 감사로그 전용 proxy — DB 테이블 없음, 관리자 화면용."""
+
+    objects = RateExampleAuditLogManager()
+
+    class Meta:
+        proxy = True
+        verbose_name = "예시표 감사로그"
+        verbose_name_plural = "예시표 감사로그"
