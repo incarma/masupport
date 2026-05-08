@@ -23,6 +23,9 @@ from typing import Iterable
 from openpyxl import load_workbook
 
 from commission.models import RateExample, RateExampleConversionRow
+from commission.services.rate_example_normalizers.db_life import (
+    build_db_life_conversion_rows,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -193,7 +196,7 @@ def normalize_rate_example(example: RateExample) -> int:
     RateExample 업로드 파일을 정규화한다.
 
     현재 지원:
-    - 생명보험 / 환산률·수정률 / ABL / xlsx
+    - 생명보험 / 환산률·수정률 / DB / xlsx
 
     반환:
     - 생성된 RateExampleConversionRow 수
@@ -201,30 +204,42 @@ def normalize_rate_example(example: RateExample) -> int:
     if not (
         example.insurer_type == RateExample.TYPE_LIFE
         and example.category == RateExample.CAT_CONV
-        and example.insurer == "ABL"
+        and example.insurer in {"ABL", "DB"}
     ):
         return 0
 
     if not example.file:
         return 0
 
-    # ABL 정규화 대상은 xlsx 기준이다. xls/pdf는 원본 보관만 수행한다.
+    # 정규화 대상은 xlsx 기준이다. xls/pdf는 원본 보관만 수행한다.
     if not str(example.original_name or "").lower().endswith(".xlsx"):
         return 0
 
     wb = load_workbook(example.file.path, data_only=True, read_only=True)
 
-    missing = [
-        sheet_name
-        for sheet_name in (SHEET_ABL_SAVING, SHEET_ABL_PROTECTION)
-        if sheet_name not in wb.sheetnames
-    ]
-    if missing:
-        raise ValueError(f"ABL 환산률/수정률 필수 시트가 없습니다: {', '.join(missing)}")
-
     normalized_rows: list[RateExampleConversionRow] = []
-    normalized_rows.extend(_normalize_abl_saving(example, wb[SHEET_ABL_SAVING]))
-    normalized_rows.extend(_normalize_abl_protection(example, wb[SHEET_ABL_PROTECTION]))
+    
+    # ── ABL 생명 환산률/수정률 정규화 ─────────────────────────────
+    # 기존 규칙 유지: 필수 시트 2개를 대상으로 고정 매핑한다.
+    if example.insurer == "ABL":
+        missing = [
+            sheet_name
+            for sheet_name in (SHEET_ABL_SAVING, SHEET_ABL_PROTECTION)
+            if sheet_name not in wb.sheetnames
+        ]
+        if missing:
+            raise ValueError(f"ABL 환산률/수정률 필수 시트가 없습니다: {', '.join(missing)}")
+
+        normalized_rows.extend(_normalize_abl_saving(example, wb[SHEET_ABL_SAVING]))
+        normalized_rows.extend(_normalize_abl_protection(example, wb[SHEET_ABL_PROTECTION]))
+
+    # ── DB 생명 환산률/수정률 정규화 ──────────────────────────────
+    # 신규 규칙:
+    # - 특약/방카교차 시트 제외
+    # - 각 시트 첫 번째 테이블만 정규화
+    # - 상품명은 A1, 보종은 시트명 기반 판정
+    elif example.insurer == "DB":
+        normalized_rows.extend(build_db_life_conversion_rows(example, wb))
 
     # 동일 보험사/구분의 정규화 master는 최신 업로드 기준으로 교체한다.
     RateExampleConversionRow.objects.filter(
