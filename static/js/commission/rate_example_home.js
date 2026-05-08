@@ -9,6 +9,7 @@
   // ── URL / CSRF ─────────────────────────────────────────────────────────────
   const UPLOAD_URL = root.dataset.uploadUrl;
   const CONVERSION_LIST_URL = root.dataset.conversionListUrl;
+  const CONVERSION_STRATEGY_UPDATE_URL = root.dataset.conversionStrategyUpdateUrl;
 
   // ── 보험사 목록 (json_script 태그에서 읽기) ───────────────────────────────
   const LIFE_INSURERS = JSON.parse(
@@ -85,7 +86,7 @@
     if (!rows || rows.length === 0) {
       convTbody.innerHTML = `
         <tr>
-          <td colspan="10" class="text-center text-muted py-3">
+          <td colspan="9" class="text-center text-muted py-3">
             조회된 정규화 데이터가 없습니다.
           </td>
         </tr>`;
@@ -95,9 +96,8 @@
     convTbody.innerHTML = rows.map(function (row) {
       return `
         <tr>
-          <td class="text-center">${ellipsisCell(row.insurer, "보험사")}</td>
           <td class="text-center">${ellipsisCell(row.coverage_type, "보종")}</td>
-          <td class="text-center">${ellipsisCell(row.strategy_flag, "전략유무")}</td>
+          <td class="text-center">${strategySelect(row.id, row.strategy_flag)}</td>
           <td>${ellipsisCell(row.product_name, "상품명", "re-product-name")}</td>
           <td class="text-center">${ellipsisCell(row.plan_type, "구분")}</td>
           <td class="text-center">${ellipsisCell(row.pay_period, "납기")}</td>
@@ -334,6 +334,22 @@
       </span>`;
   }
 
+  function strategySelect(rowId, value) {
+    const selected = String(value || "");
+    const choices = ["", "전략상품1", "전략상품2", "전략상품3", "전략상품4"];
+    return `
+      <select class="form-select form-select-sm re-strategy-select"
+              data-row-id="${escapeHtml(rowId)}"
+              data-prev-value="${escapeHtml(selected)}"
+              aria-label="전략유무 선택">
+        ${choices.map(function (choice) {
+          const label = choice || "선택";
+          const isSelected = choice === selected ? " selected" : "";
+          return `<option value="${escapeHtml(choice)}"${isSelected}>${escapeHtml(label)}</option>`;
+        }).join("")}
+      </select>`;
+  }
+
   // ── 저장 버튼 ──────────────────────────────────────────────────────────────
   const btnSave = document.getElementById("re-btn-save");
   const errBox = document.getElementById("re-upload-error");
@@ -426,7 +442,7 @@
       if (convTbody) {
         convTbody.innerHTML = `
           <tr>
-            <td colspan="10" class="text-center text-muted py-3">
+            <td colspan="9" class="text-center text-muted py-3">
               조회 중입니다...
             </td>
           </tr>`;
@@ -464,6 +480,56 @@
 
   if (convKeyword) {
     convKeyword.addEventListener("input", applyConvView);
+  }
+
+  // ── 전략유무 드랍다운 변경 → DB 즉시 저장 ─────────────────────
+  if (convTbody) {
+    convTbody.addEventListener("change", async function (e) {
+      const sel = e.target.closest(".re-strategy-select");
+      if (!sel) return;
+
+      const rowId = sel.dataset.rowId || "";
+      const value = sel.value || "";
+      const prev = sel.dataset.prevValue || "";
+
+      if (!CONVERSION_STRATEGY_UPDATE_URL) {
+        showConvError("전략유무 저장 URL이 설정되지 않았습니다.");
+        sel.value = prev;
+        return;
+      }
+
+      const fd = new FormData();
+      fd.append("id", rowId);
+      fd.append("strategy_flag", value);
+
+      sel.disabled = true;
+      try {
+        const res = await fetch(CONVERSION_STRATEGY_UPDATE_URL, {
+          method: "POST",
+          credentials: "same-origin",
+          headers: {
+            "X-CSRFToken": window.csrfToken || "",
+            "X-Requested-With": "XMLHttpRequest",
+          },
+          body: fd,
+        });
+        const json = await readJsonOrThrow(res);
+        const savedValue = json.data?.strategy_flag || "";
+
+        convRowsOriginal = convRowsOriginal.map(function (row) {
+          if (String(row.id) !== String(rowId)) return row;
+          return Object.assign({}, row, { strategy_flag: savedValue });
+        });
+
+        populateConvFilters(convRowsOriginal);
+        applyConvView();
+      } catch (err) {
+        showConvError(err.message || "전략유무 저장 중 오류가 발생했습니다.");
+        sel.value = prev;
+      } finally {
+        sel.disabled = false;
+      }
+    });
   }
 
   // ── 환산률/수정률 컬럼 정렬 ─────────────────────────────────────
@@ -574,7 +640,7 @@
       if (convTbody) {
         convTbody.innerHTML = `
           <tr>
-            <td colspan="10" class="text-center text-muted py-3">
+            <td colspan="9" class="text-center text-muted py-3">
               손생구분과 보험사를 선택 후 조회해 주세요.
             </td>
           </tr>`;

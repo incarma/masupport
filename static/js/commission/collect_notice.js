@@ -433,7 +433,8 @@ async function _onMakeNotice() {
     // Step 4: 서버 openpyxl 생성 요청
     const manualPayload = _collectManualRowsOrThrow();
     const fd = _buildExportFormData(rows, manualPayload);
-    const { blob, filename, rowCount } = await _postNoticeExport(fd);
+    fd.set("output", "xlsx");
+    const { blob, filename, rowCount } = await _postNoticeExport(fd, { output: "xlsx" });
     storeResult(blob, filename, rowCount);
   } catch (err) {
     console.error("[collect_notice] 제작 오류:", err);
@@ -535,7 +536,30 @@ async function _readErrorMessage(res) {
   return text || `요청 실패 (${res.status})`;
 }
 
-async function _postNoticeExport(formData, { fallbackFilename = "환수내역.xlsx" } = {}) {
+function _normalizeDownloadFilename(filename, ext) {
+  const safeExt = String(ext || "").replace(/^\./, "");
+  if (!safeExt) return filename || "환수내역";
+
+  const fallback = `환수내역.${safeExt}`;
+  const name = String(filename || fallback).trim() || fallback;
+  return name.replace(/\.(xlsx|xls|pdf)$/i, `.${safeExt}`);
+}
+
+async function _assertBlobSignature(blob, output) {
+  if (output !== "pdf") return;
+
+  const head = await blob.slice(0, 4).text().catch(() => "");
+  if (head !== "%PDF") {
+    throw new Error(
+      "서버 응답이 PDF 형식이 아닙니다. PDF 변환 설정 또는 output 파라미터를 확인해주세요."
+    );
+  }
+}
+
+async function _postNoticeExport(
+  formData,
+  { fallbackFilename = "환수내역.xlsx", output = "xlsx" } = {}
+) {
   if (!EXPORT_URL) {
     throw new Error("서버 생성 URL이 설정되지 않았습니다.");
   }
@@ -554,10 +578,28 @@ async function _postNoticeExport(formData, { fallbackFilename = "환수내역.xl
     throw new Error(await _readErrorMessage(res));
   }
 
+  const ct = (res.headers.get("Content-Type") || "").toLowerCase();
+  if (output === "pdf" && !ct.includes("application/pdf")) {
+    throw new Error(
+      `PDF 응답 형식이 올바르지 않습니다. 현재 Content-Type: ${ct || "없음"}`
+    );
+  }
+  if (output === "xlsx" && !ct.includes("spreadsheet") && !ct.includes("excel")) {
+    throw new Error(
+      `엑셀 응답 형식이 올바르지 않습니다. 현재 Content-Type: ${ct || "없음"}`
+    );
+  }
+
   const blob = await res.blob();
+  await _assertBlobSignature(blob, output);
+
+  const ext = output === "pdf" ? "pdf" : "xlsx";
   const filename =
-    _filenameFromContentDisposition(res.headers.get("Content-Disposition")) ||
-    fallbackFilename;
+    _normalizeDownloadFilename(
+      _filenameFromContentDisposition(res.headers.get("Content-Disposition")) ||
+        fallbackFilename,
+      ext
+    );
   const rowCount = Number(res.headers.get("X-Collect-Notice-Row-Count") || "0");
 
   return { blob, filename, rowCount };
@@ -592,6 +634,8 @@ async function _onDownloadPdf() {
   }
 
   const overlay = document.getElementById("loadingOverlay");
+  const btn = document.getElementById("btnDownloadPdfResult");
+  if (btn) btn.disabled = true;
   overlay.hidden = false;
 
   try {
@@ -599,13 +643,15 @@ async function _onDownloadPdf() {
     const fd = _buildExportFormData(rows, manualPayload);
     fd.set("output", "pdf");
 
-    const { blob, filename } = await _postNoticeExport(fd, { fallbackFilename: "환수내역.pdf" });
+    const { blob, filename } = await _postNoticeExport(fd, {
+      fallbackFilename: "환수내역.pdf",
+      output: "pdf",
+    });
 
-    const pdfFilename = filename.replace(/\.xlsx$/i, ".pdf");
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = pdfFilename;
+    a.download = filename;
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -615,6 +661,7 @@ async function _onDownloadPdf() {
     alert(`PDF 다운로드 중 오류가 발생했습니다.\n${err.message || err}`);
   } finally {
     overlay.hidden = true;
+    if (btn) btn.disabled = false;
   }
 }
 

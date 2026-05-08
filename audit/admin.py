@@ -4,7 +4,7 @@ from __future__ import annotations
 from django.contrib import admin
 from django.utils.html import format_html
 
-from .models import RequestLog, AuditLog
+from .models import RequestLog, AuditLog, RateExampleAuditLog
 
 
 @admin.register(RequestLog)
@@ -63,6 +63,74 @@ class AuditLogAdmin(admin.ModelAdmin):
         return format_html('<span style="color:#c00;font-weight:700;">FAIL</span>')
     
 
+_ACTION_LABEL = {
+    "commission.rate_example.upload":          "업로드",
+    "commission.rate_example.download":        "다운로드",
+    "commission.rate_example.delete":          "삭제",
+    "commission.rate_example.normalize":       "정규화",
+    "commission.rate_example.strategy_update": "전략유무 변경",
+}
+
+
+class RateExampleActionFilter(admin.SimpleListFilter):
+    title = "액션 유형"
+    parameter_name = "re_action"
+
+    def lookups(self, request, model_admin):
+        return list(_ACTION_LABEL.items())
+
+    def queryset(self, request, queryset):
+        if self.value():
+            return queryset.filter(action=self.value())
+        return queryset
+
+
+@admin.register(RateExampleAuditLog)
+class RateExampleAuditLogAdmin(admin.ModelAdmin):
+    list_display = (
+        "ts", "action_label", "success_badge", "user_display",
+        "object_ref", "meta_summary", "ip",
+    )
+    list_filter = (RateExampleActionFilter, "success")
+    search_fields = ("user__id", "user__name", "object_id", "ip", "meta")
+    date_hierarchy = "ts"
+    readonly_fields = [f.name for f in AuditLog._meta.fields]
+    ordering = ("-ts",)
+
+    def has_add_permission(self, request): return False
+    def has_change_permission(self, request, obj=None): return False
+    def has_delete_permission(self, request, obj=None): return request.user.is_superuser
+
+    @admin.display(description="액션")
+    def action_label(self, obj: RateExampleAuditLog):
+        return _ACTION_LABEL.get(obj.action, obj.action)
+
+    @admin.display(description="결과")
+    def success_badge(self, obj: RateExampleAuditLog):
+        if obj.success:
+            return format_html('<span style="color:green;font-weight:700;">OK</span>')
+        return format_html('<span style="color:#c00;font-weight:700;">FAIL</span>')
+
+    @admin.display(description="사용자")
+    def user_display(self, obj: RateExampleAuditLog):
+        return str(obj.user_id) if obj.user_id else "-"
+
+    @admin.display(description="대상")
+    def object_ref(self, obj: RateExampleAuditLog):
+        if obj.object_type or obj.object_id:
+            return f"{obj.object_type}:{obj.object_id}"
+        return "-"
+
+    @admin.display(description="상세")
+    def meta_summary(self, obj: RateExampleAuditLog):
+        meta = obj.meta or {}
+        parts = []
+        for key in ("insurer", "insurer_type", "from", "to", "original_name", "normalized_count"):
+            if key in meta:
+                parts.append(f"{key}={meta[key]}")
+        return " | ".join(parts) if parts else "-"
+
+
 # =============================================================================
 # ✅ custom_admin_site에도 등록 (중요!)
 # =============================================================================
@@ -74,6 +142,8 @@ try:
         custom_admin_site.register(RequestLog, RequestLogAdmin)
     if not custom_admin_site.is_registered(AuditLog):
         custom_admin_site.register(AuditLog, AuditLogAdmin)
+    if not custom_admin_site.is_registered(RateExampleAuditLog):
+        custom_admin_site.register(RateExampleAuditLog, RateExampleAuditLogAdmin)
 except Exception:
     # admin 로딩 실패가 전체를 막지 않도록
     pass

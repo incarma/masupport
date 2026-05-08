@@ -81,6 +81,10 @@ _RATE_EXAMPLE_API = {
         "commission.views.api_rate_example_conversion",
         "rate_example_conversion_list",
     ),
+    "rate_example_conversion_strategy_update": (
+        "commission.views.api_rate_example_conversion",
+        "rate_example_conversion_strategy_update",
+    ),
 }
 
 # Collect Notice export
@@ -226,4 +230,5 @@ __all__ = [
     "rate_example_download",
     "rate_example_delete",
     "rate_example_conversion_list",
+    "rate_example_conversion_strategy_update",
 ]

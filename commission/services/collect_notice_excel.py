@@ -22,6 +22,7 @@ from contextlib import suppress
 import shutil
 import subprocess
 import tempfile
+import logging
 from pathlib import Path
 import re
 from typing import Any, Iterable
@@ -29,6 +30,10 @@ from typing import Any, Iterable
 from openpyxl import Workbook, load_workbook
 from openpyxl.worksheet.page import PageMargins
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+
+
+logger = logging.getLogger(__name__)
+PDF_MAGIC = b"%PDF"
 
 
 # =============================================================================
@@ -212,6 +217,11 @@ def build_collect_notice_pdf(
         xlsx_content=xlsx_result.content,
         xlsx_filename=xlsx_result.filename,
     )
+
+    if not pdf_content.startswith(PDF_MAGIC):
+        raise RuntimeError(
+            "PDF 변환 결과가 올바르지 않습니다. 생성 파일이 PDF 형식이 아닙니다."
+        )
 
     pdf_filename = re.sub(r"\.xlsx$", ".pdf", xlsx_result.filename, flags=re.IGNORECASE)
 
@@ -744,6 +754,11 @@ def _convert_xlsx_bytes_to_pdf(*, xlsx_content: bytes, xlsx_filename: str) -> by
         except subprocess.CalledProcessError as exc:
             stderr = (exc.stderr or b"").decode("utf-8", errors="replace")
             stdout = (exc.stdout or b"").decode("utf-8", errors="replace")
+            logger.warning(
+                "[collect_notice_pdf] libreoffice failed stdout=%s stderr=%s",
+                stdout[:1000],
+                stderr[:1000],
+            )
             raise RuntimeError(f"PDF 변환에 실패했습니다.\nstdout={stdout}\nstderr={stderr}") from exc
 
         # LibreOffice는 입력 파일과 같은 이름의 .pdf를 --outdir에 생성한다.
@@ -760,4 +775,11 @@ def _convert_xlsx_bytes_to_pdf(*, xlsx_content: bytes, xlsx_filename: str) -> by
                 f"LibreOffice 설치 상태를 확인하세요.\nstdout={stdout}"
             )
 
-        return pdf_path.read_bytes()
+        pdf_bytes = pdf_path.read_bytes()
+        if not pdf_bytes.startswith(PDF_MAGIC):
+            raise RuntimeError(
+                "PDF 파일은 생성되었지만 파일 형식이 올바르지 않습니다. "
+                "LibreOffice PDF 변환 결과를 확인해주세요."
+            )
+
+        return pdf_bytes

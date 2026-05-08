@@ -78,6 +78,9 @@ urlpatterns = [
          views.rate_example_download, name="rate_example_download"),
     path("rate-examples/<int:pk>/delete/",
          views.rate_example_delete,   name="rate_example_delete"),
-     path("rate-examples/conversions/",
+    path("rate-examples/conversions/",
          views.rate_example_conversion_list, name="rate_example_conversion_list"),
+    path("rate-examples/conversions/strategy/",
+         views.rate_example_conversion_strategy_update,
+         name="rate_example_conversion_strategy_update"),
 ]

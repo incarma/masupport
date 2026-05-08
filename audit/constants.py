@@ -116,7 +116,8 @@ class ACTION:
     PARTNER_ESIGN_PROCESS_DATE_UPDATE = "partner.esign.process_date.update"
 
     # Commission / RateExample (예시표)
-    COMMISSION_RATE_EXAMPLE_UPLOAD   = "commission.rate_example.upload"
-    COMMISSION_RATE_EXAMPLE_DOWNLOAD = "commission.rate_example.download"
-    COMMISSION_RATE_EXAMPLE_DELETE   = "commission.rate_example.delete"
-    COMMISSION_RATE_EXAMPLE_NORMALIZE = "commission.rate_example.normalize"
+    COMMISSION_RATE_EXAMPLE_UPLOAD          = "commission.rate_example.upload"
+    COMMISSION_RATE_EXAMPLE_DOWNLOAD        = "commission.rate_example.download"
+    COMMISSION_RATE_EXAMPLE_DELETE          = "commission.rate_example.delete"
+    COMMISSION_RATE_EXAMPLE_NORMALIZE       = "commission.rate_example.normalize"
+    COMMISSION_RATE_EXAMPLE_STRATEGY_UPDATE = "commission.rate_example.strategy_update"

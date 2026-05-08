@@ -346,6 +346,7 @@ def rate_example_home(request):
         "nonlife_insurers": RateExample.NONLIFE_INSURERS,
         "upload_url":       reverse("commission:rate_example_upload"),
         "conversion_list_url": reverse("commission:rate_example_conversion_list"),
+        "conversion_strategy_update_url": reverse("commission:rate_example_conversion_strategy_update"),
         "is_superuser":     request.user.grade == "superuser",
     }
     return render(request, "commission/rate_example_home.html", context)
