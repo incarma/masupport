@@ -33,18 +33,28 @@ def rate_example_upload(request):
         return _json_error(result["message"])
 
     instance = result["instance"]
+    normalized_count = result.get("normalized_count", 0)
     try:
         log_action(
             request,
             ACTION.COMMISSION_RATE_EXAMPLE_UPLOAD,
             obj=instance,
-            meta={"insurer": instance.insurer, "category": instance.category},
+            meta={
+                "insurer_type": instance.insurer_type,
+                "insurer": instance.insurer,
+                "category": instance.category,
+                "original_name": instance.original_name,
+                "normalized_count": normalized_count,
+            },
             success=True,
         )
     except Exception:
         logger.exception("rate_example upload audit log failed")
 
-    return _json_ok("파일이 등록되었습니다.")
+    return _json_ok(
+        "파일이 등록되었습니다.",
+        data={"normalized_count": normalized_count},
+    )
 
 
 # ── 다운로드 ────────────────────────────────────────────────────────────────

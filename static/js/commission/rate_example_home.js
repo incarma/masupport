@@ -8,6 +8,7 @@
 
   // ── URL / CSRF ─────────────────────────────────────────────────────────────
   const UPLOAD_URL = root.dataset.uploadUrl;
+  const CONVERSION_LIST_URL = root.dataset.conversionListUrl;
 
   // ── 보험사 목록 (json_script 태그에서 읽기) ───────────────────────────────
   const LIFE_INSURERS = JSON.parse(
@@ -54,6 +55,70 @@
       opt.textContent = name;
       sel.appendChild(opt);
     });
+  }
+
+  // ── 환산률/수정률 정규화 테이블 렌더링 ───────────────────────────────
+  function escapeHtml(value) {
+    return String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
+  function showConvError(msg) {
+    if (!convErrBox) return;
+    convErrBox.textContent = msg;
+    convErrBox.classList.remove("d-none");
+  }
+
+  function clearConvError() {
+    if (!convErrBox) return;
+    convErrBox.textContent = "";
+    convErrBox.classList.add("d-none");
+  }
+
+  function renderConvRows(rows) {
+    if (!convTbody) return;
+
+    if (!rows || rows.length === 0) {
+      convTbody.innerHTML = `
+        <tr>
+          <td colspan="10" class="text-center text-muted py-3">
+            조회된 정규화 데이터가 없습니다.
+          </td>
+        </tr>`;
+      return;
+    }
+
+    convTbody.innerHTML = rows.map(function (row) {
+      return `
+        <tr>
+          <td class="text-center">${ellipsisCell(row.insurer, "보험사")}</td>
+          <td class="text-center">${ellipsisCell(row.coverage_type, "보종")}</td>
+          <td class="text-center">${ellipsisCell(row.strategy_flag, "전략유무")}</td>
+          <td>${ellipsisCell(row.product_name, "상품명", "re-product-name")}</td>
+          <td class="text-center">${ellipsisCell(row.plan_type, "구분")}</td>
+          <td class="text-center">${ellipsisCell(row.pay_period, "납기")}</td>
+          <td class="text-end re-rate-num">${escapeHtml(row.year1)}</td>
+          <td class="text-end re-rate-num">${escapeHtml(row.year2)}</td>
+          <td class="text-end re-rate-num">${escapeHtml(row.year3)}</td>
+          <td class="text-end re-rate-num">${escapeHtml(row.year4)}</td>
+        </tr>`;
+    }).join("");
+  }
+
+  async function readJsonOrThrow(res) {
+    const contentType = res.headers.get("content-type") || "";
+    if (!contentType.includes("application/json")) {
+      throw new Error("JSON 응답이 아닙니다. 로그인 만료 또는 권한 오류를 확인해 주세요.");
+    }
+    const data = await res.json();
+    if (!res.ok || data.ok === false) {
+      throw new Error(data.message || "요청 처리 중 오류가 발생했습니다.");
+    }
+    return data;
   }
 
   // ── 필터 이벤트 ───────────────────────────────────────────────────────────
@@ -107,6 +172,166 @@
         modalInsurer.appendChild(opt);
       });
     });
+  }
+
+  // ── 환산률/수정률 모달: 손생 변경 → 보험사 드랍다운 교체 ──────────────────
+  const convType    = document.getElementById("re-conv-type");
+  const convInsurer = document.getElementById("re-conv-insurer");
+  const convTbody   = document.getElementById("re-conv-tbody");
+  const convErrBox  = document.getElementById("re-conv-error");
+  const convUpdatedAt = document.getElementById("re-conv-updated-at");
+  const convFilterEls = Array.from(document.querySelectorAll(".re-conv-filter"));
+  const convKeyword = document.getElementById("re-conv-keyword");
+  const convSortBtns = Array.from(document.querySelectorAll(".re-sort-btn"));
+  const fullTextModalEl = document.getElementById("reCellFullTextModal");
+  const fullTextTitleEl = document.getElementById("re-cell-fulltext-title");
+  const fullTextBodyEl = document.getElementById("re-cell-fulltext-body");
+
+  let convRowsOriginal = [];
+  let convSortKey = "";
+  let convSortDir = "asc";
+
+  if (convType && convInsurer) {
+    convType.addEventListener("change", function () {
+      const val = this.value;
+      convInsurer.innerHTML = '<option value="">선택</option>';
+
+      const list = val === "life" ? LIFE_INSURERS
+                  : val === "nonlife" ? NONLIFE_INSURERS
+                  : [];
+
+      if (list.length === 0) {
+        convInsurer.disabled = true;
+        convInsurer.innerHTML = '<option value="">손생구분을 먼저 선택하세요</option>';
+        return;
+      }
+
+      convInsurer.disabled = false;
+      list.forEach(function (name) {
+        const opt = document.createElement("option");
+        opt.value = name;
+        opt.textContent = name;
+        convInsurer.appendChild(opt);
+      });
+    });
+  }
+
+  function setConvUpdatedInfo(data) {
+    if (!convUpdatedAt) return;
+    const updatedAt = data?.last_updated_at || "";
+    const updatedBy = data?.last_updated_by || "";
+    const sourceName = data?.source_file_name || "";
+
+    if (!updatedAt) {
+      convUpdatedAt.textContent = "마지막 업데이트 정보 없음";
+      return;
+    }
+
+    convUpdatedAt.textContent = [
+      `마지막 업데이트: ${updatedAt}`,
+      updatedBy ? `업로더: ${updatedBy}` : "",
+      sourceName ? `원본: ${sourceName}` : "",
+    ].filter(Boolean).join(" / ");
+  }
+
+  function uniqueValues(rows, key) {
+    return Array.from(new Set(
+      rows.map(function (row) { return row[key] || ""; }).filter(Boolean)
+    )).sort(function (a, b) {
+      return String(a).localeCompare(String(b), "ko");
+    });
+  }
+
+  function populateConvFilters(rows) {
+    convFilterEls.forEach(function (sel) {
+      const key = sel.dataset.filterKey;
+      const current = sel.value;
+      sel.innerHTML = '<option value="">전체</option>';
+
+      uniqueValues(rows, key).forEach(function (value) {
+        const opt = document.createElement("option");
+        opt.value = value;
+        opt.textContent = value;
+        sel.appendChild(opt);
+      });
+
+      if (current && uniqueValues(rows, key).includes(current)) {
+        sel.value = current;
+      }
+    });
+  }
+
+  function resetConvFilters() {
+    convFilterEls.forEach(function (sel) {
+      sel.innerHTML = '<option value="">전체</option>';
+      sel.value = "";
+    });
+  }
+
+  function filteredConvRows() {
+    const keyword = String(convKeyword?.value || "").trim().toLowerCase();
+
+    return convRowsOriginal.filter(function (row) {
+      const matchedFilters = convFilterEls.every(function (sel) {
+        const key = sel.dataset.filterKey;
+        const val = sel.value || "";
+        return !val || String(row[key] || "") === val;
+      });
+
+      if (!matchedFilters) return false;
+      if (!keyword) return true;
+
+      return [
+        row.coverage_type,
+        row.strategy_flag,
+        row.product_name,
+        row.plan_type,
+        row.pay_period,
+        row.year1,
+        row.year2,
+        row.year3,
+        row.year4,
+      ].some(function (value) {
+        return String(value || "").toLowerCase().includes(keyword);
+      });
+    });
+  }
+
+  function sortedConvRows(rows) {
+    if (!convSortKey) return rows;
+    const dir = convSortDir === "desc" ? -1 : 1;
+    return rows.slice().sort(function (a, b) {
+      const av = String(a[convSortKey] || "");
+      const bv = String(b[convSortKey] || "");
+      return av.localeCompare(bv, "ko", { numeric: true }) * dir;
+    });
+  }
+
+  function updateSortButtons() {
+    convSortBtns.forEach(function (btn) {
+      btn.classList.remove("is-asc", "is-desc");
+      if (btn.dataset.sortKey === convSortKey) {
+        btn.classList.add(convSortDir === "desc" ? "is-desc" : "is-asc");
+      }
+    });
+  }
+
+  function applyConvView() {
+    renderConvRows(sortedConvRows(filteredConvRows()));
+    updateSortButtons();
+  }
+
+  function ellipsisCell(value, title, extraClass) {
+    const safeValue = escapeHtml(value || "");
+    const safeTitle = escapeHtml(title || "전체 텍스트");
+    const cls = extraClass ? ` ${extraClass}` : "";
+    return `
+      <span class="re-ellipsis-cell${cls}"
+            data-title="${safeTitle}"
+            data-fulltext="${safeValue}"
+            title="${safeValue}">
+        ${safeValue}
+      </span>`;
   }
 
   // ── 저장 버튼 ──────────────────────────────────────────────────────────────
@@ -170,6 +395,113 @@
     });
   }
 
+  // ── 환산률/수정률 확인 버튼 → 정규화 데이터 조회 ─────────────────────────
+  const convBtnApply = document.getElementById("re-conv-btn-apply");
+
+  if (convBtnApply) {
+    convBtnApply.addEventListener("click", async function () {
+      const typeVal    = convType    ? convType.value    : "";
+      const insurerVal = convInsurer ? convInsurer.value : "";
+
+      clearConvError();
+
+      if (!CONVERSION_LIST_URL) {
+        showConvError("조회 URL이 설정되지 않았습니다.");
+        return;
+      }
+      if (!typeVal) {
+        showConvError("손생구분을 선택해 주세요.");
+        return;
+      }
+      if (!insurerVal) {
+        showConvError("보험사를 선택해 주세요.");
+        return;
+      }
+
+      const url = new URL(CONVERSION_LIST_URL, window.location.origin);
+      url.searchParams.set("insurer_type", typeVal);
+      url.searchParams.set("insurer", insurerVal);
+
+      convBtnApply.disabled = true;
+      if (convTbody) {
+        convTbody.innerHTML = `
+          <tr>
+            <td colspan="10" class="text-center text-muted py-3">
+              조회 중입니다...
+            </td>
+          </tr>`;
+      }
+
+      try {
+        const res = await fetch(url.toString(), {
+          method: "GET",
+          credentials: "same-origin",
+          headers: { "X-Requested-With": "XMLHttpRequest" },
+        });
+        const json = await readJsonOrThrow(res);
+        convRowsOriginal = json.data?.rows || [];
+        convSortKey = "";
+        convSortDir = "asc";
+        setConvUpdatedInfo(json.data || {});
+        populateConvFilters(convRowsOriginal);
+        applyConvView();
+      } catch (err) {
+        showConvError(err.message || "조회 중 오류가 발생했습니다.");
+        convRowsOriginal = [];
+        setConvUpdatedInfo(null);
+        resetConvFilters();
+        renderConvRows([]);
+      } finally {
+        convBtnApply.disabled = false;
+      }
+    });
+  }
+
+  // ── 환산률/수정률 필터 변경 ─────────────────────────────────────
+  convFilterEls.forEach(function (sel) {
+    sel.addEventListener("change", applyConvView);
+  });
+
+  if (convKeyword) {
+    convKeyword.addEventListener("input", applyConvView);
+  }
+
+  // ── 환산률/수정률 컬럼 정렬 ─────────────────────────────────────
+  convSortBtns.forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      const key = btn.dataset.sortKey || "";
+      if (!key) return;
+
+      if (convSortKey === key) {
+        convSortDir = convSortDir === "asc" ? "desc" : "asc";
+      } else {
+        convSortKey = key;
+        convSortDir = "asc";
+      }
+      applyConvView();
+    });
+  });
+
+  // ── 말줄임 셀 클릭 → 전체 텍스트 모달 ───────────────────────────
+  if (convTbody) {
+    convTbody.addEventListener("click", function (e) {
+      const cell = e.target.closest(".re-ellipsis-cell");
+      if (!cell) return;
+
+      const fulltext = cell.dataset.fulltext || cell.textContent || "";
+      if (!fulltext.trim()) return;
+
+      if (fullTextTitleEl) fullTextTitleEl.textContent = cell.dataset.title || "전체 텍스트";
+      if (fullTextBodyEl) fullTextBodyEl.textContent = fulltext;
+
+      if (fullTextModalEl && window.bootstrap?.Modal) {
+        bootstrap.Modal.getOrCreateInstance(fullTextModalEl).show();
+      } else {
+        alert(fulltext);
+      }
+    });
+  }
+
   // ── 삭제 버튼 (이벤트 위임) ────────────────────────────────────────────────
   root.addEventListener("click", async function (e) {
     const btn = e.target.closest(".re-btn-delete");
@@ -220,6 +552,32 @@
       if (modalInsurer) {
         modalInsurer.disabled = true;
         modalInsurer.innerHTML = '<option value="">손생구분을 먼저 선택하세요</option>';
+      }
+    });
+  }
+  // ── 환산률/수정률 모달 초기화 (열릴 때 선택값 리셋) ──────────────────────
+  const convModal = document.getElementById("rateExampleConvModal");
+  if (convModal) {
+    convModal.addEventListener("show.bs.modal", function () {
+      if (convType)    { convType.selectedIndex    = 0; }
+      if (convInsurer) {
+        convInsurer.innerHTML = '<option value="">손생구분을 먼저 선택하세요</option>';
+        convInsurer.disabled  = true;
+      }
+      convRowsOriginal = [];
+      convSortKey = "";
+      convSortDir = "asc";
+      setConvUpdatedInfo(null);
+      resetConvFilters();
+      if (convKeyword) convKeyword.value = "";
+      updateSortButtons();
+      if (convTbody) {
+        convTbody.innerHTML = `
+          <tr>
+            <td colspan="10" class="text-center text-muted py-3">
+              손생구분과 보험사를 선택 후 조회해 주세요.
+            </td>
+          </tr>`;
       }
     });
   }

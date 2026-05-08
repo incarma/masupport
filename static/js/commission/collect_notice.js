@@ -535,7 +535,7 @@ async function _readErrorMessage(res) {
   return text || `요청 실패 (${res.status})`;
 }
 
-async function _postNoticeExport(formData) {
+async function _postNoticeExport(formData, { fallbackFilename = "환수내역.xlsx" } = {}) {
   if (!EXPORT_URL) {
     throw new Error("서버 생성 URL이 설정되지 않았습니다.");
   }
@@ -557,7 +557,7 @@ async function _postNoticeExport(formData) {
   const blob = await res.blob();
   const filename =
     _filenameFromContentDisposition(res.headers.get("Content-Disposition")) ||
-    "환수내역.xlsx";
+    fallbackFilename;
   const rowCount = Number(res.headers.get("X-Collect-Notice-Row-Count") || "0");
 
   return { blob, filename, rowCount };
@@ -599,12 +599,13 @@ async function _onDownloadPdf() {
     const fd = _buildExportFormData(rows, manualPayload);
     fd.set("output", "pdf");
 
-    const { blob, filename } = await _postNoticeExport(fd);
+    const { blob, filename } = await _postNoticeExport(fd, { fallbackFilename: "환수내역.pdf" });
 
+    const pdfFilename = filename.replace(/\.xlsx$/i, ".pdf");
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = filename || "환수내역.pdf";
+    a.download = pdfFilename;
     document.body.appendChild(a);
     a.click();
     a.remove();

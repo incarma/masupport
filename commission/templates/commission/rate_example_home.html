@@ -9,11 +9,12 @@
 {% endblock %}
 
 {% block content %}
-<div class="container my-4" id="rate-example-root"
+<div class="container-fluid my-4" id="rate-example-root"
      data-upload-url="{{ upload_url }}"
+     data-conversion-list-url="{{ conversion_list_url }}"
      data-user-grade="{{ request.user.grade }}">
 
-  <h3 class="fw-bold text-center mb-4" style="color:#003f7d">예시표</h3>
+  <h3 class="fw-bold text-center mb-4 commission-title">예시표</h3>
 
   <!-- ── 보험사 목록 (json_script 주입 — CSP 안전) ─────────────────── -->
   {{ life_insurers|json_script:"life-insurers-data" }}
@@ -45,11 +46,17 @@
         </select>
       </div>
       {% if is_superuser %}
-      <div class="col-6 col-md-2 ms-md-auto d-grid">
-        <button class="btn btn-success btn-sm"
+      <div class="col-6 col-md-2 ms-md-auto d-flex gap-2">
+        <button class="btn btn-success btn-sm flex-fill"
                 data-bs-toggle="modal"
                 data-bs-target="#rateExampleUploadModal">
           파일 추가
+        </button>
+        <button class="btn btn-outline-secondary btn-sm flex-fill"
+                id="re-btn-open-conv"
+                data-bs-toggle="modal"
+                data-bs-target="#rateExampleConvModal">
+          환산률/수정률
         </button>
       </div>
       {% endif %}
@@ -175,6 +182,146 @@
         <button type="button" class="btn btn-outline-secondary btn-sm"
                 data-bs-dismiss="modal">취소</button>
         <button type="button" class="btn btn-primary btn-sm" id="re-btn-save">저장</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ── 환산률/수정률 확인 모달 (superuser 전용) ──────────────────── -->
+<div class="modal fade" id="rateExampleConvModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title fw-bold">환산률/수정률 확인</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="re-conv-error" class="alert alert-danger d-none py-2 mb-3"></div>
+
+        <div class="row g-2 align-items-end mb-3">
+          <div class="col-12 col-md-3">
+            <label class="form-label fw-semibold">손생구분</label>
+            <select class="form-select form-select-sm" id="re-conv-type">
+              <option value="">선택</option>
+              <option value="life">생명보험</option>
+              <option value="nonlife">손해보험</option>
+            </select>
+          </div>
+          <div class="col-12 col-md-3">
+            <label class="form-label fw-semibold">보험사</label>
+            <select class="form-select form-select-sm" id="re-conv-insurer" disabled>
+              <option value="">손생구분을 먼저 선택하세요</option>
+            </select>
+          </div>
+          <div class="col-12 col-md-2 d-grid">
+            <button type="button" class="btn btn-primary btn-sm"
+                    id="re-conv-btn-apply">조회</button>
+          </div>
+        </div>
+
+        <div class="re-conv-meta mb-2" id="re-conv-updated-at">
+          마지막 업데이트 정보 없음
+        </div>
+
+        <div class="re-conv-filter-bar mb-2">
+          <div class="re-conv-filter-item">
+            <label class="form-label mb-1">보종</label>
+            <select class="form-select form-select-sm re-conv-filter" id="re-conv-filter-coverage" data-filter-key="coverage_type">
+              <option value="">전체</option>
+            </select>
+          </div>
+          <div class="re-conv-filter-item">
+            <label class="form-label mb-1">전략유무</label>
+            <select class="form-select form-select-sm re-conv-filter" id="re-conv-filter-strategy" data-filter-key="strategy_flag">
+              <option value="">전체</option>
+            </select>
+          </div>
+          <div class="re-conv-filter-item re-conv-filter-product">
+            <label class="form-label mb-1">상품명</label>
+            <select class="form-select form-select-sm re-conv-filter" id="re-conv-filter-product" data-filter-key="product_name">
+              <option value="">전체</option>
+            </select>
+          </div>
+          <div class="re-conv-filter-item">
+            <label class="form-label mb-1">구분</label>
+            <select class="form-select form-select-sm re-conv-filter" id="re-conv-filter-plan" data-filter-key="plan_type">
+              <option value="">전체</option>
+            </select>
+          </div>
+          <div class="re-conv-filter-item">
+            <label class="form-label mb-1">납기</label>
+            <select class="form-select form-select-sm re-conv-filter" id="re-conv-filter-pay-period" data-filter-key="pay_period">
+              <option value="">전체</option>
+            </select>
+          </div>
+          <div class="re-conv-filter-item re-conv-filter-keyword">
+            <label class="form-label mb-1">키워드 검색</label>
+            <input type="search"
+                   class="form-control form-control-sm"
+                   id="re-conv-keyword"
+                   placeholder="상품명/구분 등 검색">
+          </div>
+        </div>
+
+        <div class="table-responsive re-conv-table-wrap">
+          <table class="table table-sm table-bordered align-middle mb-0" id="re-conv-table">
+            <thead class="table-light">
+              <tr>
+                <th class="text-center">보험사</th>
+                <th class="text-center">
+                  <button type="button" class="re-sort-btn" data-sort-key="coverage_type">보종</button>
+                </th>
+                <th class="text-center">
+                  <button type="button" class="re-sort-btn" data-sort-key="strategy_flag">전략유무</button>
+                </th>
+                <th>
+                  <button type="button" class="re-sort-btn" data-sort-key="product_name">상품명</button>
+                </th>
+                <th class="text-center">
+                  <button type="button" class="re-sort-btn" data-sort-key="plan_type">구분</button>
+                </th>
+                <th class="text-center">
+                  <button type="button" class="re-sort-btn" data-sort-key="pay_period">납기</button>
+                </th>
+                <th class="text-end">1차년</th>
+                <th class="text-end">2차년</th>
+                <th class="text-end">3차년</th>
+                <th class="text-end">4차년</th>
+              </tr>
+            </thead>
+            <tbody id="re-conv-tbody">
+              <tr>
+                <td colspan="10" class="text-center text-muted py-3">
+                  손생구분과 보험사를 선택 후 조회해 주세요.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary btn-sm"
+                data-bs-dismiss="modal">닫기</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 말줄임 셀 전체보기 모달 ───────────────────────────────── -->
+<div class="modal fade" id="reCellFullTextModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title fw-bold" id="re-cell-fulltext-title">전체 텍스트</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="re-fulltext-body" id="re-cell-fulltext-body"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary btn-sm"
+                data-bs-dismiss="modal">닫기</button>
       </div>
     </div>
   </div>

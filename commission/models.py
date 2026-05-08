@@ -674,3 +674,55 @@ class RateExample(models.Model):
             f"[{self.get_insurer_type_display()}]"
             f" {self.insurer} - {self.get_category_display()}"
         )
+    
+
+# =============================================================================
+# RateExampleConversionRow — 예시표 환산률/수정률 정규화 테이블
+# =============================================================================
+class RateExampleConversionRow(models.Model):
+    """
+    예시표 환산률/수정률 정규화 행.
+
+    [설계 원칙]
+    - RateExample은 원본 파일 메타/다운로드용으로 유지한다.
+    - 본 모델은 조회·계산용 정규화 master 역할을 담당한다.
+    - 동일 보험사/손생구분/category는 최신 업로드 기준으로 교체된다.
+    """
+
+    source_file = models.ForeignKey(
+        RateExample,
+        on_delete=models.CASCADE,
+        related_name="conversion_rows",
+        verbose_name="원본 예시표 파일",
+    )
+    source_sheet = models.CharField(max_length=100, blank=True, default="", verbose_name="원본시트")
+    source_row_no = models.PositiveIntegerField(default=0, verbose_name="원본행번호")
+
+    insurer_type = models.CharField(max_length=10, db_index=True, verbose_name="손생구분")
+    category = models.CharField(max_length=10, db_index=True, verbose_name="구분")
+    insurer = models.CharField(max_length=30, db_index=True, verbose_name="보험사")
+
+    coverage_type = models.CharField(max_length=50, blank=True, default="", verbose_name="보종")
+    strategy_flag = models.CharField(max_length=30, blank=True, default="", verbose_name="전략유무")
+    product_name = models.CharField(max_length=255, blank=True, default="", verbose_name="상품명")
+    plan_type = models.CharField(max_length=100, blank=True, default="", verbose_name="구분")
+    pay_period = models.CharField(max_length=50, blank=True, default="", verbose_name="납기")
+
+    year1 = models.DecimalField(max_digits=12, decimal_places=4, null=True, blank=True, verbose_name="1차년")
+    year2 = models.DecimalField(max_digits=12, decimal_places=4, null=True, blank=True, verbose_name="2차년")
+    year3 = models.DecimalField(max_digits=12, decimal_places=4, null=True, blank=True, verbose_name="3차년")
+    year4 = models.DecimalField(max_digits=12, decimal_places=4, null=True, blank=True, verbose_name="4차년")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["insurer_type", "insurer", "coverage_type", "product_name", "pay_period", "id"]
+        verbose_name = "예시표 환산률/수정률 정규화 행"
+        verbose_name_plural = "예시표 환산률/수정률 정규화 행"
+        indexes = [
+            models.Index(fields=["insurer_type", "category", "insurer"], name="idx_re_conv_scope"),
+            models.Index(fields=["source_file", "source_sheet"], name="idx_re_conv_source"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.insurer}/{self.coverage_type}/{self.product_name}/{self.pay_period}"
