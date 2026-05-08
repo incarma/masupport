@@ -18,9 +18,13 @@ from commission.services.rate_example_normalizers.life_db import (
 from commission.services.rate_example_normalizers.life_im import (
     build_life_im_conversion_rows,
 )
+from commission.services.rate_example_normalizers.life_kb import (
+    build_life_kb_general_conversion_rows,
+)
 
 __all__ = [
     "build_life_abl_conversion_rows",
     "build_life_db_conversion_rows",
     "build_life_im_conversion_rows",
+    "build_life_kb_general_conversion_rows",
 ]

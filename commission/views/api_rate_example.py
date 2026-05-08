@@ -26,6 +26,13 @@ def rate_example_upload(request):
         insurer_type=request.POST.get("insurer_type", "").strip(),
         category=request.POST.get("category", "").strip(),
         insurer=request.POST.get("insurer", "").strip(),
+        # KB 생명보험 환산률/수정률 전용 상품 구분.
+        # 현재 지원값: general(일반상품), health(건강보험: UI만 활성화, 정규화는 추후)
+        product_kind=request.POST.get("product_kind", "").strip(),
+        # 정규화 데이터 저장 방식:
+        # - replace: 기존 데이터 삭제 후 새 데이터 적재
+        # - append: 기존 데이터 유지 후 새 데이터 추가
+        normalize_mode=request.POST.get("normalize_mode", "replace").strip() or "replace",
         uploaded_file=request.FILES.get("file"),
         actor=request.user,
     )
@@ -45,6 +52,8 @@ def rate_example_upload(request):
                 "category": instance.category,
                 "original_name": instance.original_name,
                 "normalized_count": normalized_count,
+                "product_kind": result.get("product_kind", ""),
+                "normalize_mode": result.get("normalize_mode", "replace"),
             },
             success=True,
         )
