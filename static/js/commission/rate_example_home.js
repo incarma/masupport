@@ -58,7 +58,7 @@
     });
   }
 
-  // ── 환산률/수정률 정규화 테이블 렌더링 ───────────────────────────────
+  // ── 환산율/수정률 정규화 테이블 렌더링 ───────────────────────────────
   function escapeHtml(value) {
     return String(value ?? "")
       .replace(/&/g, "&amp;")
@@ -148,24 +148,18 @@
     });
   }
 
-  // ── 모달: 손생 변경 → 보험사 드랍다운 교체 ────────────────────────────────
-  const modalType = document.getElementById("re-modal-type");
+  // ── 업로드 모달: 생보 전용 보험사 선택 ────────────────────────────────
   const modalInsurer = document.getElementById("re-modal-insurer");
-  const modalCat = document.getElementById("re-modal-cat");
   const modalProductKindWrap = document.getElementById("re-modal-product-kind-wrap");
   const modalProductKind = document.getElementById("re-modal-product-kind");
 
-  // ── KB 생명보험 환산률/수정률 상품 구분 활성화 ─────────────────────────
+  // ── KB 생명보험 환산율/수정률 상품 구분 활성화 ─────────────────────────
   function updateKbProductKindVisibility() {
     if (!modalProductKindWrap || !modalProductKind) return;
 
-    const insurerType = modalType?.value || "";
-    const category = modalCat?.value || "";
     const insurer = modalInsurer?.value || "";
 
     const shouldShow = (
-      insurerType === "life" &&
-      category === "conv" &&
       insurer === "KB"
     );
 
@@ -177,40 +171,23 @@
     }
   }
 
-  if (modalType && modalInsurer) {
-    modalType.addEventListener("change", function () {
-      const val = this.value;
-      modalInsurer.innerHTML = '<option value="">선택</option>';
-      const list = val === "life" ? LIFE_INSURERS
-                  : val === "nonlife" ? NONLIFE_INSURERS
-                  : [];
-      if (list.length === 0) {
-        modalInsurer.disabled = true;
-        modalInsurer.innerHTML = '<option value="">손생구분을 먼저 선택하세요</option>';
-        updateKbProductKindVisibility();
-        return;
-      }
-      modalInsurer.disabled = false;
-      list.forEach(function (name) {
-        const opt = document.createElement("option");
-        opt.value = name;
-        opt.textContent = name;
-        modalInsurer.appendChild(opt);
-      });
-      updateKbProductKindVisibility();
-    });
-  }
-
-  if (modalCat) {
-    modalCat.addEventListener("change", updateKbProductKindVisibility);
-  }
-
   if (modalInsurer) {
     modalInsurer.addEventListener("change", updateKbProductKindVisibility);
   }
 
-  // ── 환산률/수정률 모달: 손생 변경 → 보험사 드랍다운 교체 ──────────────────
-  const convType    = document.getElementById("re-conv-type");
+  function populateLifeInsurerSelect(sel, placeholder) {
+    if (!sel) return;
+    sel.disabled = false;
+    sel.innerHTML = `<option value="">${placeholder || "선택"}</option>`;
+    LIFE_INSURERS.forEach(function (name) {
+      const opt = document.createElement("option");
+      opt.value = name;
+      opt.textContent = name;
+      sel.appendChild(opt);
+    });
+  }
+
+  // ── 환산율 확인 모달: 생보 전용 보험사 선택 ──────────────────
   const convInsurer = document.getElementById("re-conv-insurer");
   const convTbody   = document.getElementById("re-conv-tbody");
   const convErrBox  = document.getElementById("re-conv-error");
@@ -225,31 +202,6 @@
   let convRowsOriginal = [];
   let convSortKey = "";
   let convSortDir = "asc";
-
-  if (convType && convInsurer) {
-    convType.addEventListener("change", function () {
-      const val = this.value;
-      convInsurer.innerHTML = '<option value="">선택</option>';
-
-      const list = val === "life" ? LIFE_INSURERS
-                  : val === "nonlife" ? NONLIFE_INSURERS
-                  : [];
-
-      if (list.length === 0) {
-        convInsurer.disabled = true;
-        convInsurer.innerHTML = '<option value="">손생구분을 먼저 선택하세요</option>';
-        return;
-      }
-
-      convInsurer.disabled = false;
-      list.forEach(function (name) {
-        const opt = document.createElement("option");
-        opt.value = name;
-        opt.textContent = name;
-        convInsurer.appendChild(opt);
-      });
-    });
-  }
 
   function setConvUpdatedInfo(data) {
     if (!convUpdatedAt) return;
@@ -403,8 +355,8 @@
   if (btnSave) {
     btnSave.addEventListener("click", async function () {
       clearError();
-      const insurerType = document.getElementById("re-modal-type")?.value || "";
-      const category = document.getElementById("re-modal-cat")?.value || "";
+      const insurerType = "life";
+      const category = "conv";
       const insurer = modalInsurer?.value || "";
       const productKind = modalProductKind?.value || "";
       const normalizeMode = document.querySelector(
@@ -413,12 +365,8 @@
       const fileInput = document.getElementById("re-modal-file");
       const file = fileInput?.files[0];
 
-      if (!insurerType) { showError("손생구분을 선택해 주세요."); return; }
-      if (!category) { showError("구분을 선택해 주세요."); return; }
       if (!insurer) { showError("보험사를 선택해 주세요."); return; }
       if (
-        insurerType === "life" &&
-        category === "conv" &&
         insurer === "KB" &&
         !productKind
       ) {
@@ -466,22 +414,18 @@
     });
   }
 
-  // ── 환산률/수정률 확인 버튼 → 정규화 데이터 조회 ─────────────────────────
+  // ── 환산율/수정률 확인 버튼 → 정규화 데이터 조회 ─────────────────────────
   const convBtnApply = document.getElementById("re-conv-btn-apply");
 
   if (convBtnApply) {
     convBtnApply.addEventListener("click", async function () {
-      const typeVal    = convType    ? convType.value    : "";
+      const typeVal    = "life";
       const insurerVal = convInsurer ? convInsurer.value : "";
 
       clearConvError();
 
       if (!CONVERSION_LIST_URL) {
         showConvError("조회 URL이 설정되지 않았습니다.");
-        return;
-      }
-      if (!typeVal) {
-        showConvError("손생구분을 선택해 주세요.");
         return;
       }
       if (!insurerVal) {
@@ -528,7 +472,7 @@
     });
   }
 
-  // ── 환산률/수정률 필터 변경 ─────────────────────────────────────
+  // ── 환산율/수정률 필터 변경 ─────────────────────────────────────
   convFilterEls.forEach(function (sel) {
     sel.addEventListener("change", applyConvView);
   });
@@ -587,7 +531,7 @@
     });
   }
 
-  // ── 환산률/수정률 컬럼 정렬 ─────────────────────────────────────
+  // ── 환산율/수정률 컬럼 정렬 ─────────────────────────────────────
   convSortBtns.forEach(function (btn) {
     btn.addEventListener("click", function () {
       const key = btn.dataset.sortKey || "";
@@ -664,8 +608,6 @@
     uploadModal.addEventListener("show.bs.modal", function () {
       clearError();
       const form = [
-        "re-modal-type",
-        "re-modal-cat",
         "re-modal-insurer",
         "re-modal-product-kind",
         "re-modal-file",
@@ -677,8 +619,7 @@
         if (el.tagName === "INPUT") el.value = "";
       });
       if (modalInsurer) {
-        modalInsurer.disabled = true;
-        modalInsurer.innerHTML = '<option value="">손생구분을 먼저 선택하세요</option>';
+        populateLifeInsurerSelect(modalInsurer, "선택");
       }
 
       const replaceMode = document.getElementById("re-modal-normalize-mode-replace");
@@ -689,14 +630,12 @@
       updateKbProductKindVisibility();
     });
   }
-  // ── 환산률/수정률 모달 초기화 (열릴 때 선택값 리셋) ──────────────────────
+  // ── 환산율/수정률 모달 초기화 (열릴 때 선택값 리셋) ──────────────────────
   const convModal = document.getElementById("rateExampleConvModal");
   if (convModal) {
     convModal.addEventListener("show.bs.modal", function () {
-      if (convType)    { convType.selectedIndex    = 0; }
       if (convInsurer) {
-        convInsurer.innerHTML = '<option value="">손생구분을 먼저 선택하세요</option>';
-        convInsurer.disabled  = true;
+        populateLifeInsurerSelect(convInsurer, "선택");
       }
       convRowsOriginal = [];
       convSortKey = "";
@@ -709,7 +648,7 @@
         convTbody.innerHTML = `
           <tr>
             <td colspan="9" class="text-center text-muted py-3">
-              손생구분과 보험사를 선택 후 조회해 주세요.
+              보험사를 선택 후 조회해 주세요.
             </td>
           </tr>`;
       }

@@ -22,13 +22,26 @@ logger = logging.getLogger(__name__)
 @grade_required("superuser", forbidden_template=None)
 @require_POST
 def rate_example_upload(request):
+    insurer_type = request.POST.get("insurer_type", "").strip()
+    category = request.POST.get("category", "").strip()
+    insurer = request.POST.get("insurer", "").strip()
+    product_kind = request.POST.get("product_kind", "").strip()
+
+    # 상품 구분은 KB 전용이다.
+    # KDB/교보는 보험사 선택만으로 각 normalizer가 동작한다.
+    if product_kind and insurer != "KB":
+        return _json_error("상품 구분은 KB 환산율 업데이트에서만 사용할 수 있습니다.")
+
+    if insurer == "KB" and product_kind not in {"general", "health"}:
+        return _json_error("KB 상품 구분을 선택해 주세요.")
+
     result = RateExampleService.create(
-        insurer_type=request.POST.get("insurer_type", "").strip(),
-        category=request.POST.get("category", "").strip(),
-        insurer=request.POST.get("insurer", "").strip(),
-        # KB 생명보험 환산률/수정률 전용 상품 구분.
-        # 현재 지원값: general(일반상품), health(건강보험: UI만 활성화, 정규화는 추후)
-        product_kind=request.POST.get("product_kind", "").strip(),
+        insurer_type=insurer_type,
+        category=category,
+        insurer=insurer,
+        # KB 생명보험 환산율/수정률 전용 상품 구분.
+        # 현재 지원값: general(일반상품), health(건강보험)
+        product_kind=product_kind,
         # 정규화 데이터 저장 방식:
         # - replace: 기존 데이터 삭제 후 새 데이터 적재
         # - append: 기존 데이터 유지 후 새 데이터 추가

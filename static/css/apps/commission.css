@@ -519,7 +519,7 @@
   table-layout: fixed;
 }
 
-/* 환산률/수정률 확인 모달 */
+/* 환산율/수정률 확인 모달 */
 #rate-example-root #rateExampleConvModal .re-conv-section-label {
   font-size: 0.78rem;
   font-weight: 700;

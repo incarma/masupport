@@ -18,7 +18,7 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('insurer_type', models.CharField(choices=[('life', '생명보험'), ('nonlife', '손해보험')], max_length=10, verbose_name='손생구분')),
-                ('category', models.CharField(choices=[('conv', '환산률/수정률'), ('pay', '지급률')], max_length=10, verbose_name='구분')),
+                ('category', models.CharField(choices=[('conv', '환산율/수정률'), ('pay', '지급률')], max_length=10, verbose_name='구분')),
                 ('insurer', models.CharField(max_length=30, verbose_name='보험사')),
                 ('file', models.FileField(upload_to='commission/rate_examples/%Y/%m/', verbose_name='첨부파일')),
                 ('original_name', models.CharField(blank=True, default='', max_length=255, verbose_name='원본파일명')),

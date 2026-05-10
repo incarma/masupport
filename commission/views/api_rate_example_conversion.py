@@ -2,10 +2,10 @@
 from __future__ import annotations
 
 """
-예시표 환산률/수정률 정규화 데이터 조회 API.
+예시표 환산율/수정률 정규화 데이터 조회 API.
 
 역할:
-- rate_example_home.html의 환산률/수정률 모달에서 테이블 조회용 JSON 제공
+- rate_example_home.html의 환산율/수정률 모달에서 테이블 조회용 JSON 제공
 - 현재는 생명보험/ABL 정규화 결과 조회에 사용
 """
 
@@ -48,7 +48,7 @@ def _format_decimal(value) -> str:
     if "." in text:
         text = text.rstrip("0").rstrip(".")
     
-    # raw 환산률이 정수처럼 보여도 화면에서는 실수 형태로 명시한다.
+    # raw 환산율이 정수처럼 보여도 화면에서는 실수 형태로 명시한다.
     if text and "." not in text:
         text = f"{text}.0"
     
@@ -57,7 +57,7 @@ def _format_decimal(value) -> str:
 
 def _format_rate_percent(value) -> str:
     """
-    환산률/수정률 화면 표시용 포맷.
+    환산율/수정률 화면 표시용 포맷.
 
     저장 정책:
     - ABL/DB/IM 모두 DB에는 백분율 수치 기준 Decimal로 저장한다.
@@ -65,7 +65,7 @@ def _format_rate_percent(value) -> str:
     - 모달 출력 시에는 사용자에게 raw 의미가 명확하도록 '%'를 붙인다.
 
     계산 정책:
-    - 보험료 × 환산률 × 지급률 × 수수료율 계산 시에는
+    - 보험료 × 환산율 × 지급률 × 수수료율 계산 시에는
       row.year1 / Decimal("100") 형태로 비례 적용한다.
     """
     text = _format_decimal(value)
@@ -76,7 +76,7 @@ def _format_rate_percent(value) -> str:
 
 def _format_percent_decimal(value) -> str:
     """
-    백분율 기준으로 저장된 환산률 값을 화면 표시용 문자열로 변환한다.
+    백분율 기준으로 저장된 환산율 값을 화면 표시용 문자열로 변환한다.
 
     사용 대상:
     - IM normalizer는 raw 표시값이 126%인 경우 DB에 Decimal("126")으로 저장한다.
@@ -100,7 +100,7 @@ def _format_percent_decimal(value) -> str:
 
 def _format_rate_value(row: RateExampleConversionRow, value) -> str:
     """
-    보험사별 환산률 표시 정책.
+    보험사별 환산율 표시 정책.
 
     - IM: raw 백분율 표시와 동일하게 126% 형태
     - 그 외 기존 보험사: 기존 실수/정수 표시 정책 유지
@@ -182,7 +182,7 @@ def rate_example_conversion_list(request):
 @require_POST
 def rate_example_conversion_strategy_update(request):
     """
-    환산률/수정률 정규화 row의 전략유무 값을 저장한다.
+    환산율/수정률 정규화 row의 전략유무 값을 저장한다.
 
     - DB 구조 변경 없음: RateExampleConversionRow.strategy_flag 재사용
     - 허용값 외 입력 차단

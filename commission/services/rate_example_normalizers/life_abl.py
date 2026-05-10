@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 """
-ABL생명 환산률/수정률 정규화 모듈.
+ABL생명 환산율/수정률 정규화 모듈.
 
 적용 대상:
 - RateExample.insurer_type == life
@@ -85,7 +85,7 @@ def _to_decimal(value):
 
 
 def _has_any_rate(*values) -> bool:
-    """연차별 환산률 값이 하나라도 있으면 데이터 행으로 판단한다."""
+    """연차별 환산율 값이 하나라도 있으면 데이터 행으로 판단한다."""
     return any(_to_decimal(v) is not None for v in values)
 
 
@@ -103,7 +103,7 @@ def _normalize_saving_sheet(
 
     주요 기능:
     - A열 상품명, B열 구분이 비어 있으면 직전 값을 이어받는다.
-    - 납기와 연차별 환산률이 모두 없는 행은 제외한다.
+    - 납기와 연차별 환산율이 모두 없는 행은 제외한다.
     """
     rows: list[RateExampleConversionRow] = []
     last_product = ""
@@ -164,7 +164,7 @@ def _normalize_protection_sheet(
     주요 기능:
     - A열 상품명, B열 구분이 비어 있으면 직전 값을 이어받는다.
     - 상품명에 "종신"이 포함되면 보종을 "종신/CI"로 저장한다.
-    - 납기와 연차별 환산률이 모두 없는 행은 제외한다.
+    - 납기와 연차별 환산율이 모두 없는 행은 제외한다.
     """
     rows: list[RateExampleConversionRow] = []
     last_product = ""
@@ -234,7 +234,7 @@ def build_life_abl_conversion_rows(
         if sheet_name not in wb.sheetnames
     ]
     if missing:
-        raise ValueError(f"ABL 환산률/수정률 필수 시트가 없습니다: {', '.join(missing)}")
+        raise ValueError(f"ABL 환산율/수정률 필수 시트가 없습니다: {', '.join(missing)}")
 
     normalized_rows: list[RateExampleConversionRow] = []
     normalized_rows.extend(_normalize_saving_sheet(example, wb[SHEET_ABL_SAVING]))
