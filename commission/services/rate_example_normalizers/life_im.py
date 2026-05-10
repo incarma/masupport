@@ -2,10 +2,10 @@
 from __future__ import annotations
 
 """
-IM생명 환산률/수정률 raw 정규화.
+IM생명 환산율/수정률 raw 정규화.
 
 대상:
-- 생명보험 / 환산률·수정률 / IM / xlsx
+- 생명보험 / 환산율·수정률 / IM / xlsx
 
 정규화 규칙:
 - 첫 번째 시트 "(총괄)환산성적표"만 사용한다.
@@ -70,7 +70,7 @@ def _format_excel_display_text(cell) -> str:
 
 def _to_percent_decimal(cell):
     """
-    환산률 값을 백분율 기준 Decimal로 변환한다.
+    환산율 값을 백분율 기준 Decimal로 변환한다.
 
     저장 기준:
     - raw 표시값이 126%이면 DB에는 Decimal("126") 저장
@@ -147,7 +147,7 @@ def build_life_im_conversion_rows(
     wb: Workbook,
 ) -> list[RateExampleConversionRow]:
     """
-    IM생명 환산률/수정률 정규화 row 생성.
+    IM생명 환산율/수정률 정규화 row 생성.
 
     반환:
     - DB 저장 전 RateExampleConversionRow 인스턴스 목록
@@ -181,13 +181,13 @@ def build_life_im_conversion_rows(
 
         # ── 제외 조건 ─────────────────────────────────────────
         # IM raw의 L열 "기본형" 값이 "미판매"인 주계약 행은
-        # 환산률 계산에 사용할 수 없으므로 정규화 대상에서 제외한다.
+        # 환산율 계산에 사용할 수 없으므로 정규화 대상에서 제외한다.
         if basic_rate_raw == "미판매":
             continue
 
         basic_rate = _to_percent_decimal(basic_rate_cell)
 
-        # 상품명과 환산률이 모두 없으면 의미 없는 행으로 보고 제외한다.
+        # 상품명과 환산율이 모두 없으면 의미 없는 행으로 보고 제외한다.
         if not product_name and basic_rate is None:
             continue
 

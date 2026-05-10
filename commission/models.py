@@ -611,16 +611,16 @@ class RateExample(models.Model):
     ]
 
     # ── 구분 ─────────────────────────────────────────────────
-    CAT_CONV = "conv"   # 환산률/수정률
+    CAT_CONV = "conv"   # 환산율/수정률
     CAT_PAY  = "pay"    # 지급률
     CAT_CHOICES = [
-        (CAT_CONV, "환산률/수정률"),
+        (CAT_CONV, "환산율/수정률"),
         (CAT_PAY,  "지급률"),
     ]
 
     # ── 보험사 허용 목록 ─────────────────────────────────────
     LIFE_INSURERS = [
-        "ABL", "DB", "IM", "KB", "교보", "농협", "동양",
+        "ABL", "DB", "IM", "KB", "KDB", "교보", "농협", "동양",
         "라이나", "메트", "미래", "삼성", "신한", "처브",
         "카디프", "푸본현대", "하나", "한화", "흥국",
     ]
@@ -677,11 +677,11 @@ class RateExample(models.Model):
     
 
 # =============================================================================
-# RateExampleConversionRow — 예시표 환산률/수정률 정규화 테이블
+# RateExampleConversionRow — 예시표 환산율/수정률 정규화 테이블
 # =============================================================================
 class RateExampleConversionRow(models.Model):
     """
-    예시표 환산률/수정률 정규화 행.
+    예시표 환산율/수정률 정규화 행.
 
     [설계 원칙]
     - RateExample은 원본 파일 메타/다운로드용으로 유지한다.
@@ -717,8 +717,8 @@ class RateExampleConversionRow(models.Model):
 
     class Meta:
         ordering = ["insurer_type", "insurer", "coverage_type", "product_name", "pay_period", "id"]
-        verbose_name = "예시표 환산률/수정률 정규화 행"
-        verbose_name_plural = "예시표 환산률/수정률 정규화 행"
+        verbose_name = "예시표 환산율/수정률 정규화 행"
+        verbose_name_plural = "예시표 환산율/수정률 정규화 행"
         indexes = [
             models.Index(fields=["insurer_type", "category", "insurer"], name="idx_re_conv_scope"),
             models.Index(fields=["source_file", "source_sheet"], name="idx_re_conv_source"),

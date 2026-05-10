@@ -2,11 +2,11 @@
 from __future__ import annotations
 
 """
-KB 생명보험 환산률/수정률 정규화 모듈.
+KB 생명보험 환산율/수정률 정규화 모듈.
 
 지원 범위:
 - 손생구분: 생명보험
-- 구분: 환산률/수정률
+- 구분: 환산율/수정률
 - 보험사: KB
 - 상품 구분: 일반상품
 
@@ -27,7 +27,7 @@ KB 생명보험 환산률/수정률 정규화 모듈.
    - 가입금액(E열)에 데이터가 있으면 E열 사용
    - D/E 모두 "-"이면 공란
 6. 납기: 납입기간(C열)
-7. 환산률:
+7. 환산율:
    - 1차년: F열
    - 2차년: G열
    - 3차년: H열
@@ -36,6 +36,7 @@ KB 생명보험 환산률/수정률 정규화 모듈.
 
 from decimal import Decimal, InvalidOperation
 import logging
+import re
 from typing import Any
 
 from openpyxl.workbook.workbook import Workbook
@@ -47,6 +48,7 @@ logger = logging.getLogger(__name__)
 
 
 RIDER_KEYWORD = "특약"
+PAREN_RE = re.compile(r"\(([^()]*)\)")
 
 
 def _clean_text(value: Any) -> str:
@@ -82,7 +84,7 @@ def _is_blank_or_dash(value: Any) -> bool:
 
 def _to_decimal(value: Any) -> Decimal | None:
     """
-    환산률 셀을 Decimal로 변환한다.
+    환산율 셀을 Decimal로 변환한다.
 
     처리 예:
     - 100.0 → Decimal("100.0")
@@ -111,7 +113,7 @@ def _to_decimal(value: Any) -> Decimal | None:
 
 def _rate_cell_to_decimal(cell) -> Decimal | None:
     """
-    KB 환산률 셀을 raw 화면 표시 기준 백분율 숫자로 변환한다.
+    KB 환산율 셀을 raw 화면 표시 기준 백분율 숫자로 변환한다.
 
     Excel 백분율 서식 셀은 openpyxl에서 표시값 336.0%가 아니라
     실제값 3.36으로 읽힌다. number_format에 '%'가 있으면 ×100 해서
@@ -130,7 +132,7 @@ def _rate_cell_to_decimal(cell) -> Decimal | None:
 
 
 def _has_any_rate_cell(*cells: Any) -> bool:
-    """1~4차년 셀 중 하나라도 유효 환산률이 있는지 확인한다."""
+    """1~4차년 셀 중 하나라도 유효 환산율이 있는지 확인한다."""
     return any(_rate_cell_to_decimal(cell) is not None for cell in cells)
 
 
@@ -153,6 +155,28 @@ def _coverage_type(product_name: str) -> str:
     if "정기" in name:
         return "종신/CI"
     return "종신/CI"
+
+
+def _split_product_and_plan(raw_product: Any) -> tuple[str, str]:
+    """
+    KB 건강보험 상품(C열)을 상품명/구분으로 분리한다.
+
+    - 상품명: 괄호 밖 텍스트
+    - 구분: 괄호 안 텍스트 전체, 2개 이상이면 콤마로 결합
+    """
+    text = _clean_text(raw_product)
+    if not text:
+        return "", ""
+
+    plans = [
+        _clean_text(match.group(1))
+        for match in PAREN_RE.finditer(text)
+        if _clean_text(match.group(1))
+    ]
+    product_name = PAREN_RE.sub("", text).strip()
+    product_name = re.sub(r"\s+", " ", product_name)
+
+    return product_name, ", ".join(plans)
 
 
 def _plan_type(*, age_premium: Any, min_premium: Any, insured_amount: Any) -> str:
@@ -210,7 +234,7 @@ def build_life_kb_general_conversion_rows(
     wb: Workbook,
 ) -> list[RateExampleConversionRow]:
     """
-    KB 생명보험 일반상품 환산률/수정률 raw workbook을 정규화 행 목록으로 변환한다.
+    KB 생명보험 일반상품 환산율/수정률 raw workbook을 정규화 행 목록으로 변환한다.
 
     DB 저장은 호출부(rate_example_normalizer.py)가 담당한다.
     """
@@ -264,6 +288,75 @@ def build_life_kb_general_conversion_rows(
                         min_premium=min_premium,
                         insured_amount=insured_amount,
                     ),
+                    pay_period=pay_period,
+                    year1=_rate_cell_to_decimal(year1_cell),
+                    year2=_rate_cell_to_decimal(year2_cell),
+                    year3=_rate_cell_to_decimal(year3_cell),
+                    year4=_rate_cell_to_decimal(year4_cell),
+                )
+            )
+
+    return rows
+
+
+def build_life_kb_health_conversion_rows(
+    example: RateExample,
+    wb: Workbook,
+) -> list[RateExampleConversionRow]:
+    """
+    KB 생명보험 건강보험 환산율/수정률 raw workbook을 정규화 행 목록으로 변환한다.
+
+    규칙:
+    - 모든 시트 정규화
+    - 각 시트 1~3행 제외
+    - B열 구분 값에 '특약'이 포함된 행부터 해당 시트 하단 전체 제외
+    - 보험사: KB
+    - 보종: 기타(보장성)
+    - 상품명: C열 괄호 밖 텍스트
+    - 구분: C열 괄호 안 텍스트 전체, 2개 이상이면 콤마 결합
+    - 납기: D열
+    - 1~4차년: E~H열
+    """
+    rows: list[RateExampleConversionRow] = []
+
+    for ws in wb.worksheets:
+        for row_no in range(4, ws.max_row + 1):
+            raw_type = _clean_text(ws.cell(row_no, 2).value)       # B: 구분
+            raw_product = ws.cell(row_no, 3).value                 # C: 상품
+            pay_period = _clean_text(ws.cell(row_no, 4).value)     # D: 납입기간
+            year1_cell = ws.cell(row_no, 5)                        # E: 1차년
+            year2_cell = ws.cell(row_no, 6)                        # F: 2차년
+            year3_cell = ws.cell(row_no, 7)                        # G: 3차년
+            year4_cell = ws.cell(row_no, 8)                        # H: 4차년
+
+            if RIDER_KEYWORD in raw_type:
+                break
+
+            product_name, plan_type = _split_product_and_plan(raw_product)
+
+            if not product_name and not pay_period and not _has_any_rate_cell(
+                year1_cell,
+                year2_cell,
+                year3_cell,
+                year4_cell,
+            ):
+                continue
+
+            if not product_name:
+                continue
+
+            rows.append(
+                RateExampleConversionRow(
+                    source_file=example,
+                    source_sheet=ws.title,
+                    source_row_no=row_no,
+                    insurer_type=example.insurer_type,
+                    category=example.category,
+                    insurer="KB",
+                    coverage_type="기타(보장성)",
+                    strategy_flag="",
+                    product_name=product_name,
+                    plan_type=plan_type,
                     pay_period=pay_period,
                     year1=_rate_cell_to_decimal(year1_cell),
                     year2=_rate_cell_to_decimal(year2_cell),

@@ -67,9 +67,9 @@ class RateExampleService:
             }
         
         # ─────────────────────────────────────────────────────
-        # KB 생명보험 환산률/수정률 상품 구분 검증
+        # KB 생명보험 환산율/수정률 상품 구분 검증
         # - DB 모델 추가 없이 업로드 분기값으로만 사용
-        # - 현재는 일반상품만 지원
+        # - 현재 지원: 일반상품, 건강보험
         # ─────────────────────────────────────────────────────
         if (
             insurer_type == RateExample.TYPE_LIFE
@@ -82,12 +82,19 @@ class RateExampleService:
                     "message": "KB 상품 구분 값이 올바르지 않습니다.",
                 }
 
-            if product_kind == "health":
-                return {
-                    "ok": False,
-                    "message": "KB 건강보험 정규화는 아직 지원되지 않습니다.",
-                }
         else:
+            product_kind = ""
+
+        # ─────────────────────────────────────────────────────
+        # KDB/교보 생명보험 환산율/수정률
+        # - 별도 상품 구분 없이 보험사 선택만으로 정규화한다.
+        # - product_kind는 빈 값으로 고정한다.
+        # ─────────────────────────────────────────────────────
+        if (
+            insurer_type == RateExample.TYPE_LIFE
+            and category == RateExample.CAT_CONV
+            and insurer in {"KDB", "교보"}
+        ):
             product_kind = ""
 
         err = RateExampleService._validate_file(uploaded_file)
@@ -104,7 +111,7 @@ class RateExampleService:
         )
         
         # ── 정규화 처리 ─────────────────────────────────────────────
-        # 현재 지원 대상: 생명보험 / 환산률·수정률 / ABL / xlsx
+        # 현재 지원 대상: 생명보험 / 환산율·수정률 / ABL / xlsx
         # import를 함수 내부에 두어 models/services 순환 import 위험을 줄인다.
         normalized_count = 0
         try:

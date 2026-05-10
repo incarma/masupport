@@ -36,7 +36,7 @@
         <label class="form-label mb-1 fw-semibold">구분</label>
         <select class="form-select form-select-sm" id="re-filter-cat">
           <option value="">전체</option>
-          <option value="환산률/수정률">환산률/수정률</option>
+          <option value="환산율/수정률">환산율/수정률</option>
           <option value="지급률">지급률</option>
         </select>
       </div>
@@ -51,13 +51,13 @@
         <button class="btn btn-success btn-sm flex-fill"
                 data-bs-toggle="modal"
                 data-bs-target="#rateExampleUploadModal">
-          파일 추가
+          환산율 업데이트
         </button>
         <button class="btn btn-outline-secondary btn-sm flex-fill"
                 id="re-btn-open-conv"
                 data-bs-toggle="modal"
                 data-bs-target="#rateExampleConvModal">
-          환산률/수정률
+          환산율 확인
         </button>
       </div>
       {% endif %}
@@ -144,36 +144,20 @@
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title fw-bold">예시표 파일 추가</h5>
+        <h5 class="modal-title fw-bold">환산율 업데이트</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
         <div id="re-upload-error" class="alert alert-danger d-none py-2 mb-3"></div>
         <div class="mb-3">
-          <label class="form-label fw-semibold">손생구분</label>
-          <select class="form-select form-select-sm" id="re-modal-type">
-            <option value="">선택</option>
-            <option value="life">생명보험</option>
-            <option value="nonlife">손해보험</option>
-          </select>
-        </div>
-        <div class="mb-3">
-          <label class="form-label fw-semibold">구분</label>
-          <select class="form-select form-select-sm" id="re-modal-cat">
-            <option value="">선택</option>
-            <option value="conv">환산률/수정률</option>
-            <option value="pay">지급률</option>
-          </select>
-        </div>
-        <div class="mb-3">
           <label class="form-label fw-semibold">보험사</label>
-          <select class="form-select form-select-sm" id="re-modal-insurer" disabled>
-            <option value="">손생구분을 먼저 선택하세요</option>
+          <select class="form-select form-select-sm" id="re-modal-insurer">
+            <option value="">선택</option>
           </select>
         </div>
         <!--
-          KB 생명보험 환산률/수정률 전용 상품 구분.
-          - 생명보험 > 환산률/수정률 > KB 선택 시에만 활성화
+          KB 생명보험 환산율/수정률 전용 상품 구분.
+          - 생명보험 > 환산율/수정률 > KB 선택 시에만 활성화
           - 서버에는 product_kind 값으로 전달한다.
           - 현재 정규화 지원: general(일반상품)
         -->
@@ -184,7 +168,7 @@
             <option value="general">일반상품</option>
             <option value="health">건강보험</option>
           </select>
-          <div class="form-text">KB 환산률/수정률 파일 업로드 시 선택합니다.</div>
+          <div class="form-text">KB 환산율/수정률 파일 업로드 시 선택합니다.</div>
         </div>
         <!--
           정규화 데이터 저장 방식.
@@ -235,12 +219,12 @@
 </div>
 
 
-<!-- ── 환산률/수정률 확인 모달 (superuser 전용) ──────────────────── -->
+<!-- ── 환산율/수정률 확인 모달 (superuser 전용) ──────────────────── -->
 <div class="modal fade" id="rateExampleConvModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-xl modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title fw-bold">환산률/수정률 확인</h5>
+        <h5 class="modal-title fw-bold">환산율 확인</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
@@ -248,17 +232,9 @@
 
         <div class="row g-2 align-items-end mb-3">
           <div class="col-12 col-md-3">
-            <label class="form-label fw-semibold">손생구분</label>
-            <select class="form-select form-select-sm" id="re-conv-type">
-              <option value="">선택</option>
-              <option value="life">생명보험</option>
-              <option value="nonlife">손해보험</option>
-            </select>
-          </div>
-          <div class="col-12 col-md-3">
             <label class="form-label fw-semibold">보험사</label>
-            <select class="form-select form-select-sm" id="re-conv-insurer" disabled>
-              <option value="">손생구분을 먼저 선택하세요</option>
+            <select class="form-select form-select-sm" id="re-conv-insurer">
+              <option value="">선택</option>
             </select>
           </div>
           <div class="col-12 col-md-2 d-grid">
@@ -339,7 +315,7 @@
             <tbody id="re-conv-tbody">
               <tr>
                 <td colspan="9" class="text-center text-muted py-3">
-                  손생구분과 보험사를 선택 후 조회해 주세요.
+                  보험사를 선택 후 조회해 주세요.
                 </td>
               </tr>
             </tbody>

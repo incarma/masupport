@@ -43,8 +43,8 @@ class Migration(migrations.Migration):
                 )),
             ],
             options={
-                "verbose_name": "예시표 환산률/수정률 정규화 행",
-                "verbose_name_plural": "예시표 환산률/수정률 정규화 행",
+                "verbose_name": "예시표 환산율/수정률 정규화 행",
+                "verbose_name_plural": "예시표 환산율/수정률 정규화 행",
                 "ordering": ["insurer_type", "insurer", "coverage_type", "product_name", "pay_period", "id"],
                 "indexes": [
                     models.Index(fields=["insurer_type", "category", "insurer"], name="idx_re_conv_scope"),

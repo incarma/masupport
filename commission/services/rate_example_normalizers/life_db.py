@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 """
-DB생명 환산률/수정률 정규화 모듈.
+DB생명 환산율/수정률 정규화 모듈.
 
 적용 대상:
 - RateExample.insurer_type == life
@@ -85,7 +85,7 @@ def _to_decimal(value):
 
 
 def _has_any_rate(*values) -> bool:
-    """연차별 환산률 값이 하나라도 있으면 유효 데이터 행으로 본다."""
+    """연차별 환산율 값이 하나라도 있으면 유효 데이터 행으로 본다."""
     return any(_to_decimal(v) is not None for v in values)
 
 

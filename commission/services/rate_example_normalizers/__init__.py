@@ -20,6 +20,13 @@ from commission.services.rate_example_normalizers.life_im import (
 )
 from commission.services.rate_example_normalizers.life_kb import (
     build_life_kb_general_conversion_rows,
+    build_life_kb_health_conversion_rows,
+)
+from commission.services.rate_example_normalizers.life_KDB import (
+    build_life_kdb_conversion_rows,
+)
+from commission.services.rate_example_normalizers.life_kyobo import (
+    build_life_kyobo_conversion_rows,
 )
 
 __all__ = [
@@ -27,4 +34,7 @@ __all__ = [
     "build_life_db_conversion_rows",
     "build_life_im_conversion_rows",
     "build_life_kb_general_conversion_rows",
+    "build_life_kb_health_conversion_rows",
+    "build_life_kdb_conversion_rows",
+    "build_life_kyobo_conversion_rows",
 ]
