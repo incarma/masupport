@@ -39,6 +39,17 @@ from commission.services.rate_example_normalizers.life_KDB import (
 from commission.services.rate_example_normalizers.life_kyobo import (
     build_life_kyobo_conversion_rows,
 )
+from commission.services.rate_example_normalizers.life_nh import (
+    build_life_nh_conversion_rows,
+)
+from commission.services.rate_example_normalizers.life_dongyang import (
+    build_life_dongyang_conversion_rows,
+)
+from commission.services.rate_example_normalizers.life_lina import (
+    build_life_lina_conversion_rows,
+    build_life_lina_pdf_conversion_rows,
+)
+
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +71,8 @@ def normalize_rate_example(
     - 생명보험 / 환산율·수정률 / KB / 건강보험 / xlsx
     - 생명보험 / 환산율·수정률 / KDB / xlsx
     - 생명보험 / 환산율·수정률 / 교보 / xlsx
+    - 생명보험 / 환산율·수정률 / 라이나 / xlsx
+    - 생명보험 / 환산율·수정률 / 라이나 / pdf
 
     반환:
     - 생성된 RateExampleConversionRow 수
@@ -67,19 +80,53 @@ def normalize_rate_example(
     normalize_mode = (normalize_mode or "replace").strip()
     if normalize_mode not in {"replace", "append"}:
         raise ValueError(f"Invalid normalize_mode: {normalize_mode}")
+    
+    # ── 지급률 정규화 분기 (category == "pay") ────────────────────────────────
+    # conv 오케스트레이터와 완전 격리. pay 파일이 이 분기에서 처리되면 즉시 반환한다.
+    if example.category == RateExample.CAT_PAY:
+        from commission.services.rate_example_pay_normalizer import (  # noqa: PLC0415
+            normalize_pay_rate_example,
+        )
+        return normalize_pay_rate_example(example, normalize_mode=normalize_mode)
 
     if not (
         example.insurer_type == RateExample.TYPE_LIFE
         and example.category == RateExample.CAT_CONV
-        and example.insurer in {"ABL", "DB", "IM", "KB", "KDB", "교보"}
+        and example.insurer in {"ABL", "DB", "IM", "KB", "KDB", "교보", "농협", "동양", "라이나"}  # conv 대상 보험사
     ):
         return 0
 
     if not example.file:
         return 0
 
-    # 정규화 대상은 xlsx 기준이다. xls/pdf는 원본 보관만 수행한다.
-    if not str(example.original_name or "").lower().endswith(".xlsx"):
+    original_name = str(example.original_name or "").lower()
+
+    # ─────────────────────────────────────────────────────
+    # 라이나 PDF 전용 정규화
+    # - 기존 xlsx parser와 완전 분리
+    # - 다른 보험사 PDF는 원본 보관만 수행
+    # - PDF는 병합 셀 정보가 없으므로 텍스트 흐름 기반으로 행을 복원
+    # ─────────────────────────────────────────────────────
+    if original_name.endswith(".pdf"):
+        if example.insurer != "라이나":
+            return 0
+
+        normalized_rows = build_life_lina_pdf_conversion_rows(example)
+
+        if normalize_mode == "replace":
+            RateExampleConversionRow.objects.filter(
+                insurer_type=example.insurer_type,
+                category=example.category,
+                insurer=example.insurer,
+            ).delete()
+
+        if normalized_rows:
+            RateExampleConversionRow.objects.bulk_create(normalized_rows, batch_size=500)
+
+        return len(normalized_rows)
+
+    # 그 외 기존 보험사는 xlsx만 정규화한다.
+    if not original_name.endswith(".xlsx"):
         return 0
 
     # ─────────────────────────────────────────────────────
@@ -160,6 +207,28 @@ def normalize_rate_example(
     # - 총환산월초 값을 1~4차년에 동일 반영
     elif example.insurer == "교보":
         normalized_rows.extend(build_life_kyobo_conversion_rows(example, wb))
+
+    # ── 농협 생명 환산율/수정률 정규화 ─────────────────────────────
+    elif example.insurer == "농협":
+        normalized_rows.extend(build_life_nh_conversion_rows(example, wb))
+
+    # ── 동양 생명 환산율/수정률 정규화 ─────────────────────────────
+    # 동양생명 GA raw 예시표 정규화
+    # - 대상 시트: 주계약
+    # - 제외: 1~14행 헤더/안내 영역
+    # - J열: 1차년, L열: 2~4차년
+    elif example.insurer == "동양":
+        normalized_rows.extend(build_life_dongyang_conversion_rows(example, wb))
+
+    # ── 라이나 생명 환산율/수정률 정규화 ─────────────────────────────
+    # 라이나 규칙:
+    # - 병합 셀 값을 row 단위로 전파한 뒤 정규화
+    # - raw "구분" 영역 첫 번째 컬럼 → 상품명
+    # - raw "구분" 영역 마지막 컬럼 → 납기
+    # - 납기에 "년납" 포함 행만 정규화
+    # - 환산율 값을 1~4차년에 동일 반영
+    elif example.insurer == "라이나":
+        normalized_rows.extend(build_life_lina_conversion_rows(example, wb))
 
     # 동일 보험사/구분의 정규화 master 처리.
     # - replace: 기존 방식. 기존 row 삭제 후 새 데이터 적재.

@@ -51,8 +51,11 @@ class RateExampleService:
             return {"ok": False, "message": "손생 구분 값이 올바르지 않습니다."}
         if category not in (RateExample.CAT_CONV, RateExample.CAT_PAY):
             return {"ok": False, "message": "구분 값이 올바르지 않습니다."}
-        if insurer not in _ALLOWED_INSURERS.get(insurer_type, set()):
-            return {"ok": False, "message": "선택된 보험사가 허용 목록에 없습니다."}
+        # pay 업로드는 보험사 단위가 아니라 전사(全社) 단일 파일이므로
+        # insurer=""로 수신되며 허용 목록 검증 대상이 아니다.
+        if category != RateExample.CAT_PAY:
+            if insurer not in _ALLOWED_INSURERS.get(insurer_type, set()):
+                return {"ok": False, "message": "선택된 보험사가 허용 목록에 없습니다."}
         
         # ─────────────────────────────────────────────────────
         # 정규화 데이터 저장 방식 검증
@@ -85,15 +88,23 @@ class RateExampleService:
         else:
             product_kind = ""
 
+        # ── category=pay 전용 강제 정규화 ────────────────────────────────────
+        # 지급률 파일은 보험사 선택 없이 업로드하므로 서버에서 항목을 강제 초기화한다.
+        # product_kind/normalize_mode는 클라이언트가 전달하더라도 무시한다.
+        if category == RateExample.CAT_PAY:
+            insurer        = ""
+            product_kind   = ""
+            normalize_mode = "replace"  # 지급률은 항상 전체 교체
+        
         # ─────────────────────────────────────────────────────
-        # KDB/교보 생명보험 환산율/수정률
+        # KDB/교보/농협/동양/라이나 생명보험 환산율/수정률
         # - 별도 상품 구분 없이 보험사 선택만으로 정규화한다.
         # - product_kind는 빈 값으로 고정한다.
         # ─────────────────────────────────────────────────────
         if (
             insurer_type == RateExample.TYPE_LIFE
             and category == RateExample.CAT_CONV
-            and insurer in {"KDB", "교보"}
+            and insurer in {"KDB", "교보", "농협", "동양", "라이나"}
         ):
             product_kind = ""
 

@@ -529,6 +529,26 @@
   margin-bottom: 4px;
 }
 
+/* ── 지급률 확인 모달 테이블 래퍼 ──────────────────────────── */
+#rate-example-root .re-pay-table-wrap {
+  max-height: 55vh;
+  overflow-y: auto;
+  overflow-x: auto;
+}
+ 
+/* ── 지급률 수치 셀: 숫자 정렬 + 최소 너비 ─────────────────── */
+#rate-example-root .re-pay-num {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  min-width: 72px;
+}
+ 
+/* ── 마지막 업데이트 메타 텍스트 ────────────────────────────── */
+#rate-example-root .re-pay-meta {
+  font-size: 0.8rem;
+  color: var(--bs-secondary-color, #6c757d);
+}
+
 /* ==========================================================
  5) Rate Example Conv Modal
  - 주의: rateExampleConvModal은 #rate-example-root 밖에 위치하므로

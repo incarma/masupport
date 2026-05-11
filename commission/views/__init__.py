@@ -85,6 +85,11 @@ _RATE_EXAMPLE_API = {
         "commission.views.api_rate_example_conversion",
         "rate_example_conversion_strategy_update",
     ),
+    # 지급률 정규화 데이터 조회 API
+    "rate_example_pay_list": (
+        "commission.views.api_rate_example_pay",
+        "rate_example_pay_list",
+    ),
 }
 
 # Collect Notice export
@@ -231,4 +236,5 @@ __all__ = [
     "rate_example_delete",
     "rate_example_conversion_list",
     "rate_example_conversion_strategy_update",
+    "rate_example_pay_list",
 ]
