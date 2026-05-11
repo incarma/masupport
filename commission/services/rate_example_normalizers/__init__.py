@@ -28,6 +28,17 @@ from commission.services.rate_example_normalizers.life_KDB import (
 from commission.services.rate_example_normalizers.life_kyobo import (
     build_life_kyobo_conversion_rows,
 )
+from commission.services.rate_example_normalizers.life_nh import (
+    build_life_nh_conversion_rows,
+)
+from commission.services.rate_example_normalizers.life_dongyang import (
+    build_life_dongyang_conversion_rows,
+)
+from commission.services.rate_example_normalizers.life_lina import (
+    build_life_lina_conversion_rows,
+    build_life_lina_pdf_conversion_rows,
+)
+
 
 __all__ = [
     "build_life_abl_conversion_rows",
@@ -37,4 +48,8 @@ __all__ = [
     "build_life_kb_health_conversion_rows",
     "build_life_kdb_conversion_rows",
     "build_life_kyobo_conversion_rows",
+    "build_life_nh_conversion_rows",
+    "build_life_dongyang_conversion_rows",
+    "build_life_lina_conversion_rows",
+    "build_life_lina_pdf_conversion_rows",
 ]

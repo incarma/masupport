@@ -347,6 +347,8 @@ def rate_example_home(request):
         "upload_url":       reverse("commission:rate_example_upload"),
         "conversion_list_url": reverse("commission:rate_example_conversion_list"),
         "conversion_strategy_update_url": reverse("commission:rate_example_conversion_strategy_update"),
+        # 지급률 확인 모달이 AJAX로 조회하는 엔드포인트
+        "pay_list_url": reverse("commission:rate_example_pay_list"),
         "is_superuser":     request.user.grade == "superuser",
     }
     return render(request, "commission/rate_example_home.html", context)

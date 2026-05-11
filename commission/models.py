@@ -621,8 +621,8 @@ class RateExample(models.Model):
     # ── 보험사 허용 목록 ─────────────────────────────────────
     LIFE_INSURERS = [
         "ABL", "DB", "IM", "KB", "KDB", "교보", "농협", "동양",
-        "라이나", "메트", "미래", "삼성", "신한", "처브",
-        "카디프", "푸본현대", "하나", "한화", "흥국",
+        "라이나", "메트", "미래", "삼성", "신한", "처브",         # ← 기존 유지
+        "카디프", "푸본현대", "하나", "한화", "흥국", "IBK",      # ← IBK 추가
     ]
     NONLIFE_INSURERS = [
         "AIG", "DB", "KB", "농협", "롯데", "메리츠",
@@ -726,3 +726,69 @@ class RateExampleConversionRow(models.Model):
 
     def __str__(self) -> str:
         return f"{self.insurer}/{self.coverage_type}/{self.product_name}/{self.pay_period}"
+    
+
+# =============================================================================
+# RateExamplePayRow — 예시표 지급률 정규화 행
+# commission/models.py 최하단에 추가 (RateExampleConversionRow 아래)
+# 기존 모델 일절 수정 금지
+# =============================================================================
+class RateExamplePayRow(models.Model):
+    """
+    예시표 지급률 정규화 행.
+
+    [설계 원칙]
+    - source_file: RateExample(category="pay") FK — 파일 삭제 시 CASCADE
+    - 동일 insurer_type 재업로드 시 기존 row 전체 삭제 후 교체 (replace 정책 기본)
+    - tier: 현재 "5천만↑" 고정 (향후 구간 확장 대비 필드만 준비)
+    - coverage_type: 상품군.
+      일반 보험사: "종신/CI", "연금" 등 COVERAGE_MAP 변환값.
+      IBK: "[IBK]{상품명}" 형태 (예: "[IBK]연금_10년")
+    - 수치 필드 col_a~col_f: 보험사마다 회차 레이블이 다르므로 raw 컬럼 순서 기반 저장
+      col_a=초회, col_b=1차년, col_c=13회, col_d=2차년구간,
+      col_e=3차년구간, col_f=4차년구간(없는 보험사는 None)
+    - 수치 단위: raw 파일 그대로 (이미 % 기준 수치)
+    """
+
+    source_file = models.ForeignKey(
+        RateExample,
+        on_delete=models.CASCADE,
+        related_name="pay_rows",
+        verbose_name="원본 예시표 파일",
+    )
+    source_sheet  = models.CharField(max_length=100, blank=True, default="", verbose_name="원본시트")
+    source_row_no = models.PositiveIntegerField(default=0, verbose_name="원본행번호")
+
+    insurer_type  = models.CharField(max_length=10, db_index=True, verbose_name="손생구분")
+    category      = models.CharField(max_length=10, db_index=True, default="pay", verbose_name="구분")
+    insurer       = models.CharField(max_length=30, db_index=True, verbose_name="보험사")
+    tier          = models.CharField(max_length=20, blank=True, default="5천만↑", verbose_name="지급구간")
+    coverage_type = models.CharField(max_length=50, blank=True, default="", verbose_name="상품군")
+
+    # ── 지급률 수치 컬럼 (보험사별 회차 레이블이 달라 raw 순서 기반 저장) ──
+    col_a = models.DecimalField(max_digits=12, decimal_places=4, null=True, blank=True, verbose_name="초회")
+    col_b = models.DecimalField(max_digits=12, decimal_places=4, null=True, blank=True, verbose_name="1차년")
+    col_c = models.DecimalField(max_digits=12, decimal_places=4, null=True, blank=True, verbose_name="13회")
+    col_d = models.DecimalField(max_digits=12, decimal_places=4, null=True, blank=True, verbose_name="2차년구간")
+    col_e = models.DecimalField(max_digits=12, decimal_places=4, null=True, blank=True, verbose_name="3차년구간")
+    col_f = models.DecimalField(max_digits=12, decimal_places=4, null=True, blank=True, verbose_name="4차년구간")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering     = ["insurer_type", "insurer", "tier", "source_row_no"]
+        verbose_name = "예시표 지급률 정규화 행"
+        verbose_name_plural = "예시표 지급률 정규화 행"
+        indexes = [
+            models.Index(
+                fields=["insurer_type", "category", "insurer"],
+                name="idx_re_pay_scope",
+            ),
+            models.Index(
+                fields=["source_file"],
+                name="idx_re_pay_source",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.insurer}/{self.tier}/{self.coverage_type}"

@@ -10,6 +10,8 @@
   const UPLOAD_URL = root.dataset.uploadUrl;
   const CONVERSION_LIST_URL = root.dataset.conversionListUrl;
   const CONVERSION_STRATEGY_UPDATE_URL = root.dataset.conversionStrategyUpdateUrl;
+  // 지급률 확인 모달 조회 URL — data-pay-list-url dataset에서 주입
+  const PAY_LIST_URL = root.dataset.payListUrl;
 
   // ── 보험사 목록 (json_script 태그에서 읽기) ───────────────────────────────
   const LIFE_INSURERS = JSON.parse(
@@ -652,6 +654,230 @@
             </td>
           </tr>`;
       }
+    });
+  }
+
+  // =========================================================================
+  // 지급률 기능
+  // =========================================================================
+
+  // ── DOM 참조 ────────────────────────────────────────────────────────────────
+  const payModalEl       = document.getElementById("rateExamplePayModal");
+  const payUploadModalEl = document.getElementById("rateExamplePayUploadModal");
+  const payTbody         = document.getElementById("re-pay-tbody");
+  const payErrBox        = document.getElementById("re-pay-error");
+  const payUpdatedInfo   = document.getElementById("re-pay-updated-at");
+  const payCountLabel    = document.getElementById("re-pay-count-label");
+  const payFilterInsurer = document.getElementById("re-pay-filter-insurer");
+  const payFilterCov     = document.getElementById("re-pay-filter-cov");
+  const payKeyword       = document.getElementById("re-pay-keyword");
+  const payBtnLoad       = document.getElementById("re-pay-btn-load");
+  const btnPaySave       = document.getElementById("re-pay-btn-save");
+
+  let payRowsOriginal = [];
+
+  // ── 에러 헬퍼 ───────────────────────────────────────────────────────────────
+  function showPayError(msg) {
+    if (!payErrBox) return;
+    payErrBox.textContent = msg;
+    payErrBox.classList.remove("d-none");
+  }
+  function clearPayError() {
+    if (!payErrBox) return;
+    payErrBox.textContent = "";
+    payErrBox.classList.add("d-none");
+  }
+
+  // ── 마지막 업데이트 정보 표시 ───────────────────────────────────────────────
+  function setPayUpdatedInfo(data) {
+    if (!payUpdatedInfo) return;
+    const updatedAt  = data?.last_updated_at  || "";
+    const updatedBy  = data?.last_updated_by  || "";
+    const sourceName = data?.source_file_name || "";
+    if (!updatedAt) {
+      payUpdatedInfo.textContent = "업데이트 정보 없음";
+      return;
+    }
+    payUpdatedInfo.textContent = [
+      `마지막 업데이트: ${updatedAt}`,
+      updatedBy  ? `업로더: ${updatedBy}`  : "",
+      sourceName ? `원본: ${sourceName}` : "",
+    ].filter(Boolean).join(" / ");
+  }
+
+  // ── 필터 select 채우기 ──────────────────────────────────────────────────────
+  function populatePayFilterSelect(sel, rows, key) {
+    if (!sel) return;
+    const current = sel.value;
+    const values  = Array.from(
+      new Set(rows.map(function (r) { return r[key] || ""; }).filter(Boolean))
+    ).sort(function (a, b) { return String(a).localeCompare(String(b), "ko"); });
+    sel.innerHTML = '<option value="">전체</option>';
+    values.forEach(function (v) {
+      const opt = document.createElement("option");
+      opt.value = v;
+      opt.textContent = v;
+      sel.appendChild(opt);
+    });
+    if (current && values.includes(current)) sel.value = current;
+  }
+
+  function populatePayFilters(rows) {
+    populatePayFilterSelect(payFilterInsurer, rows, "insurer");
+    populatePayFilterSelect(payFilterCov,     rows, "coverage_type");
+  }
+
+  function resetPayFilters() {
+    [payFilterInsurer, payFilterCov].forEach(function (sel) {
+      if (sel) sel.innerHTML = '<option value="">전체</option>';
+    });
+    if (payKeyword) payKeyword.value = "";
+  }
+
+  // ── 필터 적용 ────────────────────────────────────────────────────────────────
+  function filteredPayRows() {
+    const ins = (payFilterInsurer?.value || "").trim();
+    const cov = (payFilterCov?.value     || "").trim();
+    const kw  = (payKeyword?.value       || "").trim().toLowerCase();
+    return payRowsOriginal.filter(function (row) {
+      if (ins && row.insurer       !== ins) return false;
+      if (cov && row.coverage_type !== cov) return false;
+      if (kw) {
+        const haystack = [
+          row.insurer, row.coverage_type,
+          row.col_a, row.col_b, row.col_c,
+          row.col_d, row.col_e, row.col_f,
+        ].map(function (v) { return String(v ?? ""); }).join(" ").toLowerCase();
+        if (!haystack.includes(kw)) return false;
+      }
+      return true;
+    });
+  }
+
+  // ── 테이블 렌더링 ────────────────────────────────────────────────────────────
+  function renderPayRows(rows) {
+    if (!payTbody) return;
+    if (!rows || rows.length === 0) {
+      payTbody.innerHTML =
+        '<tr><td colspan="8" class="text-center text-muted py-3">조회된 데이터가 없습니다.</td></tr>';
+      if (payCountLabel) payCountLabel.textContent = "";
+      return;
+    }
+    payTbody.innerHTML = rows.map(function (row) {
+      function cell(v) {
+        return '<td class="text-end re-pay-num">' + escapeHtml(v || "0") + "</td>";
+      }
+      return (
+        "<tr>" +
+        "<td>" + escapeHtml(row.insurer || "") + "</td>" +
+        "<td>" + escapeHtml(row.coverage_type || "") + "</td>" +
+        cell(row.col_a) + cell(row.col_b) + cell(row.col_c) +
+        cell(row.col_d) + cell(row.col_e) + cell(row.col_f) +
+        "</tr>"
+      );
+    }).join("");
+    if (payCountLabel) payCountLabel.textContent = "총 " + rows.length + "건";
+  }
+
+  function applyPayView() {
+    renderPayRows(filteredPayRows());
+  }
+
+  // ── 조회 버튼 ────────────────────────────────────────────────────────────────
+  if (payBtnLoad) {
+    payBtnLoad.addEventListener("click", async function () {
+      clearPayError();
+      if (!PAY_LIST_URL) {
+        showPayError("조회 URL이 설정되지 않았습니다.");
+        return;
+      }
+      payBtnLoad.disabled = true;
+      if (payTbody) {
+        payTbody.innerHTML =
+          '<tr><td colspan="8" class="text-center text-muted py-3">조회 중입니다...</td></tr>';
+      }
+      try {
+        const res = await fetch(PAY_LIST_URL, {
+          method: "GET",
+          credentials: "same-origin",
+          headers: { "X-Requested-With": "XMLHttpRequest" },
+        });
+        const json = await readJsonOrThrow(res);
+        payRowsOriginal = json.data?.rows || [];
+        setPayUpdatedInfo(json.data || {});
+        populatePayFilters(payRowsOriginal);
+        applyPayView();
+      } catch (err) {
+        showPayError(err.message || "조회 중 오류가 발생했습니다.");
+        payRowsOriginal = [];
+        setPayUpdatedInfo(null);
+        resetPayFilters();
+        renderPayRows([]);
+      } finally {
+        payBtnLoad.disabled = false;
+      }
+    });
+  }
+
+  // ── 필터 이벤트 ──────────────────────────────────────────────────────────────
+  if (payFilterInsurer) payFilterInsurer.addEventListener("change", applyPayView);
+  if (payFilterCov)     payFilterCov.addEventListener("change", applyPayView);
+  if (payKeyword)       payKeyword.addEventListener("input",  applyPayView);
+
+  // ── 지급률 업로드 저장 버튼 ─────────────────────────────────────────────────
+  if (btnPaySave) {
+    btnPaySave.addEventListener("click", async function () {
+      clearPayError();
+      const fileInput = document.getElementById("re-pay-modal-file");
+      const file      = fileInput?.files[0];
+
+      if (!file) { showPayError("파일을 선택해 주세요."); return; }
+
+      const fd = new FormData();
+      fd.append("insurer_type",   "life");
+      fd.append("category",       "pay");
+      fd.append("normalize_mode", "replace");
+      fd.append("file",           file);
+
+      btnPaySave.disabled = true;
+      try {
+        const res = await fetch(UPLOAD_URL, {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "X-CSRFToken": window.csrfToken || "" },
+          body: fd,
+        });
+        const json = await res.json();
+        if (json.ok) {
+          bootstrap.Modal.getInstance(
+            document.getElementById("rateExamplePayUploadModal")
+          )?.hide();
+          location.reload();
+        } else {
+          showPayError(json.message || "업로드에 실패했습니다.");
+        }
+      } catch (e) {
+        showPayError("네트워크 오류가 발생했습니다.");
+      } finally {
+        btnPaySave.disabled = false;
+      }
+    });
+  }
+
+  // ── 지급률 업로드 모달 초기화 ────────────────────────────────────────────────
+  if (payUploadModalEl) {
+    payUploadModalEl.addEventListener("show.bs.modal", function () {
+      clearPayError();
+      const payFileInput = document.getElementById("re-pay-modal-file");
+      if (payFileInput) payFileInput.value = "";
+    });
+  }
+
+  // ── 지급률 확인 모달 초기화 ──────────────────────────────────────────────────
+  // 열릴 때 에러만 초기화 — 조회 결과는 명시적 조회 버튼 클릭 시에만 갱신
+  if (payModalEl) {
+    payModalEl.addEventListener("show.bs.modal", function () {
+      clearPayError();
     });
   }
 })();
