@@ -179,11 +179,12 @@
 
   {% if user.is_authenticated %}
     <div class="privacy-watermark" aria-hidden="true">
-      <span class="privacy-watermark__text">
-        {{ user.branch|default:"" }}
-        <br>
-        {{ user.name }} / {{ user.id }}
-      </span>
+      <span class="privacy-watermark__text">{{ user.branch|default:"" }}<br>{{ user.name }} / {{ user.id }}</span>
+      <span class="privacy-watermark__text">{{ user.branch|default:"" }}<br>{{ user.name }} / {{ user.id }}</span>
+      <span class="privacy-watermark__text">{{ user.branch|default:"" }}<br>{{ user.name }} / {{ user.id }}</span>
+      <span class="privacy-watermark__text">{{ user.branch|default:"" }}<br>{{ user.name }} / {{ user.id }}</span>
+      <span class="privacy-watermark__text">{{ user.branch|default:"" }}<br>{{ user.name }} / {{ user.id }}</span>
+      <span class="privacy-watermark__text">{{ user.branch|default:"" }}<br>{{ user.name }} / {{ user.id }}</span>
     </div>
   {% endif %}
 

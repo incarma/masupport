@@ -22,7 +22,7 @@ import logging
 
 from django.contrib.auth.decorators import login_required
 from django.utils import timezone
-from django.views.decorators.http import require_GET
+from django.views.decorators.http import require_GET, require_POST
 
 from accounts.decorators import grade_required
 from commission.views.utils_json import _json_ok
@@ -114,12 +114,14 @@ def rate_example_pay_list(request):
             "insurer":       row.insurer,
             "tier":          row.tier,
             "coverage_type": row.coverage_type,
-            "col_a": _fmt(row.col_a),
-            "col_b": _fmt(row.col_b),
-            "col_c": _fmt(row.col_c),
-            "col_d": _fmt(row.col_d),
-            "col_e": _fmt(row.col_e),
-            "col_f": _fmt(row.col_f),
+            "col_first": _fmt(row.col_first),
+            "col_yr1":   _fmt(row.col_yr1),
+            "col_m13":   _fmt(row.col_m13),
+            "col_yr2":   _fmt(row.col_yr2),
+            "col_yr3":   _fmt(row.col_yr3),
+            "col_m36":   _fmt(row.col_m36),   # None이면 "" — JS에서 "-" 렌더
+            "col_m37":   _fmt(row.col_m37),   # None이면 "" — JS에서 "-" 렌더
+            "col_yr4":   _fmt(row.col_yr4),   # None이면 "" — JS에서 "-" 렌더
         }
         for row in qs
     ]
@@ -133,4 +135,41 @@ def rate_example_pay_list(request):
             "last_updated_by":  getattr(latest_uploader, "name", "") or "",
             "source_file_name": getattr(latest_file, "original_name", "") or "",
         },
+    )
+
+
+# ── 지급률 정규화 데이터 전체 초기화 ────────────────────────────────────────
+@login_required
+@grade_required("superuser", forbidden_template=None)
+@require_POST
+def rate_example_pay_reset(request):
+    """
+    지급률 정규화 데이터(RateExamplePayRow) 전체 삭제.
+    지급률은 전사 단일 파일이므로 보험사 단위가 아닌 전체 삭제.
+    """
+    from commission.models import RateExamplePayRow  # noqa: PLC0415
+
+    deleted_count, _ = RateExamplePayRow.objects.filter(
+        insurer_type="life",
+        category="pay",
+    ).delete()
+
+    try:
+        from audit.constants import ACTION  # noqa: PLC0415
+        from audit.services import log_action  # noqa: PLC0415
+        log_action(
+            request,
+            ACTION.COMMISSION_RATE_EXAMPLE_DELETE,   # 가장 근접한 기존 ACTION 재사용
+            meta={
+                "action_detail": "pay_reset",
+                "deleted_count": deleted_count,
+            },
+            success=True,
+        )
+    except Exception:
+        logger.exception("rate_example pay_reset audit log failed")
+
+    return _json_ok(
+        f"지급률 데이터 {deleted_count}건을 전체 삭제했습니다.",
+        data={"deleted_count": deleted_count},
     )

@@ -78,6 +78,9 @@ urlpatterns = [
          views.rate_example_delete,   name="rate_example_delete"),
      path("rate-examples/conversions/",
          views.rate_example_conversion_list, name="rate_example_conversion_list"),
+     path("rate-examples/options/",
+         views.rate_example_options,
+         name="rate_example_options"),
      path("rate-examples/conversions/strategy/",
          views.rate_example_conversion_strategy_update,
          name="rate_example_conversion_strategy_update"),
@@ -85,4 +88,12 @@ urlpatterns = [
      path("rate-examples/pay/list/",
          views.rate_example_pay_list,
          name="rate_example_pay_list"),
+     # 환산율 정규화 데이터 초기화 (보험사 단위 삭제, superuser 전용)
+     path("rate-examples/conversions/reset/",
+         views.rate_example_conversion_reset,
+         name="rate_example_conversion_reset"),
+     # 지급률 정규화 데이터 전체 초기화 (superuser 전용)
+     path("rate-examples/pay/reset/",
+         views.rate_example_pay_reset,
+         name="rate_example_pay_reset"),
 ]

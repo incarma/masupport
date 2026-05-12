@@ -11,9 +11,12 @@
 {% block content %}
 <div class="container-fluid my-4" id="rate-example-root"
      data-upload-url="{{ upload_url }}"
+     data-options-url="{{ options_url }}"
      data-conversion-list-url="{{ conversion_list_url }}"
      data-conversion-strategy-update-url="{{ conversion_strategy_update_url }}"
+     data-conversion-reset-url="{{ conversion_reset_url }}"
      data-pay-list-url="{{ pay_list_url }}"
+     data-pay-reset-url="{{ pay_reset_url }}"
      data-user-grade="{{ request.user.grade }}">
 
   <h3 class="fw-bold text-center mb-4 commission-title">수수료 예시표</h3>
@@ -26,124 +29,143 @@
   <div class="card shadow border-0 rounded-4 p-3 mb-3">
     <div class="row g-2 align-items-end">
       <div class="col-6 col-md-2">
-        <label class="form-label mb-1 fw-semibold">손생구분</label>
-        <select class="form-select form-select-sm" id="re-filter-type">
-          <option value="">전체</option>
-          <option value="생명보험">생명보험</option>
-          <option value="손해보험">손해보험</option>
-        </select>
-      </div>
-      <div class="col-6 col-md-2">
-        <label class="form-label mb-1 fw-semibold">구분</label>
-        <select class="form-select form-select-sm" id="re-filter-cat">
-          <option value="">전체</option>
-          <option value="환산율/수정률">환산율/수정률</option>
-          <option value="지급률">지급률</option>
-        </select>
+        <label class="form-label mb-1 fw-semibold">수수료율(%)</label>
+        <input type="number" class="form-control form-control-sm"
+               id="re-commission-rate"
+               min="1" max="100" step="1"
+               inputmode="numeric"
+               placeholder="예: 70">
       </div>
       <div class="col-6 col-md-3">
-        <label class="form-label mb-1 fw-semibold">보험사</label>
-        <select class="form-select form-select-sm" id="re-filter-insurer">
-          <option value="">전체</option>
-        </select>
+        <label class="form-label mb-1 fw-semibold">보험료</label>
+        <input type="text" class="form-control form-control-sm"
+               id="re-premium"
+               inputmode="numeric"
+               placeholder="예: 100,000">
+      </div>
+      <div class="col-12 col-md-2 d-grid">
+        <button type="button" class="btn btn-primary btn-sm"
+                id="re-btn-calc-search">
+          조회
+        </button>
       </div>
       {% if is_superuser %}
-      <div class="col-6 col-md-2 ms-md-auto d-flex gap-2">
-        <button class="btn btn-success btn-sm flex-fill"
-                data-bs-toggle="modal"
-                data-bs-target="#rateExampleUploadModal">
-          환산율 업데이트
-        </button>
-        <button class="btn btn-primary btn-sm flex-fill"
-                id="re-btn-open-pay-upload"
-                data-bs-toggle="modal"
-                data-bs-target="#rateExamplePayUploadModal">
-          지급률 업데이트
-        </button>
-        <button class="btn btn-outline-secondary btn-sm flex-fill"
-                id="re-btn-open-conv"
-                data-bs-toggle="modal"
-                data-bs-target="#rateExampleConvModal">
-          환산율 확인
-        </button>
-        <button class="btn btn-outline-secondary btn-sm flex-fill"
-                id="re-btn-open-pay"
-                data-bs-toggle="modal"
-                data-bs-target="#rateExamplePayModal">
-          지급률 확인
-        </button>
+      <div class="col-12 col-md-auto ms-md-auto mt-2 mt-md-0">
+        <div class="d-flex flex-nowrap gap-2 justify-content-end">
+          <button class="btn btn-success btn-sm text-nowrap"
+                  data-bs-toggle="modal"
+                  data-bs-target="#rateExampleUploadModal">
+            환산율 업데이트
+          </button>
+          <button class="btn btn-primary btn-sm text-nowrap"
+                  id="re-btn-open-pay-upload"
+                  data-bs-toggle="modal"
+                  data-bs-target="#rateExamplePayUploadModal">
+            지급률 업데이트
+          </button>
+          <button class="btn btn-outline-secondary btn-sm text-nowrap"
+                  id="re-btn-open-conv"
+                  data-bs-toggle="modal"
+                  data-bs-target="#rateExampleConvModal">
+            환산율 확인
+          </button>
+          <button class="btn btn-outline-secondary btn-sm text-nowrap"
+                  id="re-btn-open-pay"
+                  data-bs-toggle="modal"
+                  data-bs-target="#rateExamplePayModal">
+            지급률 확인
+          </button>
+        </div>
       </div>
       {% endif %}
     </div>
   </div>
 
   <!-- ── 목록 카드 ──────────────────────────────────────────────────── -->
-  <div class="card shadow border-0 rounded-4 p-3 mb-3">
-    <div class="table-responsive">
-      <table class="table table-sm table-bordered align-middle" id="re-table">
-        <colgroup>
-          <col class="c-no">
-          <col class="c-type">
-          <col class="c-cat">
-          <col class="c-insurer">
-          <col>
-          <col class="c-date">
-          <col class="c-uploader">
-          <col class="c-dl">
-          {% if is_superuser %}<col class="c-del">{% endif %}
-        </colgroup>
+  <div class="card shadow border-0 rounded-4 p-3 mb-3 re-calc-card">
+    <div class="d-flex justify-content-end gap-2 mb-2">
+      <button type="button" class="btn btn-outline-primary btn-sm" id="re-btn-add-row">
+        행 추가
+      </button>
+      <button type="button" class="btn btn-outline-danger btn-sm" id="re-btn-delete-row">
+        행 삭제
+      </button>
+      <button type="button" class="btn btn-outline-secondary btn-sm" id="re-btn-reset-rows">
+        초기화
+      </button>
+    </div>
+    <div class="re-calc-table-wrap">
+      <table class="table table-sm table-bordered align-middle mb-0" id="re-calc-table">
         <thead class="table-light">
           <tr>
-            <th class="text-center">번호</th>
-            <th class="text-center">손생구분</th>
-            <th class="text-center">구분</th>
-            <th>파일명</th>
-            <th class="text-center">등록일</th>
-            <th class="text-center">등록자</th>
-            <th class="text-center">다운로드</th>
-            {% if is_superuser %}<th class="text-center">삭제</th>{% endif %}
+            <th rowspan="2" class="text-center re-th-check">선택</th>
+            <th rowspan="2" class="text-center re-th-base">보험사</th>
+            <th rowspan="2" class="text-center re-th-product">상품명</th>
+            <th rowspan="2" class="text-center re-th-plan">구분</th>
+            <th rowspan="2" class="text-center re-th-period">납기</th>
+            <th colspan="2" class="text-center">초회</th>
+            <th colspan="7" class="text-center">계속분</th>
+            <th colspan="2" class="text-center">총량</th>
+          </tr>
+          <tr>
+            <th class="text-center">익월</th>
+            <th class="text-center">익월 소계</th>
+            <th class="text-center">13회</th>
+            <th class="text-center">2차년</th>
+            <th class="text-center">3차년</th>
+            <th class="text-center">36회</th>
+            <th class="text-center">37회</th>
+            <th class="text-center">4차년</th>
+            <th class="text-center">계속 소계</th>
+            <th class="text-center">금액</th>
+            <th class="text-center">비율</th>
           </tr>
         </thead>
-        <tbody>
-          {% for ex in examples %}
-          <tr>
-            <td class="text-center">{{ forloop.counter }}</td>
+        <tbody id="re-calc-tbody">
+          <tr class="re-calc-row">
             <td class="text-center">
-              {% if ex.insurer_type == "life" %}
-                <span class="re-badge-life">생명보험</span>
-              {% else %}
-                <span class="re-badge-nonlife">손해보험</span>
-              {% endif %}
+              <input type="checkbox" class="form-check-input re-row-check" aria-label="행 선택">
             </td>
-            <td class="text-center">{{ ex.get_category_display }}</td>
-            <td class="text-center">{{ ex.insurer }}</td>
-            <td>{{ ex.original_name|default:"-" }}</td>
-            <td class="text-center">{{ ex.created_at|date:"Y-m-d" }}</td>
-            <td class="text-center">{{ ex.uploaded_by.name|default:"-" }}</td>
-            <td class="text-center">
-              <a href="{% url 'commission:rate_example_download' ex.pk %}"
-                 class="btn btn-outline-primary btn-sm">
-                다운로드
-              </a>
+            <td>
+              <div class="re-combo" data-combo="insurer">
+                <input type="text"
+                       class="form-control form-control-sm re-calc-insurer"
+                       placeholder="보험사"
+                       autocomplete="off">
+                <div class="re-combo-menu re-insurer-menu" hidden></div>
+              </div>
             </td>
-            {% if is_superuser %}
-            <td class="text-center">
-              <button class="btn btn-outline-danger btn-sm re-btn-delete"
-                      data-pk="{{ ex.pk }}"
-                      data-delete-url="{% url 'commission:rate_example_delete' ex.pk %}">
-                삭제
-              </button>
+            <td>
+              <div class="re-combo" data-combo="product">
+                <input type="text"
+                      class="form-control form-control-sm re-calc-product"
+                      placeholder="상품명"
+                      autocomplete="off">
+                <div class="re-combo-menu re-product-menu" hidden></div>
+              </div>
             </td>
-            {% endif %}
+            <td>
+              <select class="form-select form-select-sm re-calc-plan">
+                <option value="">선택</option>
+              </select>
+            </td>
+            <td>
+              <select class="form-select form-select-sm re-calc-period">
+                <option value="">선택</option>
+              </select>
+            </td>
+            <td class="text-end re-calc-placeholder">-</td>
+            <td class="text-end re-calc-placeholder">-</td>
+            <td class="text-end re-calc-placeholder">-</td>
+            <td class="text-end re-calc-placeholder">-</td>
+            <td class="text-end re-calc-placeholder">-</td>
+            <td class="text-end re-calc-placeholder">-</td>
+            <td class="text-end re-calc-placeholder">-</td>
+            <td class="text-end re-calc-placeholder">-</td>
+            <td class="text-end re-calc-placeholder">-</td>
+            <td class="text-end re-calc-placeholder">-</td>
+            <td class="text-end re-calc-placeholder">-</td>
           </tr>
-          {% empty %}
-          <tr>
-            <td colspan="{% if is_superuser %}9{% else %}8{% endif %}"
-                class="text-center text-muted py-3">
-              등록된 예시표가 없습니다.
-            </td>
-          </tr>
-          {% endfor %}
         </tbody>
       </table>
     </div>
@@ -311,7 +333,9 @@
                 <th class="text-end">13회</th>
                 <th class="text-end">2차년구간</th>
                 <th class="text-end">3차년구간</th>
-                <th class="text-end">4차년구간~</th>
+                <th class="text-end re-pay-opt-th">36회</th>
+                <th class="text-end re-pay-opt-th">37회</th>
+                <th class="text-end">4차년구간</th>
               </tr>
             </thead>
             <tbody id="re-pay-tbody">
@@ -324,10 +348,14 @@
           </table>
         </div>
  
-        <div class="mt-2 text-end text-muted" id="re-pay-count-label"
-             style="font-size:0.8rem;"></div>
+        <div class="mt-2 text-end text-muted re-pay-count-label" id="re-pay-count-label"></div>
       </div>
-      <div class="modal-footer">
+      <div class="modal-footer justify-content-between">
+        <!-- 초기화: 전체 지급률 데이터 삭제 -->
+        <button type="button" class="btn btn-outline-danger btn-sm"
+                id="re-pay-btn-reset">
+          데이터 초기화
+        </button>
         <button type="button" class="btn btn-outline-secondary btn-sm"
                 data-bs-dismiss="modal">닫기</button>
       </div>
@@ -438,7 +466,12 @@
           </table>
         </div>
       </div>
-      <div class="modal-footer">
+      <div class="modal-footer justify-content-between">
+        <!-- 초기화: 현재 조회된 보험사 데이터 전체 삭제 -->
+        <button type="button" class="btn btn-outline-danger btn-sm"
+                id="re-conv-btn-reset">
+          데이터 초기화
+        </button>
         <button type="button" class="btn btn-outline-secondary btn-sm"
                 data-bs-dismiss="modal">닫기</button>
       </div>

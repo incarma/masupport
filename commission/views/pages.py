@@ -345,10 +345,13 @@ def rate_example_home(request):
         "life_insurers":    RateExample.LIFE_INSURERS,
         "nonlife_insurers": RateExample.NONLIFE_INSURERS,
         "upload_url":       reverse("commission:rate_example_upload"),
+        "options_url":      reverse("commission:rate_example_options"),
         "conversion_list_url": reverse("commission:rate_example_conversion_list"),
         "conversion_strategy_update_url": reverse("commission:rate_example_conversion_strategy_update"),
+        "conversion_reset_url":           reverse("commission:rate_example_conversion_reset"),
         # 지급률 확인 모달이 AJAX로 조회하는 엔드포인트
         "pay_list_url": reverse("commission:rate_example_pay_list"),
+        "pay_reset_url":  reverse("commission:rate_example_pay_reset"),
         "is_superuser":     request.user.grade == "superuser",
     }
     return render(request, "commission/rate_example_home.html", context)

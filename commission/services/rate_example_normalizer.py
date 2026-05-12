@@ -49,6 +49,9 @@ from commission.services.rate_example_normalizers.life_lina import (
     build_life_lina_conversion_rows,
     build_life_lina_pdf_conversion_rows,
 )
+from commission.services.rate_example_normalizers.life_met import (
+    build_life_met_conversion_rows,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -92,7 +95,7 @@ def normalize_rate_example(
     if not (
         example.insurer_type == RateExample.TYPE_LIFE
         and example.category == RateExample.CAT_CONV
-        and example.insurer in {"ABL", "DB", "IM", "KB", "KDB", "교보", "농협", "동양", "라이나"}  # conv 대상 보험사
+        and example.insurer in {"ABL", "DB", "IM", "KB", "KDB", "교보", "농협", "동양", "라이나", "메트"}  # conv 대상 보험사
     ):
         return 0
 
@@ -229,6 +232,12 @@ def normalize_rate_example(
     # - 환산율 값을 1~4차년에 동일 반영
     elif example.insurer == "라이나":
         normalized_rows.extend(build_life_lina_conversion_rows(example, wb))
+
+    # ── 메트 생명 환산율/수정률 정규화 ─────────────────────────────
+    # - 대상 시트: 주계약 CSC
+    # - 상품명(C), 납기(E), 보험료(F)/가입금액(G), 1~4차년(K~N) 매핑
+    elif example.insurer == "메트":
+        normalized_rows.extend(build_life_met_conversion_rows(example, wb))
 
     # 동일 보험사/구분의 정규화 master 처리.
     # - replace: 기존 방식. 기존 row 삭제 후 새 데이터 적재.
