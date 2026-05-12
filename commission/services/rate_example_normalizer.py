@@ -52,7 +52,12 @@ from commission.services.rate_example_normalizers.life_lina import (
 from commission.services.rate_example_normalizers.life_met import (
     build_life_met_conversion_rows,
 )
-
+from commission.services.rate_example_normalizers.life_shinhan import (
+    build_life_shinhan_conversion_rows,
+)
+from commission.services.rate_example_normalizers.life_chubb import (
+    build_life_chubb_pdf_conversion_rows,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +100,7 @@ def normalize_rate_example(
     if not (
         example.insurer_type == RateExample.TYPE_LIFE
         and example.category == RateExample.CAT_CONV
-        and example.insurer in {"ABL", "DB", "IM", "KB", "KDB", "교보", "농협", "동양", "라이나", "메트"}  # conv 대상 보험사
+        and example.insurer in {"ABL", "DB", "IM", "KB", "KDB", "교보", "농협", "동양", "라이나", "메트", "신한", "처브"}  # conv 대상 보험사
     ):
         return 0
 
@@ -111,6 +116,25 @@ def normalize_rate_example(
     # - PDF는 병합 셀 정보가 없으므로 텍스트 흐름 기반으로 행을 복원
     # ─────────────────────────────────────────────────────
     if original_name.endswith(".pdf"):
+        # ── 처브 PDF 전용 정규화 ─────────────────────────────────────────
+        # - 주계약 페이지만 정규화
+        # - "특약" 섹션 감지 시 해당 페이지와 이후 페이지 제외
+        # - 환산율은 raw % 값에 12를 곱해 1~4차년에 동일 저장
+        if example.insurer == "처브":
+            normalized_rows = build_life_chubb_pdf_conversion_rows(example)
+
+            if normalize_mode == "replace":
+                RateExampleConversionRow.objects.filter(
+                    insurer_type=example.insurer_type,
+                    category=example.category,
+                    insurer=example.insurer,
+                ).delete()
+
+            if normalized_rows:
+                RateExampleConversionRow.objects.bulk_create(normalized_rows, batch_size=500)
+
+            return len(normalized_rows)
+        
         if example.insurer != "라이나":
             return 0
 
@@ -238,6 +262,16 @@ def normalize_rate_example(
     # - 상품명(C), 납기(E), 보험료(F)/가입금액(G), 1~4차년(K~N) 매핑
     elif example.insurer == "메트":
         normalized_rows.extend(build_life_met_conversion_rows(example, wb))
+    
+    # ── 신한 생명 환산율/수정률 정규화 ─────────────────────────────
+    # 신한 규칙:
+    # - "일반상품" 포함 시트: C6~J6 헤더, 7행부터 1Y(H열) 마지막 데이터까지
+    # - 상품명(C) 공란은 직전 상품명으로 전파
+    # - 구분(D/E)은 콤마+공백으로 결합, 둘 다 공란이면 동일 상품명 내 직전 구분 전파
+    # - 납기(F), 1~3차년(H~J), 4차년 없음
+    # - "건강" 포함 시트: A8~J8 헤더, A열이 "주보험"인 행만 정규화
+    elif example.insurer == "신한":
+        normalized_rows.extend(build_life_shinhan_conversion_rows(example, wb))
 
     # 동일 보험사/구분의 정규화 master 처리.
     # - replace: 기존 방식. 기존 row 삭제 후 새 데이터 적재.

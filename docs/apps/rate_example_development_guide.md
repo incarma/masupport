@@ -52,7 +52,7 @@
 
 | category | 설명 |
 | --- | --- |
-| conv | 생명보험 환산율/수정률 (9개 보험사) |
+| conv | 생명보험 환산율/수정률 (10개 보험사) |
 | pay | 생명보험 지급률 (20개 보험사, 단일 xlsx) |
 
 ---
@@ -384,6 +384,7 @@ elif example.insurer == "교보": ...
 elif example.insurer == "농협": ...
 elif example.insurer == "동양": ...
 elif example.insurer == "라이나": ...
+elif example.insurer == "신한": ...
 ```
 
 pay dispatcher:
@@ -748,7 +749,8 @@ commission/services/rate_example_normalizers/
 ├── life_kyobo.py
 ├── life_nh.py
 ├── life_dongyang.py
-└── life_lina.py
+├── life_lina.py
+└── life_shinhan.py
 ```
 
 원칙:
@@ -861,6 +863,163 @@ DB: 특약/방카교차 시트 제외, 첫 번째 테이블만 사용
 DATA_START_ROW = 15
 
 ## 18.8 라이나생명 FINAL
+
+
+## 18.9 신한생명 FINAL
+
+대상:
+
+| 조건 | 값 |
+| --- | --- |
+| 보험사 | 신한 |
+| 파일 | .xlsx |
+| category | conv |
+| 지원 시트 | "일반상품" 포함 시트 / "건강" 포함 시트 |
+
+### 18.9.1 일반상품 시트 정책
+
+헤더 기준:
+
+| 영역 | 위치 |
+| --- | --- |
+| 헤더 | C6 ~ J6 |
+| 데이터 시작 | 7행 |
+| 종료 기준 | H열(1Y) 마지막 데이터 행 |
+
+컬럼 매핑:
+
+| 필드 | raw 컬럼 |
+| --- | --- |
+| product_name | C열 |
+| plan_type | D열 + E열 |
+| pay_period | F열 |
+| year1 | H열 |
+| year2 | I열 |
+| year3 | J열 |
+| year4 | 없음(None 고정) |
+
+상품명 정책:
+
+* C열 공란이면 직전 상품명 carry-forward
+* 동일 상품명 그룹 유지
+
+구분(plan_type) 정책:
+
+```text
+D + ", " + E
+```
+
+예:
+
+```text
+기본형, 해약환급금미지급형
+```
+
+추가 정책:
+
+* D/E 모두 공란이면 동일 상품 내 직전 구분값 전파
+* 둘 중 하나만 존재하면 해당 값만 사용
+
+보종 판정:
+
+| 조건 | coverage_type |
+| --- | --- |
+| 변액 + 연금 | 변액연금 |
+| 경영 포함 | CEO정기 |
+| 종신 포함 | 종신/CI |
+| 연금 포함 | 연금 |
+| 기타 | 기타(보장성) |
+
+### 18.9.2 건강 시트 정책
+
+헤더 기준:
+
+| 영역 | 위치 |
+| --- | --- |
+| 헤더 | A8 ~ J8 |
+| 데이터 시작 | 9행 |
+
+대상 행:
+
+```text
+A열 == "주보험"
+```
+
+인 행만 정규화.
+
+컬럼 매핑:
+
+| 필드 | raw 컬럼 |
+| --- | --- |
+| product_name | C열 |
+| plan_type | 공란 고정 |
+| pay_period | G열 |
+| year1 | H열 |
+| year2 | I열 |
+| year3 | J열 |
+| year4 | 없음(None 고정) |
+
+보종 정책:
+
+```text
+기타(보장성) 고정
+```
+
+### 18.9.3 신한 환산율 저장 정책
+
+신한도 기존 conv 보험사와 동일하게 백분율 수치 기준 저장:
+
+| raw 표시 | DB 저장 |
+| --- | --- |
+| 100.0% | Decimal("100.0") |
+| 245.0% | Decimal("245.0") |
+
+Excel percent 셀은 반드시:
+
+```python
+if "%" in number_format:
+    value *= 100
+```
+
+보정 후 저장.
+
+### 18.9.4 dispatcher 등록 FINAL
+
+파일:
+
+```text
+commission/services/rate_example_normalizers/__init__.py
+commission/services/rate_example_normalizer.py
+```
+
+등록 함수명:
+
+```python
+build_life_shinhan_conversion_rows
+```
+
+dispatcher:
+
+```python
+elif example.insurer == "신한":
+    normalized_rows.extend(
+        build_life_shinhan_conversion_rows(example, wb)
+    )
+```
+
+### 18.9.5 신한 회귀 체크리스트
+
+검증 항목:
+
+* 일반상품 시트만 정상 정규화
+* 건강 시트만 정상 정규화
+* C열 공란 carry-forward 정상
+* D/E 구분 결합 정상
+* D/E 공란 시 직전 구분 전파 정상
+* 건강 시트 A열 "주보험"만 적재
+* year4 None 저장 정상
+* 환산율 % 저장 정상
+* 환산율 확인 모달 조회 정상
 
 Excel + PDF 이중 지원.
 

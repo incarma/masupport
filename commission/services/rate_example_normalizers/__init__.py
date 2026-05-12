@@ -41,6 +41,12 @@ from commission.services.rate_example_normalizers.life_lina import (
 from commission.services.rate_example_normalizers.life_met import (
     build_life_met_conversion_rows,
 )
+from commission.services.rate_example_normalizers.life_shinhan import (
+    build_life_shinhan_conversion_rows,
+)
+from commission.services.rate_example_normalizers.life_chubb import (
+    build_life_chubb_pdf_conversion_rows,
+)
 
 
 __all__ = [
@@ -56,4 +62,6 @@ __all__ = [
     "build_life_lina_conversion_rows",
     "build_life_lina_pdf_conversion_rows",
     "build_life_met_conversion_rows",
+    "build_life_shinhan_conversion_rows",
+    "build_life_chubb_pdf_conversion_rows",
 ]
