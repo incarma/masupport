@@ -81,6 +81,10 @@ urlpatterns = [
      path("rate-examples/options/",
          views.rate_example_options,
          name="rate_example_options"),
+     # 수수료 예시표 계산 API (1차: DB/IBK/처브/카디프 제외)
+     path("rate-examples/calculate/",
+         views.rate_example_calculate,
+         name="rate_example_calculate"),
      path("rate-examples/conversions/strategy/",
          views.rate_example_conversion_strategy_update,
          name="rate_example_conversion_strategy_update"),

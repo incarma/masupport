@@ -346,6 +346,7 @@ def rate_example_home(request):
         "nonlife_insurers": RateExample.NONLIFE_INSURERS,
         "upload_url":       reverse("commission:rate_example_upload"),
         "options_url":      reverse("commission:rate_example_options"),
+        "calculate_url": reverse("commission:rate_example_calculate"),
         "conversion_list_url": reverse("commission:rate_example_conversion_list"),
         "conversion_strategy_update_url": reverse("commission:rate_example_conversion_strategy_update"),
         "conversion_reset_url":           reverse("commission:rate_example_conversion_reset"),

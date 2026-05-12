@@ -105,6 +105,11 @@ _RATE_EXAMPLE_API = {
         "commission.views.api_rate_example_options",
         "rate_example_options",
     ),
+    # 수수료 예시표 계산 API
+    "rate_example_calculate": (
+        "commission.views.api_rate_example_calculate",
+        "rate_example_calculate",
+    ),
 }
 
 # Collect Notice export
@@ -251,6 +256,7 @@ __all__ = [
     "rate_example_delete",
     "rate_example_conversion_list",
     "rate_example_options",
+    "rate_example_calculate",
     "rate_example_conversion_strategy_update",
     "rate_example_pay_list",
     "rate_example_conversion_reset",

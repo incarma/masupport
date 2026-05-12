@@ -29,11 +29,29 @@ from __future__ import annotations
 """
 
 import logging
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from openpyxl import load_workbook
 
 logger = logging.getLogger(__name__)
+
+
+# ── 지급률 정규화 정책 ────────────────────────────────────────────────────────
+#
+# 운영 기준:
+#   raw 지급률은 현재 97% 기준표이므로
+#   DB 저장 시 100% 기준 지급률로 역산 저장한다.
+#
+# 공식:
+#   최종 저장 지급률 = raw 지급률 / 0.97
+#
+# 예:
+#   97.00  -> 100.0000
+#   48.50  ->  50.0000
+#   77.60  ->  80.0000
+#
+PAY_NORMALIZE_DIVISOR = Decimal("0.97")
+PAY_QUANT = Decimal("0.0001")
 
 # ── 대상 시트명 ───────────────────────────────────────────────────────────────
 TARGET_SHEET = "① 5천만, 3천만↑"
@@ -152,11 +170,25 @@ _GROUPS: list[tuple] = [
 # ── 유틸 함수 ─────────────────────────────────────────────────────────────────
 
 def _to_decimal(value) -> "Decimal | None":
-    """raw 셀 값 → Decimal(소수점 4자리). None이면 None 반환."""
+    """
+    raw 지급률 셀 값 → 100% 기준 지급률 Decimal(소수점 4자리).
+
+    정책:
+        최종 저장값 = raw 지급률 / 0.97
+    """
     if value is None:
         return None
+    
     try:
-        return Decimal(str(value)).quantize(Decimal("0.0001"))
+        raw = Decimal(str(value).replace(",", "").strip())
+
+        normalized = raw / PAY_NORMALIZE_DIVISOR
+
+        return normalized.quantize(
+            PAY_QUANT,
+            rounding=ROUND_HALF_UP,
+        )
+
     except (InvalidOperation, TypeError, ValueError):
         return None
 
