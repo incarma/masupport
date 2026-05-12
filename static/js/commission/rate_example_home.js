@@ -42,6 +42,7 @@
   const btnDeleteRow = document.getElementById("re-btn-delete-row");
   const btnResetRows = document.getElementById("re-btn-reset-rows");
   const MAX_CALC_ROWS = 10;
+  const IBK_INSURER = "IBK";
 
   let activeComboInput = null;
   let activeComboMenu = null;
@@ -122,6 +123,30 @@
     };
   }
 
+  function isIbkRow(row) {
+    const els = rowEls(row);
+    return (els.insurer?.value || "").trim() === IBK_INSURER;
+  }
+
+  function setIbkRowMode(row) {
+    const els = rowEls(row);
+    const enabled = isIbkRow(row);
+
+    if (els.plan) {
+      fillSelect(els.plan, [], "사용안함");
+      els.plan.disabled = enabled;
+      if (enabled) els.plan.value = "";
+    }
+    if (els.period) {
+      fillSelect(els.period, [], "사용안함");
+      els.period.disabled = enabled;
+      if (enabled) els.period.value = "";
+    }
+    if (els.product) {
+      els.product.placeholder = enabled ? "IBK 상품군" : "상품명";
+    }
+  }
+
   function fillSelect(el, values, placeholder) {
     if (!el) return;
     el.innerHTML = `<option value="">${placeholder || "선택"}</option>`;
@@ -156,6 +181,7 @@
     if (els.product) els.product.value = "";
     fillSelect(els.plan, [], "선택");
     fillSelect(els.period, [], "선택");
+    setIbkRowMode(row);
     if (els.productMenu) els.productMenu.innerHTML = "";
     row.dataset.products = "[]";
 
@@ -180,6 +206,8 @@
     const productName = (els.product?.value || "").trim();
     fillSelect(els.plan, [], "선택");
     fillSelect(els.period, [], "선택");
+    setIbkRowMode(row);
+    if (insurer === IBK_INSURER) return;
     if (!insurer || !productName) return;
     const plans = await loadOptionList("plan_types", {
       insurer,
@@ -194,6 +222,8 @@
     const productName = (els.product?.value || "").trim();
     const planType = (els.plan?.value || "").trim();
     fillSelect(els.period, [], "선택");
+    setIbkRowMode(row);
+    if (insurer === IBK_INSURER) return;
     if (!insurer || !productName) return;
     const periods = await loadOptionList("pay_periods", {
       insurer,
@@ -224,6 +254,7 @@
     });
     row.querySelectorAll("select").forEach(function (sel) {
       fillSelect(sel, [], "선택");
+      sel.disabled = false;
     });
     row.querySelectorAll(".re-combo-menu").forEach(function (menu) {
       menu.innerHTML = "";
@@ -461,11 +492,13 @@
 
   function collectCalcPayload(row) {
     const els = rowEls(row);
+    const insurer = (els.insurer?.value || "").trim();
+    const isIbk = insurer === IBK_INSURER;
     return {
-      insurer: (els.insurer?.value || "").trim(),
+      insurer: insurer,
       product_name: (els.product?.value || "").trim(),
-      plan_type: (els.plan?.value || "").trim(),
-      pay_period: (els.period?.value || "").trim(),
+      plan_type: isIbk ? "" : (els.plan?.value || "").trim(),
+      pay_period: isIbk ? "" : (els.period?.value || "").trim(),
       premium: parseMoneyInput(premiumInput?.value || ""),
       commission_rate: String(commissionRateInput?.value || "").trim(),
     };
@@ -478,7 +511,11 @@
     if (!payload.insurer && !payload.product_name && !payload.plan_type && !payload.pay_period) {
       return;
     }
-    if (!payload.insurer || !payload.product_name || !payload.pay_period) {
+    if (payload.insurer === IBK_INSURER) {
+      if (!payload.product_name) {
+        throw new Error("IBK 상품군을 선택해 주세요.");
+      }
+    } else if (!payload.insurer || !payload.product_name || !payload.pay_period) {
       throw new Error("보험사, 상품명, 납기를 모두 선택해 주세요.");
     }
     if (!payload.premium || Number(payload.premium) <= 0) {

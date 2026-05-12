@@ -58,6 +58,9 @@ from commission.services.rate_example_normalizers.life_shinhan import (
 from commission.services.rate_example_normalizers.life_chubb import (
     build_life_chubb_pdf_conversion_rows,
 )
+from commission.services.rate_example_normalizers.life_cardif import (
+    build_life_cardif_pdf_conversion_rows,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -100,7 +103,7 @@ def normalize_rate_example(
     if not (
         example.insurer_type == RateExample.TYPE_LIFE
         and example.category == RateExample.CAT_CONV
-        and example.insurer in {"ABL", "DB", "IM", "KB", "KDB", "교보", "농협", "동양", "라이나", "메트", "신한", "처브"}  # conv 대상 보험사
+        and example.insurer in {"ABL", "DB", "IM", "KB", "KDB", "교보", "농협", "동양", "라이나", "메트", "신한", "처브", "카디프"}  # conv 대상 보험사
     ):
         return 0
 
@@ -122,6 +125,25 @@ def normalize_rate_example(
         # - 환산율은 raw % 값에 12를 곱해 1~4차년에 동일 저장
         if example.insurer == "처브":
             normalized_rows = build_life_chubb_pdf_conversion_rows(example)
+
+            if normalize_mode == "replace":
+                RateExampleConversionRow.objects.filter(
+                    insurer_type=example.insurer_type,
+                    category=example.category,
+                    insurer=example.insurer,
+                ).delete()
+
+            if normalized_rows:
+                RateExampleConversionRow.objects.bulk_create(normalized_rows, batch_size=500)
+
+            return len(normalized_rows)
+        
+        # ── 카디프 PDF 전용 정규화 ───────────────────────────────────────
+        # - 주계약 영역만 정규화
+        # - "□ 특약" 이후 테이블 제외
+        # - PDF raw % 값에 12를 곱해 year1~year4에 저장
+        if example.insurer == "카디프":
+            normalized_rows = build_life_cardif_pdf_conversion_rows(example)
 
             if normalize_mode == "replace":
                 RateExampleConversionRow.objects.filter(
