@@ -486,6 +486,98 @@
   }
 }
 
+#rate-example-root .re-calc-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  min-height: 520px;
+  overflow-y: visible;
+}
+
+#rate-example-root .re-calc-card {
+  min-height: 560px;
+}
+
+#rate-example-root #re-calc-table {
+  min-width: 1540px;
+  table-layout: fixed;
+  font-size: 0.78rem;
+}
+
+#rate-example-root #re-calc-table .re-th-check {
+  width: 48px;
+}
+
+#rate-example-root #re-calc-table th,
+#rate-example-root #re-calc-table td {
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+#rate-example-root #re-calc-table .re-th-base {
+  width: 110px;
+}
+
+#rate-example-root #re-calc-table .re-th-product {
+  width: 260px;
+}
+
+#rate-example-root #re-calc-table .re-th-plan {
+  width: 150px;
+}
+
+#rate-example-root #re-calc-table .re-th-period {
+  width: 110px;
+}
+
+#rate-example-root #re-calc-table input,
+#rate-example-root #re-calc-table select {
+  font-size: 0.78rem;
+}
+
+#rate-example-root .re-calc-placeholder {
+  color: #6c757d;
+  font-variant-numeric: tabular-nums;
+  background-color: #fafafa;
+}
+
+/* 계산 테이블 검색형 드랍다운 */
+#rate-example-root .re-combo {
+  position: relative;
+}
+
+#rate-example-root .re-combo-menu {
+  position: fixed;
+  z-index: 3000;
+  width: 240px;
+  max-height: 220px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid #ced4da;
+  border-radius: 0.375rem;
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.12);
+}
+
+#rate-example-root .re-combo-item {
+  display: block;
+  width: 100%;
+  padding: 0.35rem 0.5rem;
+  border: 0;
+  background: #fff;
+  text-align: left;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+#rate-example-root .re-combo-item:hover,
+#rate-example-root .re-combo-item.is-active {
+  background: #e8f0fe;
+}
+
+#rateExamplePayModal .re-pay-count-label {
+  font-size: 0.8rem;
+}
+
 #rate-example-root .re-badge-life {
   background-color: #e8f0fe;
   color: #1a56db;
@@ -541,6 +633,14 @@
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   min-width: 72px;
+}
+
+/* ── 36회/37회/4차년 선택적 컬럼: 없는 보험사는 "-" + 연한 배경으로 시각 구분 ── */
+#rate-example-root .re-pay-opt,
+#rate-example-root .re-pay-opt-th {
+  color: var(--bs-secondary-color, #6c757d);
+  background-color: #f8f9fa;
+  min-width: 60px;
 }
  
 /* ── 마지막 업데이트 메타 텍스트 ────────────────────────────── */

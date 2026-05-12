@@ -1,4 +1,4 @@
-# django_ma 수수료 예시표(RateExample) 개발 가이드 FINAL (동양 포함 리팩토링)
+# django_ma 수수료 예시표(RateExample) 개발 가이드 FINAL
 
 > 목적:
 >
@@ -10,27 +10,18 @@
 >
 > 최신 반영 (이번 버전):
 >
-> * 동양생명 정규화 FINAL
-> * 동양 대상 시트 정책: `주계약` only
-> * 동양 raw 제외 정책: 1~14행 제외, 15행부터 데이터 처리
-> * 동양 컬럼 매핑 정책: B/C/G/J/L열 기준
-> * 동양 보종 판정 정책: 종신/연금/기타(보장성)
-> * 동양 함수명 SSOT: `build_life_dongyang_conversion_rows`
-> * 동양 legacy alias 정책: `build_dongyang_conversion_rows`
-> * dispatcher / parser 구조 / 회귀 체크리스트 보강
+> * 지급률(RateExamplePayRow) 기능 전체 추가
+> * 지급률 URL/뷰/서비스/모델/JS/CSS 계약 FINAL
+> * 지급률 보험사별 컬럼 매핑 FINAL (20개 생보사)
+> * 지급률 모달 UI 정책 FINAL
 >
 > 이전 반영 내역:
 >
-> * 교보 생명 정규화 FINAL (5개 테이블)
-> * 교보 공통 헬퍼 리팩토링 (_parse_table / _resolve_product / _make_row)
-> * 서브타입 키워드 판정 정책 (_is_subtype_keyword 강화)
-> * 판매중지/특약 제외 정책 통일 (_should_exclude)
-> * 교보 parser 구조 SSOT 추가
-> * 회귀 체크리스트 보강
->
+> * 라이나생명 정규화 FINAL (Excel/PDF)
+> * 동양생명 정규화 FINAL
+> * 교보 생명 정규화 FINAL
 > * IM 생명 정규화 FINAL
-> * KB 생명 일반상품 정규화 FINAL
-> * KB 건강보험 정규화 FINAL
+> * KB 생명 일반상품/건강보험 정규화 FINAL
 > * KDB 생명 정규화 FINAL
 > * normalize_mode(replace/append) 정책
 > * 환산율 % 저장 정책 통일
@@ -38,8 +29,6 @@
 > * 전략상품 저장 정책
 > * 생보 전용 업로드 UI 전환
 > * parser dispatcher 구조 SSOT
-> * 병합 셀 전파 정책
-> * KDB dedupe 정책
 
 ---
 
@@ -53,11 +42,18 @@
 
 1. 원본 파일 업로드
 2. 파일 검증
-3. 보험사별 xlsx 정규화
+3. 보험사별 정규화
 4. 정규화 데이터 조회
 5. 전략상품 저장
 6. 업로드/다운로드/삭제 audit
-7. 계산 엔진용 표준 환산율 데이터 구축
+7. 계산 엔진용 표준 환산율/지급률 데이터 구축
+
+현재 정규화 지원 범위:
+
+| category | 설명 |
+| --- | --- |
+| conv | 생명보험 환산율/수정률 (9개 보험사) |
+| pay | 생명보험 지급률 (20개 보험사, 단일 xlsx) |
 
 ---
 
@@ -71,20 +67,22 @@ commission/urls.py
 
 기존 URL name 변경 금지.
 
-| URL name                                           | 역할      |
-| -------------------------------------------------- | ------- |
-| commission:rate_example_home                       | 메인      |
-| commission:rate_example_upload                     | 업로드     |
-| commission:rate_example_download                   | 원본 다운로드 |
-| commission:rate_example_delete                     | 삭제      |
-| commission:rate_example_conversion_list            | 정규화 조회  |
+| URL name | 역할 |
+| --- | --- |
+| commission:rate_example_home | 메인 |
+| commission:rate_example_upload | 업로드 (환산율/지급률 공통) |
+| commission:rate_example_download | 원본 다운로드 |
+| commission:rate_example_delete | 삭제 |
+| commission:rate_example_conversion_list | 환산율 정규화 조회 |
 | commission:rate_example_conversion_strategy_update | 전략상품 저장 |
+| commission:rate_example_pay_list | 지급률 정규화 조회 |
 
 원칙:
 
 * 보험사 추가 시 URL 추가 금지
 * parser만 추가
 * 기존 URL name 변경 금지
+* 화면/JS에서 정규화 로직 하드코딩 금지
 
 ---
 
@@ -96,8 +94,8 @@ commission/urls.py
 
 주요 필드:
 
-* insurer_type
-* category
+* insurer_type (life / nonlife)
+* category (conv / pay)
 * insurer
 * file
 * original_name
@@ -122,22 +120,56 @@ open_fileresponse_from_fieldfile(...)
 
 ## 3.2 RateExampleConversionRow
 
-정규화 master 테이블.
+환산율/수정률 정규화 master 테이블.
 
 주요 필드:
 
-* source_file
-* source_sheet
-* source_row_no
-* insurer_type
-* category
-* insurer
+* source_file / source_sheet / source_row_no
+* insurer_type / category / insurer
+* coverage_type / strategy_flag
+* product_name / plan_type / pay_period
+* year1 / year2 / year3 / year4
+
+---
+
+## 3.3 RateExamplePayRow
+
+지급률 정규화 테이블. (신규)
+
+주요 필드:
+
+* source_file / source_sheet / source_row_no
+* insurer_type / category / insurer
+* tier (현재 "5천만↑" 고정)
 * coverage_type
-* strategy_flag
-* product_name
-* plan_type
-* pay_period
-* year1~year4
+* col_first : 초회
+* col_yr1   : 1차년
+* col_m13   : 13회
+* col_yr2   : 2차년구간
+* col_yr3   : 3차년구간
+* col_m36   : 36회 (별도 기재 보험사만 값, 나머지 None)
+* col_m37   : 37회 (별도 기재 보험사만 값, 나머지 None)
+* col_yr4   : 4차년구간 (해당 보험사만 값, 나머지 None)
+
+필드명 설계 원칙:
+
+```text
+col_first  → verbose_name="초회"
+col_yr1    → verbose_name="1차년"
+col_m13    → verbose_name="13회"
+col_yr2    → verbose_name="2차년구간"
+col_yr3    → verbose_name="3차년구간"
+col_m36    → verbose_name="36회"
+col_m37    → verbose_name="37회"
+col_yr4    → verbose_name="4차년구간"
+```
+
+영문 필드명 사용 이유:
+
+* Django ORM 쿼리 안정성
+* IDE 자동완성 지원
+* 마이그레이션 파일 가독성
+* verbose_name으로 한글 의미 유지
 
 ---
 
@@ -145,16 +177,13 @@ open_fileresponse_from_fieldfile(...)
 
 ## 매우 중요
 
-현재 모든 보험사는
-"백분율 수치 기준"으로 저장한다.
+현재 모든 보험사는 **백분율 수치 기준**으로 저장한다.
 
-예:
-
-| raw 표시 | DB 저장            |
-| ------ | ---------------- |
+| raw 표시 | DB 저장 |
+| --- | --- |
 | 100.0% | Decimal("100.0") |
 | 336.0% | Decimal("336.0") |
-| 126%   | Decimal("126")   |
+| 126% | Decimal("126") |
 
 즉:
 
@@ -172,26 +201,51 @@ open_fileresponse_from_fieldfile(...)
 
 ---
 
-# 5. 화면 출력 정책
+# 5. 지급률 저장 정책 FINAL
 
-환산율 확인 모달에서는:
+지급률도 환산율과 동일하게 **수치 그대로** 저장한다.
+
+| raw 파일 값 | DB 저장 |
+| --- | --- |
+| 222.59 | Decimal("222.59") |
+| 47.92 | Decimal("47.92") |
+| 0 | Decimal("0") |
+| (없음/병합) | None |
+
+소수점 4자리 고정:
+
+```python
+Decimal(str(value)).quantize(Decimal("0.0001"))
+```
+
+---
+
+# 6. 화면 출력 정책
+
+환산율 확인 모달:
 
 ```text
 336.0%
 126%
 100.0%
+245.0%
 ```
 
-형태로 출력한다.
+지급률 확인 모달:
 
-즉:
+```text
+222.59
+47.92
+0
+- (None인 경우)
+```
 
-* DB 저장값 = 숫자
-* UI 표시값 = `%` 포함 문자열
+지급률은 % 없이 숫자로 출력한다.
+36회/37회/4차년구간이 None인 경우 UI에서 `-` 표시.
 
 ---
 
-# 6. Excel 백분율 셀 처리 정책
+# 7. Excel 백분율 셀 처리 정책
 
 raw Excel 셀이:
 
@@ -199,8 +253,7 @@ raw Excel 셀이:
 336.0%
 ```
 
-처럼 보이더라도,
-openpyxl은 실제값을:
+처럼 보이더라도, openpyxl은 실제값을:
 
 ```python
 3.36
@@ -208,7 +261,7 @@ openpyxl은 실제값을:
 
 으로 읽을 수 있다.
 
-따라서 parser에서는:
+따라서 환산율 parser에서는:
 
 ```python
 if "%" in number_format:
@@ -217,15 +270,11 @@ if "%" in number_format:
 
 형태로 보정 후 저장한다.
 
-최종 저장:
-
-```python
-Decimal("336.0")
-```
+지급률 파일은 수치 그대로 저장하므로 이 보정이 불필요하다.
 
 ---
 
-# 7. normalize_mode 정책 FINAL
+# 8. normalize_mode 정책 FINAL
 
 업로드 모달에는:
 
@@ -235,42 +284,37 @@ Decimal("336.0")
 
 옵션이 존재한다.
 
----
-
-## replace
-
-```text
-기존 데이터를 초기화하고 새 데이터를 업데이트 합니다.
-```
+## 8.1 replace
 
 동작:
 
 * 동일 insurer_type/category/insurer row 전체 삭제
 * 신규 bulk_create
 
-기존 정책 유지.
-
----
-
-## append
-
-```text
-기존 데이터에 새 데이터를 추가합니다.
-```
+## 8.2 append
 
 동작:
 
 * 기존 row 유지
 * 신규 row만 append
 
-주의:
+## 8.3 지급률 normalize_mode 정책
 
-* dedupe 없음
-* 동일 상품 중복 가능
+지급률(category=pay) 업로드는:
+
+```python
+normalize_mode = "replace"  # 서버에서 강제 고정
+```
+
+이유:
+
+* 지급률은 전사 단일 파일로 20개 보험사가 한 번에 교체됨
+* append는 지급률에서 의미 없음
+* JS에서 전달하는 normalize_mode는 서버에서 무시됨
 
 ---
 
-# 8. 정규화 오케스트레이터
+# 9. 정규화 오케스트레이터
 
 파일:
 
@@ -280,28 +324,29 @@ commission/services/rate_example_normalizer.py
 
 역할:
 
-* workbook load
+* 파일 형식 판정
+* workbook load 또는 PDF parser 분기
+* category 분기 (conv / pay)
 * 보험사 parser dispatch
 * replace/append 처리
 * bulk_create
 
-현재 지원:
+## 9.1 category 분기 정책 FINAL
 
-| insurer | 지원 |
-| ------- | -- |
-| ABL     | O  |
-| DB      | O  |
-| IM      | O  |
-| KB      | O  |
-| KDB     | O  |
-| 교보      | O  |
-| 동양      | O  |
+오케스트레이터 진입 직후 category 분기:
 
----
+```python
+if example.category == RateExample.CAT_PAY:
+    from commission.services.rate_example_pay_normalizer import normalize_pay_rate_example
+    return normalize_pay_rate_example(example, normalize_mode=normalize_mode)
+```
 
-## workbook load 정책 FINAL
+pay 분기는 conv dispatcher와 완전 격리.
+pay 분기에서 return하면 conv 로직에 진입하지 않는다.
 
-KDB 병합 셀 처리를 위해:
+## 9.2 workbook load 정책 FINAL
+
+KDB 등 병합 셀 처리를 위해:
 
 ```python
 read_only=False
@@ -309,44 +354,387 @@ read_only=False
 
 고정 사용.
 
-금지:
+## 9.3 PDF 분기 정책 FINAL
 
 ```python
-load_workbook(..., read_only=True)
+original_name = str(example.original_name or "").lower()
+
+if original_name.endswith(".pdf"):
+    if example.insurer != "라이나":
+        return 0
+    normalized_rows = build_life_lina_pdf_conversion_rows(example)
+    ...
+    return len(normalized_rows)
+
+if not original_name.endswith(".xlsx"):
+    return 0
+```
+
+## 9.4 현재 dispatcher 구조
+
+conv dispatcher:
+
+```python
+if example.insurer == "ABL": ...
+elif example.insurer == "DB": ...
+elif example.insurer == "IM": ...
+elif example.insurer == "KB": ...
+elif example.insurer == "KDB": ...
+elif example.insurer == "교보": ...
+elif example.insurer == "농협": ...
+elif example.insurer == "동양": ...
+elif example.insurer == "라이나": ...
+```
+
+pay dispatcher:
+
+```python
+# rate_example_pay_normalizer.py 내부
+# 별도 파일로 완전 분리
+```
+
+---
+
+# 10. 지급률 정규화 서비스 FINAL
+
+파일:
+
+```text
+commission/services/rate_example_pay_normalizer.py
+```
+
+## 10.1 대상
+
+| 조건 | 값 |
+| --- | --- |
+| insurer_type | life |
+| category | pay |
+| 파일 | .xlsx |
+| 시트 | ① 5천만, 3천만↑ |
+
+## 10.2 대상 시트
+
+```python
+TARGET_SHEET = "① 5천만, 3천만↑"
+```
+
+5천만원↑ 블록(행 5~16, 32~43, 59~70, 86~97)만 처리.
+
+## 10.3 보험사별 컬럼 매핑 FINAL
+
+tuple 형식: `(col_first, col_yr1, col_m13, col_yr2, col_yr3, col_m36, col_m37, col_yr4)`
+
+값: 1-indexed 열 번호. None = 해당 보험사에 없는 회차.
+
+### 그룹1 (데이터행 5~16)
+
+| 보험사 | first | yr1 | m13 | yr2 | yr3 | m36 | m37 | yr4 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| ABL | 5 | 6 | 7 | 8 (14~24회) | 9 (25~36회) | - | - | 10 (37~48회) |
+| 삼성 | 12 | 13 | 14 | 15 (19~24회) | 16 (25~36회) | - | 17 | - |
+| 신한 | 19 | 20 | 21 | 22 (14~24회) | 23 (25~36회) | - | 24 | - |
+| 하나 | 26 | 27 | 28 | 29 (14~24회) | 30 (25~36회) | - | - | - |
+
+IBK는 별도 처리 (col32 상품명, col35~39 수치)
+
+### 그룹2 (데이터행 32~43)
+
+| 보험사 | first | yr1 | m13 | yr2 | yr3 | m36 | m37 | yr4 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| DB | 5 | 6 | 7 | 8 (13~24회) | 9 (25~36회) | - | 10 | - |
+| IM | 12 | 13 | 14 | 15 (14~24회) | 16 (25~35회) | 17 | - | - |
+| KB | 19 | 20 | 21 | 22 (14~24회) | 23 (25~36회) | - | 24 | - |
+| 농협 | 26 | 27 | 28 | 29 (19~24회) | 30 (25~36회) | - | - | - |
+| 라이나 | 32 | 33 | 34 | 35 (14~24회) | 36 (25~36회) | - | - | - |
+
+### 그룹3 (데이터행 59~70)
+
+| 보험사 | first | yr1 | m13 | yr2 | yr3 | m36 | m37 | yr4 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| KDB | 5 | 6 | 7 | 8 (14~24회) | 9 (25~36회) | - | 10 | - |
+| 미래 | 12 | 13 | 14 | 15 (14~24회) | 16 (25~36회) | - | 17 | - |
+| 처브 | 19 | 20 | 21 | 22 (14~24회) | 23 (25~36회) | - | - | 24 (37~48회) |
+| 한화 | 26 | 27 | 28 | 29 (14~24회) | 30 (25~35회) | 31 | - | 32 (37~42회) |
+| 카디프 | 34 | 35 | 36 | 37 (14~24회) | 38 (25~36회) | - | 39 | - |
+
+### 그룹4 (데이터행 86~97)
+
+| 보험사 | first | yr1 | m13 | yr2 | yr3 | m36 | m37 | yr4 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 동양 | 5 | 6 | 7 | 8 (19~24회) | 9 (25~36회) | - | - | - |
+| 메트 | 11 | 12 | 13 | 14 (14~24회) | 15 (25~36회) | - | 16 | - |
+| 흥국 | 18 | 19 | 20 | 21 (14~15회) | 22 (25회) | 23 | - | - |
+| 푸본현대 | 25 | 26 | 27 | 28 (14~24회) | 29 (25~36회) | - | - | - |
+| 교보 | 31 | 32 | 33 | 34 (14~24회) | 35 (25~36회) | - | - | 36 (37~39회) |
+
+### 흥국 특이 구조
+
+흥국은 2차년(14~15회), 3차년(25회) 구간이 타 보험사와 상이하다.
+필드 매핑은 col_yr2 / col_yr3 에 그대로 저장하며 verbose_name으로 의미를 보존한다.
+
+## 10.4 IBK 전용 처리
+
+IBK는 상품군(col4) 대신 col32 자체 상품명을 coverage_type으로 사용한다.
+
+```python
+coverage_type = f"[IBK]{str(raw_product).strip()}"
+```
+
+col_m36 / col_m37 / col_yr4 는 없음 (None).
+
+## 10.5 상품군(coverage_type) 정규화
+
+col4 값 기준:
+
+| raw | DB 저장 |
+| --- | --- |
+| 종신,CI | 종신/CI |
+| 연금 | 연금 |
+| 변액연금 | 변액연금 |
+| 저축 | 저축 |
+| VUL | VUL |
+| 연금저축 | 연금저축 |
+| 기타(보장성) | 기타(보장성) |
+| CEO정기 | CEO정기 |
+| 전략상품1~4 | 전략상품1~4 |
+
+col4 공란이면 직전 값 전파 (병합셀 대응).
+
+## 10.6 col_m36 / col_m37 / col_yr4 있는 보험사
+
+| 컬럼 | 있는 보험사 |
+| --- | --- |
+| col_m36 | IM, 한화, 흥국 |
+| col_m37 | 삼성, 신한, DB, KB, KDB, 미래, 카디프, 메트 |
+| col_yr4 | ABL, 처브, 한화, 교보 |
+
+나머지 보험사는 None → UI에서 `-` 표시.
+
+---
+
+# 11. 지급률 업로드 서비스 정책 FINAL
+
+파일:
+
+```text
+commission/services/rate_example.py
+```
+
+## 11.1 category=pay 전용 서버 강제 처리
+
+```python
+if category == RateExample.CAT_PAY:
+    insurer        = ""
+    product_kind   = ""
+    normalize_mode = "replace"
 ```
 
 이유:
 
-```python
-ReadOnlyWorksheet has no merged_cells
-```
+* 지급률 파일은 보험사 선택 없이 업로드 (전사 단일 파일)
+* insurer는 normalizer가 파일 내부에서 직접 판단
+* normalize_mode는 항상 replace
 
-병합 셀 API 미지원.
-
----
-
-## 현재 dispatcher 구조
+## 11.2 지급률 보험사 허용 목록 검증 skip
 
 ```python
-if example.insurer == "ABL":
-    ...
-elif example.insurer == "DB":
-    ...
-elif example.insurer == "IM":
-    ...
-elif example.insurer == "KB":
-    ...
-elif example.insurer == "KDB":
-    ...
-elif example.insurer == "교보":
-    ...
-elif example.insurer == "동양":
-    ...
+if category != RateExample.CAT_PAY:
+    if insurer not in _ALLOWED_INSURERS.get(insurer_type, set()):
+        return {"ok": False, "message": "선택된 보험사가 허용 목록에 없습니다."}
 ```
 
 ---
 
-# 9. parser 구조 SSOT
+# 12. 지급률 조회 API FINAL
+
+파일:
+
+```text
+commission/views/api_rate_example_pay.py
+```
+
+URL:
+
+```text
+commission:rate_example_pay_list
+GET /commission/rate-examples/pay/list/
+```
+
+권한: superuser 전용
+
+응답 구조:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "rows": [
+      {
+        "insurer": "ABL",
+        "tier": "5천만↑",
+        "coverage_type": "종신/CI",
+        "col_first": "222.59",
+        "col_yr1":   "0",
+        "col_m13":   "47.92",
+        "col_yr2":   "47.92",
+        "col_yr3":   "95.86",
+        "col_m36":   "",
+        "col_m37":   "",
+        "col_yr4":   "95.86"
+      }
+    ],
+    "count": 240,
+    "last_updated_at": "2026-05-11 14:30",
+    "last_updated_by": "홍길동",
+    "source_file_name": "지급률.xlsx"
+  }
+}
+```
+
+None 필드는 `""` (빈 문자열)로 직렬화.
+JS에서 `""` → `-` 렌더링.
+
+---
+
+# 13. views/__init__.py 등록 정책
+
+파일:
+
+```text
+commission/views/__init__.py
+```
+
+지급률 조회 API 등록:
+
+```python
+_RATE_EXAMPLE_API = {
+    ...
+    "rate_example_pay_list": (
+        "commission.views.api_rate_example_pay",
+        "rate_example_pay_list",
+    ),
+}
+```
+
+`__all__`에도 추가:
+
+```python
+"rate_example_pay_list",
+```
+
+---
+
+# 14. 지급률 프론트 구조 FINAL
+
+## 14.1 dataset 계약
+
+```html
+<div id="rate-example-root"
+     data-upload-url="{{ upload_url }}"
+     data-conversion-list-url="{{ conversion_list_url }}"
+     data-conversion-strategy-update-url="{{ conversion_strategy_update_url }}"
+     data-pay-list-url="{{ pay_list_url }}"
+     data-user-grade="{{ request.user.grade }}">
+```
+
+`data-pay-list-url` 추가 필수. JS는 `root.dataset.payListUrl`로 읽는다.
+
+## 14.2 지급률 업로드 모달
+
+ID: `rateExamplePayUploadModal`
+
+* 보험사 선택 없음 (전사 단일 파일)
+* insurer_type=life / category=pay / normalize_mode=replace 서버 전달
+* xlsx 파일만 허용 (`accept=".xlsx"`)
+
+## 14.3 지급률 확인 모달
+
+ID: `rateExamplePayModal`
+
+테이블 컬럼:
+
+| 컬럼 | 설명 | class |
+| --- | --- | --- |
+| 보험사 | insurer | - |
+| 상품군 | coverage_type | - |
+| 초회 | col_first | re-pay-num |
+| 1차년 | col_yr1 | re-pay-num |
+| 13회 | col_m13 | re-pay-num |
+| 2차년구간 | col_yr2 | re-pay-num |
+| 3차년구간 | col_yr3 | re-pay-num |
+| 36회 | col_m36 | re-pay-num re-pay-opt |
+| 37회 | col_m37 | re-pay-num re-pay-opt |
+| 4차년구간 | col_yr4 | re-pay-num re-pay-opt |
+
+36회/37회/4차년구간은 `.re-pay-opt` class 추가. 값이 빈 문자열이면 `-` 렌더.
+
+## 14.4 JS 렌더링 정책
+
+```javascript
+function cell(v) {
+  return '<td class="text-end re-pay-num">' + escapeHtml(v || "0") + "</td>";
+}
+function optCell(v) {
+  return '<td class="text-end re-pay-num re-pay-opt">'
+    + (v !== "" ? escapeHtml(v) : "-")
+    + "</td>";
+}
+```
+
+## 14.5 CSS 정책
+
+```css
+/* 36회/37회/4차년 선택적 컬럼: 연한 배경으로 시각 구분 */
+#rate-example-root .re-pay-opt,
+#rate-example-root .re-pay-opt-th {
+  color: var(--bs-secondary-color, #6c757d);
+  background-color: #f8f9fa;
+  min-width: 60px;
+}
+```
+
+---
+
+# 15. 업로드 모달 정책 FINAL
+
+## 15.1 환산율 업로드 모달
+
+현재 생보 전용 구조.
+
+* 손생구분 dropdown 없음
+* 구분 dropdown 없음
+* 서버에 `insurer_type=life`, `category=conv` 고정 전달
+* KB 선택 시만 상품 dropdown(general/health) 노출
+* KDB/교보/농협/동양/라이나는 product_kind 사용 안 함
+
+## 15.2 지급률 업로드 모달
+
+별도 모달 (ID: `rateExamplePayUploadModal`).
+
+* 보험사 선택 없음
+* 서버에 `insurer_type=life`, `category=pay`, `normalize_mode=replace` 고정 전달
+* xlsx 파일만 허용
+
+---
+
+# 16. 조회 모달 정책 FINAL
+
+## 16.1 환산율 확인 모달 (ID: rateExampleConvModal)
+
+* 보험사만 선택 (insurer_type=life 고정)
+* 라이나 선택 시 xlsx/pdf 구분 없이 동일 master table 조회
+* 전략상품 저장 가능
+
+## 16.2 지급률 확인 모달 (ID: rateExamplePayModal)
+
+* 보험사 필터 / 상품군 필터 / 키워드 검색
+* 조회 버튼 클릭 시 `data-pay-list-url` 호출
+* 36회/37회/4차년 없는 보험사는 `-` 표시
+* 전략상품 저장 없음 (지급률에는 strategy_flag 미적용)
+
+---
+
+# 17. 환산율 parser 구조 SSOT
 
 구조:
 
@@ -358,1024 +746,191 @@ commission/services/rate_example_normalizers/
 ├── life_kb.py
 ├── life_KDB.py
 ├── life_kyobo.py
-└── life_dongyang.py
+├── life_nh.py
+├── life_dongyang.py
+└── life_lina.py
 ```
 
 원칙:
 
-* 보험사별 parser는 life_*.py만 담당
-* rate_example_normalizer.py는 dispatcher만 담당
-* legacy parser/helper 유지 금지
+* 보험사별 parser는 `life_*.py`만 담당
+* `rate_example_normalizer.py`는 dispatcher만 담당
+* 세부 파싱 로직을 dispatcher에 직접 작성하지 않는다.
 
----
-
-# 10. KB 일반상품 정규화 FINAL
-
-파일:
+지급률 parser는 별도 단일 파일:
 
 ```text
-life_kb.py
+commission/services/rate_example_pay_normalizer.py
 ```
+
+모든 보험사(20개)를 단일 파일에서 처리한다.
+파일 구조상 하나의 시트에 전체 보험사가 있기 때문.
 
 ---
 
-## 10.1 대상
+# 18. 보험사별 환산율 정규화 정책
 
-| 조건           | 값       |
-| ------------ | ------- |
-| insurer_type | life    |
-| category     | conv    |
-| insurer      | KB      |
+## 18.1 KB 일반상품 FINAL
+
+| 조건 | 값 |
+| --- | --- |
 | product_kind | general |
-| 파일           | .xlsx   |
+| 파일 | .xlsx |
+| 제외 | 특약 포함 행, 1~4행 |
 
----
+보종 판정:
 
-## 10.2 raw 제외 정책
+| 조건 | coverage_type |
+| --- | --- |
+| 변액 포함 | 변액연금 |
+| 연금 포함 | 연금 |
+| 경영 포함 | CEO정기 |
+| 기타 | 종신/CI |
 
-raw 1~4행은 정규화 제외.
+## 18.2 KB 건강보험 FINAL
 
-```python
-for row_no in range(5, ...)
-```
-
----
-
-## 10.3 특약 제외 정책 FINAL
-
-상품명(B열)에:
-
-```text
-특약
-```
-
-문구가 포함된 행은 제외.
-
-```python
-if "특약" in product_name:
-    continue
-```
-
----
-
-## 10.4 보종 판정 FINAL
-
-| 조건    | coverage_type |
-| ----- | ------------- |
-| 변액 포함 | 변액연금          |
-| 연금 포함 | 연금            |
-| 경영 포함 | CEO정기         |
-| 정기 포함 | 종신/CI         |
-| 기타    | 종신/CI         |
-
----
-
-## 10.5 컬럼 매핑
-
-| 정규화 필드       | raw       |
-| ------------ | --------- |
-| product_name | B열        |
-| pay_period   | C열        |
-| plan_type    | D/E/K열 조합 |
-| year1        | F열        |
-| year2        | G열        |
-| year3        | H열        |
-| year4        | I열        |
-
----
-
-# 11. KB 건강보험 정규화 FINAL
-
-파일:
-
-```text
-life_kb.py
-```
-
----
-
-## 11.1 대상
-
-| 조건           | 값      |
-| ------------ | ------ |
-| insurer_type | life   |
-| category     | conv   |
-| insurer      | KB     |
+| 조건 | 값 |
+| --- | --- |
 | product_kind | health |
-| 파일           | .xlsx  |
+| 파일 | .xlsx |
+| 보종 | 기타(보장성) 고정 |
 
----
+특약 차단: B열에 `특약` 등장 시 해당 행부터 하단 전체 break.
 
-## 11.2 핵심 정책
+## 18.3 KDB 생명 FINAL
 
-* workbook 내 모든 시트 사용
-* 각 시트 1~3행 제외
-* B열 구분값에 "특약" 포함 시 해당 행부터 하단 전체 제외
-* 보험사 컬럼은 강제로 KB 저장
-* 보종은 강제로 기타(보장성) 저장
+| 조건 | 값 |
+| --- | --- |
+| 대상 시트 | GA 주계약 |
+| 제외 행 | 1~3행 |
+| plan_type | 공란 고정 |
+| 병합 셀 | C열(상품명), H열(납기) 전파 필수 |
 
----
-
-## 11.3 특약 차단 정책 FINAL
-
-B열:
+연령/기준(I열) 병합 정책:
 
 ```text
-특약
+납기 + "(" + I열 + ")"
 ```
 
-문구가 발견되는 행부터:
-
-```python
-break
-```
-
-즉:
-
-* 특약 행 포함
-* 특약 하단 전체 제외
-
----
-
-## 11.4 상품명/구분 파싱 정책
-
-raw 상품(C열):
-
-```text
-KB암보험(기본형)(무해약형)
-```
-
-정규화 결과:
-
-| 필드           | 값         |
-| ------------ | --------- |
-| product_name | KB암보험     |
-| plan_type    | 기본형, 무해약형 |
-
----
-
-## 11.5 컬럼 매핑
-
-| 정규화 필드       | raw     |
-| ------------ | ------- |
-| product_name | C열 괄호 밖 |
-| plan_type    | C열 괄호 안 |
-| pay_period   | D열      |
-| year1        | E열      |
-| year2        | F열      |
-| year3        | G열      |
-| year4        | H열      |
-
----
-
-# 12. KDB 생명 정규화 FINAL
-
-파일:
-
-```text
-commission/services/rate_example_normalizers/life_KDB.py
-```
-
----
-
-## 12.1 대상
-
-| 조건           | 값     |
-| ------------ | ----- |
-| insurer_type | life  |
-| category     | conv  |
-| insurer      | KDB   |
-| 파일           | .xlsx |
-
----
-
-## 12.2 대상 시트
-
-반드시 아래 시트만 사용:
-
-```text
-GA 주계약
-```
-
-다른 시트는 모두 무시.
-
----
-
-## 12.3 raw 제외 정책
-
-1~3행 제외:
-
-```python
-for row_no in range(4, ...)
-```
-
----
-
-## 12.4 병합 셀 처리 FINAL
-
-KDB raw는:
-
-* 상품명(C열)
-* 납기(H열)
-
-가 병합되어 여러 행을 점유한다.
-
-openpyxl은 병합 범위 첫 셀만 값을 보유하므로,
-반드시 병합값 전파 로직 필요.
-
-예:
-
-| row | C열            |
-| --- | ------------- |
-| 7   | 버팀목New케어보험(무) |
-| 8   | 빈값            |
-| 9   | 빈값            |
-
-정규화 결과:
-
-| row | 상품명           |
-| --- | ------------- |
-| 7   | 버팀목New케어보험(무) |
-| 8   | 버팀목New케어보험(무) |
-| 9   | 버팀목New케어보험(무) |
-
----
-
-## 12.5 각 행 독립 상품 처리 정책
-
-병합 상품명이어도:
-
-* 구분
-* 납기
-
-가 다르면 서로 다른 상품으로 본다.
-
-즉:
-
-```text
-상품명 동일 != 같은 상품
-```
-
-이다.
-
----
-
-## 12.6 구분(plan_type) 정책 FINAL
-
-KDB는:
-
-```python
-plan_type = ""
-```
-
-고정.
-
-즉:
-
-* D열 구분 사용 안 함
-* 정규화 테이블의 구분 컬럼은 공란 저장
-
----
-
-## 12.7 연령/기준(I열) 병합 정책 FINAL
-
-I열 값이 있으면:
-
-```text
-납기(H열) + "(" + I열 + ")"
-```
-
-형태로 결합.
-
-예:
-
-| H열   | I열  | 결과        |
-| ---- | --- | --------- |
-| 3년만기 | 3년납 | 3년만기(3년납) |
-
----
-
-## 12.8 보종 판정 FINAL
-
-| 조건      | coverage_type |
-| ------- | ------------- |
-| 연금 + 변액 | 변액연금          |
-| 연금 + 저축 | 연금저축          |
-| 종신 포함   | 종신/CI         |
-| CEO 포함  | CEO정기         |
-| 연금 포함   | 연금            |
-| 기타      | 기타(보장성)       |
-
-주의:
-
-* 변액연금 우선
-* 연금저축 우선
-* 일반 연금은 마지막
-
----
-
-## 12.9 컬럼 매핑 FINAL
-
-| 정규화 필드       | raw        |
-| ------------ | ---------- |
-| product_name | C열         |
-| plan_type    | 공란         |
-| pay_period   | H열 + I열 결합 |
-| year1        | K열         |
-| year2        | K열         |
-| year3        | K열         |
-| year4        | K열         |
-
----
-
-## 12.10 dedupe 정책 FINAL
-
-최종 정규화 후:
+dedupe 기준:
 
 ```python
 (product_name, plan_type, pay_period)
 ```
 
-가 동일하면 같은 상품으로 보고 제거.
-
-즉:
-
-```python
-seen_keys = {
-    (상품명, 구분, 납기)
-}
-```
-
-기준 dedupe.
-
----
-
-# 13. IM 정규화 핵심
+## 18.4 IM 정규화 핵심
 
 * 첫 번째 시트만 사용
 * E열 == 주계약만 사용
 * 미판매 제외
 * 납기 문자열 보존
 
----
+## 18.5 ABL/DB
 
-# 14. ABL/DB 정책
+ABL: 종신 포함 → 종신/CI, 기타 → 기타(보장성)
+DB: 특약/방카교차 시트 제외, 첫 번째 테이블만 사용
 
-ABL:
+## 18.6 교보 생명 FINAL
 
-* 종신 포함 → 종신/CI
-* 기타 → 기타(보장성)
+대상 시트: `주계약(종속특약포함)`
 
-DB:
+5개 테이블 열 방향 나열:
 
-* 특약/방카교차 시트 제외
-* 첫 번째 테이블만 사용
+| 테이블 | 상품명 열 | 환산율 열 | coverage_type |
+| --- | --- | --- | --- |
+| 종신보험 | B(2) | F(6) | 종신/CI 고정 |
+| CI보험 | H(8) | L(12) | 종신/CI 고정 |
+| 연금보험 | N(14) | R(18) | 변액연금/연금저축/연금 분기 |
+| 정기보험 | Z(26) | AC(29) | CEO정기/종신/CI |
+| 건강/어린이/기타보장 | AE(31) | AH(34) | 기타(보장성) 고정 |
 
----
+판매중지/특약 포함 → 제외.
 
-# 15. 교보 생명 정규화 FINAL
+## 18.7 동양생명 FINAL
 
-파일:
+대상 시트: `주계약`
 
-```text
-commission/services/rate_example_normalizers/life_kyobo.py
-```
+| 필드 | raw 컬럼 |
+| --- | --- |
+| product_name | B열 |
+| plan_type | C열 첫 번째 `_` 뒤 |
+| pay_period | G열 |
+| year1 | J열 |
+| year2~4 | L열 동일 |
 
----
-
-## 15.1 대상
-
-| 조건           | 값     |
-| ------------ | ----- |
-| insurer_type | life  |
-| category     | conv  |
-| insurer      | 교보    |
-| 파일           | .xlsx |
-
----
-
-## 15.2 대상 시트
-
-반드시 아래 시트만 사용:
-
-```text
-주계약(종속특약포함)
-```
-
-다른 시트(특약, 단체보험, 단체 특약 등)는 모두 무시.
-
----
-
-## 15.3 테이블 구성
-
-교보 raw 파일은 단일 시트에 5개 테이블이 열 방향으로 나열된다.
-
-| 테이블           | 상품명 열   | 구분 열       | 납기 열    | 환산율 열   | 보종 판정 정책              |
-| ------------- | ------- | ---------- | ------- | ------- | --------------------- |
-| 종신보험          | B열(2)   | E열(5)      | D열(4)   | F열(6)   | 종신/CI 고정              |
-| CI보험          | H열(8)   | K열(11)     | J열(10)  | L열(12)  | 종신/CI 고정              |
-| 연금보험          | N열(14)  | Q열(17)     | P열(16)  | R열(18)  | 연금 / 변액연금 / 연금저축 분기   |
-| 정기보험          | Z열(26)  | 없음         | AB열(28) | AC열(29) | CEO정기(경영 포함) / 종신/CI  |
-| 건강/어린이/기타보장   | AE열(31) | 없음         | AG열(33) | AH열(34) | 기타(보장성) 고정            |
-
-* 5행은 헤더. 데이터는 6행부터 시작.
-* 각 테이블의 마지막 행은 해당 환산율 열의 마지막 데이터 행으로 독립 탐색한다.
-
----
-
-## 15.4 공통 헬퍼 구조
-
-```text
-_text(value) → str
-_should_exclude(product_name) → bool
-_is_subtype_keyword(value) → bool
-_to_decimal_percent(cell) → Decimal | None
-_last_data_row(ws, rate_col) → int
-_resolve_product(...) → tuple
-_make_row(...) → RateExampleConversionRow
-_parse_table(...) → list[RateExampleConversionRow]
-```
-
-공통 헬퍼 원칙:
-
-* 테이블 추가 시 `_parse_table()` + `coverage_type_fn` 만 추가
-* 상품명 처리 로직(`_resolve_product`)은 모든 테이블이 공유
-* 보종 판정은 테이블별 함수(`_coverage_*`)로 분리
-
----
-
-## 15.5 상품명 제외 정책 FINAL
-
-`_should_exclude()` 기준:
-
-* 상품명에 `판매중지` 포함 → 제외
-* 상품명에 `특약` 포함 → 제외
-* 해당 상품 하위 공란 행도 동일하게 제외 (전파)
-
-```python
-def _should_exclude(product_name: str) -> bool:
-    name = _text(product_name)
-    return "판매중지" in name or "특약" in name
-```
-
----
-
-## 15.6 상품명 공란 전파 정책 FINAL
-
-`_resolve_product()` 처리 순서:
-
-1. B열(또는 해당 테이블 상품명 열)이 공란 → 직전 상품명 전파
-2. 서브타입 키워드(`_is_subtype_keyword`) → 직전 상품명에 합성
-3. 일반 상품명 → 그대로 사용
-
----
-
-## 15.7 서브타입 키워드 판정 정책 FINAL
-
-`_is_subtype_keyword()` 판정 기준:
-
-* 문자열 전체가 `(` 로 시작하고 `)` 로 끝남
-* **내부에 추가 괄호가 없음** (단일 괄호 쌍)
-
-```python
-def _is_subtype_keyword(value: str) -> bool:
-    v = value.strip()
-    if not (v.startswith("(") and v.endswith(")")):
-        return False
-    inner = v[1:-1]
-    return "(" not in inner and ")" not in inner
-```
-
-예:
-
-| 값                          | 판정    | 이유              |
-| -------------------------- | ----- | --------------- |
-| `(기본형)`                    | True  | 단일 괄호 쌍         |
-| `(체증형)`                    | True  | 단일 괄호 쌍         |
-| `(무)교보바로받는웰스연금(거치형)`       | False | 내부에 추가 괄호 있음    |
-| `기본형(플러스),보장강화형(플러스)`      | False | 괄호로 시작 안 함      |
-
-서브타입 합성 예:
-
-| 직전 상품명                            | 서브타입 키워드 | 합성 결과                              |
-| ---------------------------------- | -------- | ---------------------------------- |
-| 교보하이브리드변액종신보험(무배당)\_판매중지          | (체증형)    | 교보하이브리드변액종신보험(무배당)\_판매중지(체증형)      |
-
-합성 후 `_should_exclude` 재판정 → 판매중지 포함이므로 제외.
-
----
-
-## 15.8 보종 판정 FINAL
-
-### 종신보험 / CI보험
-
-```python
-coverage_type = "종신/CI"  # 고정
-```
-
-### 연금보험
-
-| 조건      | coverage_type |
-| ------- | ------------- |
-| 변액 포함   | 변액연금          |
-| 저축 포함   | 연금저축          |
-| 기타      | 연금            |
-
-우선순위: 변액연금 > 연금저축 > 연금
-
-### 정기보험
-
-| 조건    | coverage_type |
-| ----- | ------------- |
-| 경영 포함 | CEO정기         |
-| 기타    | 종신/CI         |
-
-### 건강/어린이/기타보장
-
-```python
-coverage_type = "기타(보장성)"  # 고정
-```
-
----
-
-## 15.9 Excel % 셀 보정 정책
-
-교보 raw 파일의 환산율 열(F/L/R/AC/AH)은 모두 `number_format='0%'` 또는 `'0.00%'`.
-
-openpyxl 읽기 결과:
-
-| Excel 표시 | openpyxl value | number_format | DB 저장         |
-| -------- | -------------- | ------------- | ------------- |
-| 75%      | 0.75           | 0%            | Decimal("75") |
-| 150%     | 1.5            | 0%            | Decimal("150")|
-| 0.22%    | 0.0022         | 0.00%         | Decimal("0.22")|
-
-`_to_decimal_percent()` 가 `number_format`에 `%` 포함 시 ×100 보정 적용.
-
----
-
-## 15.10 회귀 위험 포인트
-
-* `TARGET_SHEET_NAME = "주계약(종속특약포함)"` byte 일치 필수
-* 각 테이블 환산율 열 번호 변경 금지 (열 이동 시 상수 전체 점검)
-* `_is_subtype_keyword` 내부 괄호 체크 로직 변경 금지
-* `_should_exclude` 판정 키워드(`판매중지`, `특약`) 변경 시 전 테이블 영향
-
----
-
-
-# 16. 동양생명 정규화 FINAL
-
-파일:
-
-```text
-commission/services/rate_example_normalizers/life_dongyang.py
-```
-
----
-
-## 16.1 대상
-
-| 조건           | 값     |
-| ------------ | ----- |
-| insurer_type | life  |
-| category     | conv  |
-| insurer      | 동양    |
-| 파일           | .xlsx |
-
----
-
-## 16.2 대상 시트
-
-반드시 아래 시트만 사용:
-
-```text
-주계약
-```
-
-다른 시트는 모두 무시한다.
-
-실제 raw 파일 기준 확인된 시트:
-
-| 시트명 | 처리 |
-| ------ | ---- |
-| 주계약 | 정규화 대상 |
-| 특약   | 무시 |
-
----
-
-## 16.3 raw 제외 정책
-
-동양 raw 파일은 1~12행이 안내/기준 영역이고, 13~14행은 헤더 영역이다.
-
-따라서 정규화 데이터는 15행부터 처리한다.
-
-```python
 DATA_START_ROW = 15
 
-for row_no in range(DATA_START_ROW, ws.max_row + 1):
-    ...
-```
+## 18.8 라이나생명 FINAL
 
-정책:
+Excel + PDF 이중 지원.
 
-* 1~14행 제외
-* 15행부터 데이터 row로 판단
-* `source_row_no`에는 실제 Excel 행 번호 저장
+| 파일 | parser |
+| --- | --- |
+| .xlsx | build_life_lina_conversion_rows |
+| .pdf | build_life_lina_pdf_conversion_rows |
 
----
+PDF 정책:
 
-## 16.4 함수명 SSOT
+* `년납` 포함 행만 정규화
+* `년만기` 제외
+* 줄바꿈 상품명 병합
+* `무배당` 포함 line은 신규 상품명
+* continuation line에 `무배당` 포함 시 반드시 제외
+* year1~year4 동일 저장
+* plan_type 공란 고정
+* dedupe key: (insurer, coverage_type, product_name, pay_period, year1)
 
-동양 parser의 공식 함수명은 아래로 통일한다.
-
-```python
-build_life_dongyang_conversion_rows(example, workbook)
-```
-
-호환 alias는 허용한다.
-
-```python
-build_dongyang_conversion_rows = build_life_dongyang_conversion_rows
-```
-
-이유:
-
-* `life_abl.py` 등 기존 생보 parser 함수명 패턴과 맞춘다.
-* `rate_example_normalizers/__init__.py` export와 `rate_example_normalizer.py` dispatcher import 이름이 일치해야 한다.
-* 함수명 불일치 시 업로드 시점에 `ImportError`가 발생한다.
-
-금지:
-
-```python
-# __init__.py 또는 normalizer.py에서 실제 파일에 없는 함수명 import 금지
-from commission.services.rate_example_normalizers.life_dongyang import build_dongyang_conversion_rows
-```
-
-허용:
-
-```python
-from commission.services.rate_example_normalizers.life_dongyang import (
-    build_life_dongyang_conversion_rows,
-)
-```
+의존성: `pypdf>=4.0.0`
 
 ---
 
-## 16.5 컬럼 매핑 FINAL
+# 19. 전략상품 저장 정책
 
-| 정규화 필드       | raw 컬럼 | 설명 |
-| ------------ | ------- | ---- |
-| insurer      | 고정값   | `동양` |
-| product_name | B열      | 대표상품명 |
-| coverage_type | B열 기반 | 상품명 키워드로 판정 |
-| plan_type    | C열      | 세부상품명 중 첫 번째 `_` 뒤 텍스트 |
-| pay_period   | G열      | 납입기간 원문 |
-| year1        | J열      | 초년도 환산 변경후 |
-| year2        | L열      | 차년도 환산 변경후 |
-| year3        | L열      | 차년도 환산 변경후 |
-| year4        | L열      | 차년도 환산 변경후 |
+정규화 row의 `strategy_flag` 필드 사용.
+
+허용값: 전략상품1 / 전략상품2 / 전략상품3 / 전략상품4
+
+저장 API: `commission:rate_example_conversion_strategy_update`
+
+적용 대상: 환산율(conv)만. 지급률(pay)에는 미적용.
 
 ---
 
-## 16.6 상품명 전파 정책
+# 20. Audit 정책
 
-동양 raw 파일은 대표상품명(B열)이 병합 또는 공란으로 내려오는 행이 있을 수 있다.
-
-정책:
-
-* B열 값이 있으면 `current_product_name` 갱신
-* B열 값이 없으면 직전 상품명 전파
-* 전파 후에도 상품명이 없으면 제외
-
-```python
-if raw_product_name:
-    current_product_name = raw_product_name
-
-product_name = current_product_name
-
-if not product_name:
-    continue
-```
-
----
-
-## 16.7 구분(plan_type) 파싱 정책 FINAL
-
-세부상품명(C열)에서 첫 번째 언더스코어(`_`) 뒤 텍스트를 저장한다.
-
-예:
-
-| C열 raw | plan_type |
-| ------- | --------- |
-| 무배당A상품_보장형_평준납입형 | 보장형_평준납입형 |
-| 무배당B상품_해약환급금 일부지급 | 해약환급금 일부지급 |
-| 언더스코어없음 | 공란 |
-
-정책:
-
-```python
-def _plan_type_from_detail(detail_name: str) -> str:
-    detail = _text(detail_name)
-    if "_" not in detail:
-        return ""
-    return detail.split("_", 1)[1].strip()
-```
-
-주의:
-
-* 첫 번째 `_` 앞 텍스트는 상품명 성격이므로 구분에 저장하지 않는다.
-* `_`가 여러 개 있으면 첫 번째 `_` 뒤 전체를 보존한다.
-* `_`가 없으면 공란 저장한다.
-
----
-
-## 16.8 보종 판정 FINAL
-
-상품명(B열) 기준으로 판정한다.
-
-| 조건 | coverage_type |
-| ---- | ------------- |
-| `종신` 포함 | 종신/CI |
-| `연금` 포함 | 연금 |
-| 기타 | 기타(보장성) |
-
-우선순위:
-
-```text
-종신 > 연금 > 기타(보장성)
-```
-
-구현 예:
-
-```python
-def _coverage_type(product_name: str) -> str:
-    name = _text(product_name)
-    if "종신" in name:
-        return "종신/CI"
-    if "연금" in name:
-        return "연금"
-    return "기타(보장성)"
-```
-
----
-
-## 16.9 환산율 처리 FINAL
-
-동양 raw의 환산율 컬럼:
-
-| 연차 | raw 컬럼 | 저장 필드 |
-| ---- | -------- | -------- |
-| 1차년 | J열 | year1 |
-| 2차년 | L열 | year2 |
-| 3차년 | L열 | year3 |
-| 4차년 | L열 | year4 |
-
-즉, 차년도 환산 변경후(L열)를 2~4차년에 동일하게 저장한다.
-
-```python
-year1 = _to_decimal_percent(ws.cell(row_no, COL_YEAR1_AFTER))
-next_year = _to_decimal_percent(ws.cell(row_no, COL_NEXT_AFTER))
-
-year2 = next_year
-year3 = next_year
-year4 = next_year
-```
-
----
-
-## 16.10 Excel % 셀 보정 정책
-
-동양 raw의 J/L열은 Excel 표시상 `%` 형식일 수 있다.
-
-openpyxl은 아래처럼 읽을 수 있다.
-
-| Excel 표시 | openpyxl value | number_format | DB 저장 |
-| ---------- | -------------- | ------------- | ------- |
-| 70%        | 0.7            | 0%            | Decimal("70") |
-| 150%       | 1.5            | 0%            | Decimal("150") |
-| 0.22%      | 0.0022         | 0.00%         | Decimal("0.22") |
-
-반드시 기존 환산율 저장 정책과 동일하게 백분율 수치 기준으로 저장한다.
-
-```python
-if "%" in number_format:
-    dec *= Decimal("100")
-```
-
-금지:
-
-```python
-# 70%를 Decimal("0.7")로 저장 금지
-```
-
----
-
-## 16.11 row 제외 정책 FINAL
-
-제외 대상:
-
-* 상품명 전파 후에도 상품명이 없는 행
-* 세부상품명(C열)이 없는 행
-* J/L열 환산률이 모두 비어 있는 행
-* 1~14행
-
-기본적으로 `특약` 문구는 동양 주계약 시트에서 별도 제외 키워드로 적용하지 않는다.
-
-이유:
-
-* 요구사항의 대상 시트가 `주계약`으로 고정되어 있다.
-* `특약` 시트는 시트 단위로 무시한다.
-* 주계약 시트 내 특약성 문구 제외는 별도 raw 케이스 확인 후 정책화한다.
-
----
-
-## 16.12 dispatcher 연결 정책
-
-파일:
-
-```text
-commission/services/rate_example_normalizer.py
-```
-
-import:
-
-```python
-from commission.services.rate_example_normalizers.life_dongyang import (
-    build_life_dongyang_conversion_rows,
-)
-```
-
-분기:
-
-```python
-elif example.insurer == "동양":
-    rows = build_life_dongyang_conversion_rows(example, wb)
-```
-
-주의:
-
-* `rate_example_normalizer.py`는 dispatcher만 담당한다.
-* 동양 세부 파싱 로직을 dispatcher에 직접 작성하지 않는다.
-* `normalize_mode` 처리, 기존 row 삭제, `bulk_create`는 기존 오케스트레이터 정책을 그대로 따른다.
-
----
-
-## 16.13 프론트 드롭다운 정책
-
-파일:
-
-```text
-commission/templates/commission/rate_example_home.html
-static/js/commission/rate_example_home.js
-```
-
-정책:
-
-* 업로드 모달 보험사 dropdown에 `동양` 추가
-* 조회 모달 보험사 dropdown에 `동양` 추가
-* KB 전용 product_kind dropdown은 동양 선택 시 숨김
-* JS에 동양 정규화 규칙 하드코딩 금지
-
-서버 전달값:
-
-```text
-insurer_type = life
-category = conv
-insurer = 동양
-```
-
----
-
-## 16.14 동양 회귀 위험 포인트
-
-* `TARGET_SHEET_NAME = "주계약"` byte 일치 필수
-* `DATA_START_ROW = 15` 변경 금지
-* B/C/G/J/L 열 번호 변경 금지
-* 공식 함수명 `build_life_dongyang_conversion_rows` 유지
-* `__init__.py` export명과 dispatcher import명 일치 필수
-* J열은 1차년만 저장
-* L열은 2~4차년에 동일 저장
-* `%` 보정 누락 시 모든 환산율이 100분의 1로 저장됨
-
----
-
-
-# 17. 프론트 구조
-
-파일:
-
-```text
-static/js/commission/rate_example_home.js
-```
-
-핵심:
-
-* root.dataset.inited 중복 방지
-* normalize_mode FormData 전달
-* 생보 전용 업로드 구조
-* 보험사 dropdown 항상 활성화
-* KB 선택 시 상품 dropdown 노출
-
----
-
-# 18. 업로드 모달 정책 FINAL
-
-현재 업로드 모달은 생보 전용 구조.
-
-제거된 항목:
-
-* 손생구분 dropdown
-* 구분 dropdown
-
-서버에는:
-
-```python
-insurer_type = "life"
-category = "conv"
-```
-
-고정 전달.
-
----
-
-## 18.1 KB 상품 dropdown
-
-KB 선택 시만 노출.
-
-옵션:
-
-* general
-* health
-
-KDB/교보/동양은 product_kind 사용 안 함.
-
----
-
-# 19. 조회 모달 정책 FINAL
-
-환산율 확인 모달:
-
-* 손생구분 제거
-* 보험사만 선택
-* insurer_type=life 고정 조회
-
----
-
-# 20. 전략상품 저장 정책
-
-정규화 row의:
-
-```text
-strategy_flag
-```
-
-필드를 사용.
-
-허용값:
-
-* 전략상품1
-* 전략상품2
-* 전략상품3
-* 전략상품4
-
-저장 API:
-
-```text
-commission:rate_example_conversion_strategy_update
-```
-
----
-
-# 21. Audit 정책
-
-로그 대상:
-
-* 업로드
-* 다운로드
-* 삭제
-* 전략상품 변경
+로그 대상: 업로드 / 다운로드 / 삭제 / 전략상품 변경
 
 필수 meta:
 
-* insurer_type
-* insurer
-* category
-* original_name
-* normalized_count
-* product_kind
-* normalize_mode
+* insurer_type / insurer / category
+* original_name / normalized_count
+* product_kind / normalize_mode
+
+지급률 업로드 meta 예:
+
+```json
+{
+  "insurer_type": "life",
+  "insurer": "",
+  "category": "pay",
+  "original_name": "지급률.xlsx",
+  "normalized_count": 240,
+  "product_kind": "",
+  "normalize_mode": "replace"
+}
+```
 
 ---
 
-# 22. 보안 원칙
+# 21. 보안 원칙
 
 금지:
 
 * file.url 직접 노출
+* PDF/Excel 원본 public URL 제공
 * except: pass
 * 권한 완화
-* raw 파일 public URL 제공
+* raw 파일을 static/media 직접 링크로 제공
 
 허용:
 
@@ -1383,81 +938,143 @@ commission:rate_example_conversion_strategy_update
 * logger.exception 사용
 * superuser 유지
 * transaction.atomic 사용
+* parser 내부: `example.file.open("rb")` 또는 `example.file.path`
 
 ---
 
-# 23. 회귀 위험 체크리스트
+# 22. 회귀 위험 체크리스트
+
+## 공통
 
 * URL name 변경 없음
 * dataset key 유지
-* replace 정상
-* append 정상
-* KB 일반상품 조회 정상
-* KB 건강보험 조회 정상
-* KDB 조회 정상
-* IM 조회 정상
-* ABL 조회 정상
-* DB 조회 정상
-* 교보 조회 정상 (189건 기준)
-* 교보 종신/CI 조회 정상
-* 교보 CI보험 조회 정상
-* 교보 연금보험 조회 정상 (변액연금/연금저축 분기 포함)
-* 교보 정기보험(CEO정기) 조회 정상
-* 교보 건강/기타보장 조회 정상
-* 교보 판매중지/특약 제외 정상 (잔존 0건)
-* 교보 서브타입 합성 후 재판정 정상
-* 교보 괄호 단독 상품명 잔존 없음
-* 동양 조회 정상
-* 동양 `주계약` 시트만 정규화 정상
-* 동양 `특약` 시트 무시 정상
-* 동양 1~14행 제외 정상
-* 동양 B열 상품명 전파 정상
-* 동양 C열 첫 번째 `_` 뒤 구분 저장 정상
-* 동양 G열 납기 원문 보존 정상
-* 동양 J열 → 1차년 저장 정상
-* 동양 L열 → 2~4차년 동일 저장 정상
-* 동양 종신/연금/기타 보종 판정 정상
-* 동양 `%` 보정 정상
-* 동양 함수명 import 정상 (`build_life_dongyang_conversion_rows`)
+* replace/append 정상
+
+## 환산율
+
+* KB 일반상품 / 건강보험 조회 정상
+* KDB / IM / ABL / DB / 교보 / 농협 / 동양 조회 정상
+* 라이나 xlsx / pdf 조회 정상
+* 라이나 pypdf import 정상
+* 라이나 PDF normalized_count > 0
+* 라이나 PDF 년납 행만 정규화
+* 라이나 PDF 줄바꿈 상품명 병합
+* 라이나 PDF 상품명 중복 결합 없음
 * % 출력 정상
-* 336.0% 정상 출력
 * 병합 셀 전파 정상
 * dedupe 정상
+
+## 지급률
+
+* 지급률 업로드 후 normalized_count == 240
+* 20개 보험사 전체 row 존재
+* col_m36 없는 보험사 None 확인
+* col_m37 없는 보험사 None 확인
+* col_yr4 없는 보험사 None 확인
+* 지급률 확인 모달 조회 정상
+* 보험사/상품군 필터 정상
+* `-` 표시 정상
+* data-pay-list-url dataset 존재
+
+## 마이그레이션
+
+* makemigrations commission 정상
+* migrate 정상
+* RateExamplePayRow 테이블 생성 확인
 * python manage.py check 통과
 
 ---
 
-# 24. 절대 금지
+# 23. 절대 금지
+
+## 환산율
 
 * 환산율을 1.26 기준으로 저장
 * file.url 직접 노출
 * parser를 dispatcher에 재삽입
-* except: pass 사용
+* except: pass
 * DOM id 변경
 * dataset key 변경
-* normalize_mode 기본값 변경
+* normalize_mode 기본값 임의 변경
 * 보험사별 정책을 프론트 JS에 하드코딩
-* 교보 `_is_subtype_keyword` 내부 괄호 체크 제거
-* 교보 `_should_exclude` 판정 키워드 임의 변경
-* 교보 테이블 열 번호 상수를 parser 밖에서 하드코딩
-* 동양 환산율을 0.7 기준으로 저장
-* 동양 `특약` 시트를 정규화 대상에 포함
-* 동양 1~14행을 정규화 대상에 포함
-* 동양 J열 값을 2~4차년에 복제
-* 동양 L열 값을 1차년에 저장
-* 동양 공식 함수명과 dispatcher import명을 다르게 유지
+* 라이나 PDF: OCR 전제 구현
+* 라이나 PDF: 무배당 신규 상품명을 continuation으로 병합
+* 라이나 PDF: 년만기 행 정규화
+* 교보: `_is_subtype_keyword` 내부 괄호 체크 제거
+* 교보: `_should_exclude` 판정 키워드 임의 변경
+* 동양: 환산율을 0.7 기준으로 저장
+* 동양: 특약 시트 정규화
+* 동양: 1~14행 정규화
+* 동양: J열 값을 2~4차년에 복제
+* 동양: L열 값을 1차년에 저장
+
+## 지급률
+
+* 지급률 모델 필드명에 한글 사용
+* col_m36/col_m37/col_yr4 없는 보험사에 0 저장 (반드시 None)
+* 지급률 업로드에서 normalize_mode append 허용
+* 지급률 업로드에서 보험사 선택 UI 추가
+* 지급률 normalizer에서 insurer를 클라이언트에서 받는 구조
+* 지급률에 strategy_flag 적용
+* 흥국의 col_yr2/col_yr3를 타 보험사와 동일하게 취급
 
 ---
 
-동양생명 관련 최신 반영 기준 포함 리팩토링 완료. 이번 버전 주요 변경:
+# 24. 신규 보험사 추가 표준 절차
 
-* 동양 parser 구조 (`life_dongyang.py`) 추가
-* 동양 공식 함수명 `build_life_dongyang_conversion_rows` 기준화
-* 동양 legacy alias `build_dongyang_conversion_rows` 정책 추가
-* `주계약` 시트 only 정규화 정책 추가
-* 1~14행 제외, 15행부터 처리 정책 추가
-* B/C/G/J/L 열 매핑 정책 추가
-* 종신/연금/기타 보종 판정 정책 추가
-* J열 1차년, L열 2~4차년 저장 정책 추가
-* 동양 `%` 보정 및 회귀 체크리스트 보강 완료
-* 절대금지 동양 관련 항목 추가
+## 환산율 신규 보험사
+
+1. raw 파일 구조 확인
+2. 파일 형식 결정 (xlsx / pdf / both)
+3. `commission/services/rate_example_normalizers/life_<insurer>.py` 생성
+4. 공식 함수명 정의
+5. 환산율 Decimal 저장 정책 준수
+6. `rate_example_normalizers/__init__.py` export 추가
+7. `rate_example_normalizer.py` dispatcher 추가
+8. `RateExample.LIFE_INSURERS` 목록 추가
+9. 업로드 후 normalized_count 검증
+10. 회귀 테스트
+
+## 지급률 신규 보험사 추가
+
+지급률 파일이 개정되어 신규 보험사가 추가되는 경우:
+
+1. `rate_example_pay_normalizer.py` 내 해당 그룹 dict에 tuple 추가
+2. col_m36/col_m37/col_yr4 없으면 반드시 None
+3. 신규 보험사가 특정 회차를 별도 컬럼으로 기재한다면
+   `RateExamplePayRow` 모델에 신규 필드 추가 후 마이그레이션
+
+---
+
+# 25. 최소 검증 시나리오
+
+```bash
+python manage.py check
+```
+
+지급률 업로드 후:
+
+```powershell
+python manage.py shell -c "
+from commission.models import RateExamplePayRow
+print('총 행수:', RateExamplePayRow.objects.count())
+print('보험사 목록:', list(RateExamplePayRow.objects.values_list('insurer', flat=True).distinct()))
+print('col_m36 있는 보험사:', list(RateExamplePayRow.objects.exclude(col_m36=None).values_list('insurer', flat=True).distinct()))
+print('col_m37 있는 보험사:', list(RateExamplePayRow.objects.exclude(col_m37=None).values_list('insurer', flat=True).distinct()))
+print('col_yr4 있는 보험사:', list(RateExamplePayRow.objects.exclude(col_yr4=None).values_list('insurer', flat=True).distinct()))
+"
+```
+
+브라우저 검증:
+
+1. superuser 로그인
+2. `/commission/rate-examples/` 접속
+3. 지급률 업데이트 버튼 클릭
+4. 지급률.xlsx 업로드
+5. 응답 normalized_count == 240 확인
+6. 지급률 확인 버튼 클릭
+7. 조회 버튼 클릭
+8. 보험사/상품군 필터 동작 확인
+9. ABL 36회/37회 컬럼 `-` 표시 확인
+10. 삼성 37회 컬럼 값 존재 확인
+11. 한화 36회/4차년 컬럼 값 존재 확인

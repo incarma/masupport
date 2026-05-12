@@ -8,10 +8,15 @@
 
   // ── URL / CSRF ─────────────────────────────────────────────────────────────
   const UPLOAD_URL = root.dataset.uploadUrl;
+  const OPTIONS_URL = root.dataset.optionsUrl;
   const CONVERSION_LIST_URL = root.dataset.conversionListUrl;
   const CONVERSION_STRATEGY_UPDATE_URL = root.dataset.conversionStrategyUpdateUrl;
+  // 환산율 정규화 초기화 URL (보험사 단위)
+  const CONVERSION_RESET_URL         = root.dataset.conversionResetUrl;
   // 지급률 확인 모달 조회 URL — data-pay-list-url dataset에서 주입
   const PAY_LIST_URL = root.dataset.payListUrl;
+  // 지급률 정규화 전체 초기화 URL
+  const PAY_RESET_URL                = root.dataset.payResetUrl;
 
   // ── 보험사 목록 (json_script 태그에서 읽기) ───────────────────────────────
   const LIFE_INSURERS = JSON.parse(
@@ -21,42 +26,374 @@
     document.getElementById("nonlife-insurers-data").textContent
   );
 
-  // ── DataTables 초기화 ──────────────────────────────────────────────────────
-  // typeof $ 는 $ 미선언 시에도 throw 없이 "undefined" 반환 (ECMAScript 보장).
-  // typeof $.fn 은 $ 평가 후 .fn 접근이라 $ 미선언 시 ReferenceError → 사용 금지.
-  const tableEl = document.getElementById("re-table");
-  let table = null;
-  if (tableEl && typeof $ !== "undefined" && $ && $.fn && $.fn.DataTable) {
-    table = $(tableEl).DataTable({
-      searching: false,
-      pageLength: 20,
-      language: {
-        lengthMenu: "_MENU_ 건씩 보기",
-        info: "_START_ - _END_ / 전체 _TOTAL_ 건",
-        infoEmpty: "데이터 없음",
-        paginate: { previous: "이전", next: "다음" },
-        emptyTable: "등록된 예시표가 없습니다.",
-        zeroRecords: "검색 결과 없음",
-      },
-      columnDefs: [
-        { orderable: false, targets: [7] },  // 다운로드
-        { orderable: false, targets: [8] },  // 삭제 (superuser 없으면 존재하지 않음)
-      ],
+  // =========================================================================
+  // 메인 계산 입력 UI
+  // =========================================================================
+  // - 기존 파일 목록 DataTables/필터 기능 제거
+  // - 보험사/상품명/구분/납기 연동만 담당
+  // - 실제 계산은 추후 calculator API에서 개발
+
+  const commissionRateInput = document.getElementById("re-commission-rate");
+  const premiumInput = document.getElementById("re-premium");
+  const calcSearchBtn = document.getElementById("re-btn-calc-search");
+  const calcTbody = document.getElementById("re-calc-tbody");
+  const btnAddRow = document.getElementById("re-btn-add-row");
+  const btnDeleteRow = document.getElementById("re-btn-delete-row");
+  const btnResetRows = document.getElementById("re-btn-reset-rows");
+  const MAX_CALC_ROWS = 10;
+
+  let activeComboInput = null;
+  let activeComboMenu = null;
+
+  function onlyDigits(value) {
+    return String(value || "").replace(/[^\d]/g, "");
+  }
+
+  function formatComma(value) {
+    const digits = onlyDigits(value);
+    return digits ? Number(digits).toLocaleString("ko-KR") : "";
+  }
+
+  function normalizePremiumValue() {
+    if (!premiumInput) return;
+    premiumInput.value = formatComma(premiumInput.value);
+  }
+
+  function clampCommissionRate() {
+    if (!commissionRateInput) return;
+    const raw = onlyDigits(commissionRateInput.value);
+    if (!raw) {
+      commissionRateInput.value = "";
+      return;
+    }
+    const n = Math.max(1, Math.min(100, Number(raw)));
+    commissionRateInput.value = String(n);
+  }
+
+  function positionComboMenu(input, menu) {
+    if (!input || !menu) return;
+    /*
+     * CSP strict(style-src 'self') 환경에서는 JS의 element.style.* 적용이
+     * inline style로 차단될 수 있다.
+     * 위치는 CSS 고정 규칙으로 처리하고, JS는 메뉴 렌더/표시만 담당한다.
+     */
+  }
+
+  function renderComboMenu(input, menu, values, keyword) {
+    if (!input || !menu) return;
+    const kw = String(keyword || "").trim().toLowerCase();
+    const items = (values || []).filter(function (name) {
+      return !kw || String(name).toLowerCase().includes(kw);
+    });
+
+    menu.innerHTML = items.map(function (name) {
+      return (
+        '<button type="button" class="re-combo-item" data-value="' +
+        escapeHtml(name) +
+        '">' +
+        escapeHtml(name) +
+        "</button>"
+      );
+    }).join("");
+
+    positionComboMenu(input, menu);
+    menu.hidden = items.length === 0;
+  }
+
+  function hideActiveComboMenu() {
+    if (activeComboMenu) activeComboMenu.hidden = true;
+    activeComboInput = null;
+    activeComboMenu = null;
+  }
+
+  function getRow(el) {
+    return el ? el.closest(".re-calc-row") : null;
+  }
+
+  function rowEls(row) {
+    return {
+      insurer: row?.querySelector(".re-calc-insurer"),
+      product: row?.querySelector(".re-calc-product"),
+      plan: row?.querySelector(".re-calc-plan"),
+      period: row?.querySelector(".re-calc-period"),
+      insurerMenu: row?.querySelector(".re-insurer-menu"),
+      productMenu: row?.querySelector(".re-product-menu"),
+    };
+  }
+
+  function fillSelect(el, values, placeholder) {
+    if (!el) return;
+    el.innerHTML = `<option value="">${placeholder || "선택"}</option>`;
+    (values || []).forEach(function (value) {
+      if (!value) return;
+      const opt = document.createElement("option");
+      opt.value = value;
+      opt.textContent = value;
+      el.appendChild(opt);
     });
   }
 
-  // ── 커스텀 필터 헬퍼 ──────────────────────────────────────────────────────
-  function buildInsurerOptions(type) {
-    const sel = document.getElementById("re-filter-insurer");
-    sel.innerHTML = '<option value="">전체</option>';
-    const list = type === "생명보험" ? LIFE_INSURERS
-                : type === "손해보험" ? NONLIFE_INSURERS
-                : [];
-    list.forEach(function (name) {
-      const opt = document.createElement("option");
-      opt.value = name;
-      opt.textContent = name;
-      sel.appendChild(opt);
+  async function loadOptionList(kind, params) {
+    if (!OPTIONS_URL) return [];
+    const url = new URL(OPTIONS_URL, window.location.origin);
+    url.searchParams.set("kind", kind);
+    Object.entries(params || {}).forEach(function ([key, value]) {
+      if (value) url.searchParams.set(key, value);
+    });
+    const res = await fetch(url.toString(), {
+      method: "GET",
+      credentials: "same-origin",
+      headers: { "X-Requested-With": "XMLHttpRequest" },
+    });
+    const json = await readJsonOrThrow(res);
+    return json.data?.items || [];
+  }
+
+  async function refreshProductsByInsurer(row) {
+    const els = rowEls(row);
+    const insurer = (els.insurer?.value || "").trim();
+    if (els.product) els.product.value = "";
+    fillSelect(els.plan, [], "선택");
+    fillSelect(els.period, [], "선택");
+    if (els.productMenu) els.productMenu.innerHTML = "";
+    row.dataset.products = "[]";
+
+    if (!insurer) return;
+
+    const products = await loadOptionList("products", { insurer });
+    row.dataset.products = JSON.stringify(products || []);
+
+    /*
+     * 보험사 선택 직후 상품명 입력창에 포커스가 있거나,
+     * 사용자가 바로 상품명을 선택하려는 경우를 위해
+     * 상품명 메뉴 데이터를 즉시 준비한다.
+     */
+    if (els.product && document.activeElement === els.product) {
+      renderComboMenu(els.product, els.productMenu, products, els.product.value);
+    }
+  }
+
+  async function refreshPlansByProduct(row) {
+    const els = rowEls(row);
+    const insurer = (els.insurer?.value || "").trim();
+    const productName = (els.product?.value || "").trim();
+    fillSelect(els.plan, [], "선택");
+    fillSelect(els.period, [], "선택");
+    if (!insurer || !productName) return;
+    const plans = await loadOptionList("plan_types", {
+      insurer,
+      product_name: productName,
+    });
+    fillSelect(els.plan, plans, "선택");
+  }
+
+  async function refreshPeriodsByPlan(row) {
+    const els = rowEls(row);
+    const insurer = (els.insurer?.value || "").trim();
+    const productName = (els.product?.value || "").trim();
+    const planType = (els.plan?.value || "").trim();
+    fillSelect(els.period, [], "선택");
+    if (!insurer || !productName) return;
+    const periods = await loadOptionList("pay_periods", {
+      insurer,
+      product_name: productName,
+      plan_type: planType,
+    });
+    fillSelect(els.period, periods, "선택");
+  }
+
+  if (premiumInput) {
+    premiumInput.addEventListener("input", normalizePremiumValue);
+  }
+  if (commissionRateInput) {
+    commissionRateInput.addEventListener("input", clampCommissionRate);
+  }
+  function cloneCalcRow() {
+    const first = calcTbody?.querySelector(".re-calc-row");
+    if (!first) return null;
+    const row = first.cloneNode(true);
+    row.dataset.products = "[]";
+
+    row.querySelectorAll("input").forEach(function (input) {
+      if (input.type === "checkbox") {
+        input.checked = false;
+      } else {
+        input.value = "";
+      }
+    });
+    row.querySelectorAll("select").forEach(function (sel) {
+      fillSelect(sel, [], "선택");
+    });
+    row.querySelectorAll(".re-combo-menu").forEach(function (menu) {
+      menu.innerHTML = "";
+      menu.hidden = true;
+    });
+    row.querySelectorAll(".re-calc-placeholder").forEach(function (td) {
+      td.textContent = "-";
+    });
+    return row;
+  }
+
+  function resetCalcRows() {
+    if (!calcTbody) return;
+    const first = calcTbody.querySelector(".re-calc-row");
+    if (!first) return;
+    const clean = cloneCalcRow();
+    calcTbody.innerHTML = "";
+    calcTbody.appendChild(clean || first);
+    hideActiveComboMenu();
+  }
+
+  if (btnAddRow) {
+    btnAddRow.addEventListener("click", function () {
+      const currentRows = calcTbody
+        ? calcTbody.querySelectorAll(".re-calc-row").length
+        : 0;
+
+      if (currentRows >= MAX_CALC_ROWS) {
+        alert("행은 최대 10개까지만 추가할 수 있습니다.");
+        return;
+      }
+
+      const row = cloneCalcRow();
+      if (row && calcTbody) calcTbody.appendChild(row);
+    });
+  }
+
+  if (btnDeleteRow) {
+    btnDeleteRow.addEventListener("click", function () {
+      if (!calcTbody) return;
+      const rows = Array.from(calcTbody.querySelectorAll(".re-calc-row"));
+      const checked = rows.filter(function (row) {
+        return row.querySelector(".re-row-check")?.checked;
+      });
+      if (checked.length === 0) {
+        alert("삭제할 행을 선택해 주세요.");
+        return;
+      }
+      checked.forEach(function (row) { row.remove(); });
+      if (!calcTbody.querySelector(".re-calc-row")) {
+        const row = cloneCalcRow();
+        if (row) calcTbody.appendChild(row);
+      }
+      hideActiveComboMenu();
+    });
+  }
+
+  if (btnResetRows) {
+    btnResetRows.addEventListener("click", function () {
+      if (!confirm("입력 행을 모두 초기화하시겠습니까?")) return;
+      resetCalcRows();
+    });
+  }
+
+  if (calcTbody) {
+    calcTbody.addEventListener("focusin", function (e) {
+      const insurerInput = e.target.closest(".re-calc-insurer");
+      const productInput = e.target.closest(".re-calc-product");
+
+      if (insurerInput) {
+        const row = getRow(insurerInput);
+        const menu = row?.querySelector(".re-insurer-menu");
+        activeComboInput = insurerInput;
+        activeComboMenu = menu;
+        renderComboMenu(insurerInput, menu, LIFE_INSURERS, insurerInput.value);
+        return;
+      }
+
+      if (productInput) {
+        const row = getRow(productInput);
+        let products = JSON.parse(row?.dataset.products || "[]");
+        const menu = rowEls(row).productMenu;
+        activeComboInput = productInput;
+        activeComboMenu = menu;
+
+        if (products.length === 0) {
+          refreshProductsByInsurer(row).then(function () {
+            products = JSON.parse(row?.dataset.products || "[]");
+            renderComboMenu(productInput, menu, products, productInput.value);
+          });
+          return;
+        }
+
+        renderComboMenu(productInput, menu, products, productInput.value);
+      }
+    });
+
+    calcTbody.addEventListener("input", function (e) {
+      const insurerInput = e.target.closest(".re-calc-insurer");
+      const productInput = e.target.closest(".re-calc-product");
+
+      if (insurerInput) {
+        const row = getRow(insurerInput);
+        const menu = rowEls(row).insurerMenu;
+        activeComboInput = insurerInput;
+        activeComboMenu = menu;
+        renderComboMenu(insurerInput, menu, LIFE_INSURERS, insurerInput.value);
+        return;
+      }
+
+      if (productInput) {
+        const row = getRow(productInput);
+        let products = JSON.parse(row?.dataset.products || "[]");
+        const menu = rowEls(row).productMenu;
+        activeComboInput = productInput;
+        activeComboMenu = menu;
+
+        if (products.length === 0) {
+          refreshProductsByInsurer(row).then(function () {
+            products = JSON.parse(row?.dataset.products || "[]");
+            renderComboMenu(productInput, menu, products, productInput.value);
+          });
+          return;
+        }
+
+        renderComboMenu(productInput, menu, products, productInput.value);
+      }
+    });
+
+    calcTbody.addEventListener("change", function (e) {
+      const row = getRow(e.target);
+      if (!row) return;
+      if (e.target.closest(".re-calc-insurer")) refreshProductsByInsurer(row);
+      if (e.target.closest(".re-calc-product")) refreshPlansByProduct(row);
+      if (e.target.closest(".re-calc-plan")) refreshPeriodsByPlan(row);
+    });
+
+    /*
+     * focusout에서 무조건 메뉴를 닫으면
+     * 보험사 input → 상품명 input 이동 시 이전 타이머가 상품명 메뉴까지 닫아버린다.
+     * 메뉴 닫기는 document mousedown에서 combo 외부 클릭일 때만 처리한다.
+     */
+
+    calcTbody.addEventListener("mousedown", function (e) {
+      const btn = e.target.closest(".re-combo-item");
+      if (!btn || !activeComboInput) return;
+      e.preventDefault();
+
+      const selectedInput = activeComboInput;
+      const row = getRow(selectedInput);
+      selectedInput.value = btn.dataset.value || "";
+      hideActiveComboMenu();
+
+      if (selectedInput.classList.contains("re-calc-insurer")) {
+        refreshProductsByInsurer(row);
+      } else if (selectedInput.classList.contains("re-calc-product")) {
+        refreshPlansByProduct(row);
+      }
+    });
+  }
+
+  document.addEventListener("mousedown", function (e) {
+    if (!activeComboMenu) return;
+    if (e.target.closest(".re-combo")) return;
+    if (e.target.closest(".re-combo-menu")) return;
+    hideActiveComboMenu();
+  });
+
+  if (calcSearchBtn) {
+    calcSearchBtn.addEventListener("click", function () {
+      alert("조회/계산 기능은 추후 calculator API 개발 단계에서 연결됩니다.");
     });
   }
 
@@ -123,32 +460,8 @@
     return data;
   }
 
-  // ── 필터 이벤트 ───────────────────────────────────────────────────────────
-  const filterType = document.getElementById("re-filter-type");
-  const filterCat = document.getElementById("re-filter-cat");
-  const filterInsurer = document.getElementById("re-filter-insurer");
-
-  if (filterType) {
-    filterType.addEventListener("change", function () {
-      buildInsurerOptions(this.value);
-      filterInsurer.value = "";
-      if (table) {
-        table.column(1).search(this.value).column(2).search("").draw();
-      }
-    });
-  }
-
-  if (filterCat) {
-    filterCat.addEventListener("change", function () {
-      if (table) table.column(2).search(this.value).draw();
-    });
-  }
-
-  if (filterInsurer) {
-    filterInsurer.addEventListener("change", function () {
-      if (table) table.column(3).search(this.value).draw();
-    });
-  }
+  // 기존 메인 목록 필터는 제거됨.
+  // 환산율/지급률 확인 모달 내부 필터는 아래 기존 로직을 그대로 유지한다.
 
   // ── 업로드 모달: 생보 전용 보험사 선택 ────────────────────────────────
   const modalInsurer = document.getElementById("re-modal-insurer");
@@ -533,6 +846,59 @@
     });
   }
 
+  // ── 환산율 데이터 초기화 버튼 ────────────────────────────────────────────
+  const convBtnReset = document.getElementById("re-conv-btn-reset");
+  if (convBtnReset) {
+    convBtnReset.addEventListener("click", async function () {
+      const insurerVal = convInsurer ? convInsurer.value : "";
+      if (!insurerVal) {
+        showConvError("초기화할 보험사를 먼저 선택 후 조회해 주세요.");
+        return;
+      }
+      if (!confirm(`[${insurerVal}] 환산율 데이터를 전체 삭제하겠습니까?\n이 작업은 되돌릴 수 없습니다.`)) {
+        return;
+      }
+      if (!CONVERSION_RESET_URL) {
+        showConvError("초기화 URL이 설정되지 않았습니다.");
+        return;
+      }
+      convBtnReset.disabled = true;
+      clearConvError();
+      try {
+        const fd = new FormData();
+        fd.append("insurer_type", "life");
+        fd.append("insurer", insurerVal);
+        const res = await fetch(CONVERSION_RESET_URL, {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "X-CSRFToken": window.csrfToken || "" },
+          body: fd,
+        });
+        const json = await readJsonOrThrow(res);
+        // 테이블 초기화 후 안내 메시지
+        convRowsOriginal = [];
+        convSortKey = "";
+        convSortDir = "asc";
+        setConvUpdatedInfo(null);
+        resetConvFilters();
+        if (convKeyword) convKeyword.value = "";
+        updateSortButtons();
+        if (convTbody) {
+          convTbody.innerHTML = `
+            <tr>
+              <td colspan="9" class="text-center text-muted py-3">
+                ${json.message || "데이터가 삭제되었습니다."}
+              </td>
+            </tr>`;
+        }
+      } catch (err) {
+        showConvError(err.message || "초기화 중 오류가 발생했습니다.");
+      } finally {
+        convBtnReset.disabled = false;
+      }
+    });
+  }
+
   // ── 환산율/수정률 컬럼 정렬 ─────────────────────────────────────
   convSortBtns.forEach(function (btn) {
     btn.addEventListener("click", function () {
@@ -570,39 +936,8 @@
   }
 
   // ── 삭제 버튼 (이벤트 위임) ────────────────────────────────────────────────
-  root.addEventListener("click", async function (e) {
-    const btn = e.target.closest(".re-btn-delete");
-    if (!btn) return;
-
-    if (!confirm("정말 삭제하시겠습니까?")) return;
-
-    const deleteUrl = btn.dataset.deleteUrl;
-    if (!deleteUrl) return;
-
-    btn.disabled = true;
-    try {
-      const res = await fetch(deleteUrl, {
-        method: "POST",
-        credentials: "same-origin",
-        headers: { "X-CSRFToken": window.csrfToken || "" },
-      });
-      const json = await res.json();
-      if (json.ok) {
-        if (table) {
-          const row = btn.closest("tr");
-          table.row(row).remove().draw();
-        } else {
-          location.reload();
-        }
-      } else {
-        alert(json.message || "삭제에 실패했습니다.");
-        btn.disabled = false;
-      }
-    } catch (e) {
-      alert("네트워크 오류가 발생했습니다.");
-      btn.disabled = false;
-    }
-  });
+  // 기존 파일 목록 삭제 버튼은 메인 목록 제거에 따라 비활성화.
+  // 파일 삭제/관리 화면이 다시 필요하면 별도 관리 모달로 분리한다.
 
   // ── 모달 초기화 (열릴 때 입력 리셋) ───────────────────────────────────────
   const uploadModal = document.getElementById("rateExampleUploadModal");
@@ -767,12 +1102,24 @@
       function cell(v) {
         return '<td class="text-end re-pay-num">' + escapeHtml(v || "0") + "</td>";
       }
+      // col_m36 / col_m37 / col_yr4: 해당 보험사에 없으면 "" → "-" 표시
+      function optCell(v) {
+        return '<td class="text-end re-pay-num re-pay-opt">'
+          + (v !== "" ? escapeHtml(v) : "-")
+          + "</td>";
+      }
       return (
         "<tr>" +
         "<td>" + escapeHtml(row.insurer || "") + "</td>" +
         "<td>" + escapeHtml(row.coverage_type || "") + "</td>" +
-        cell(row.col_a) + cell(row.col_b) + cell(row.col_c) +
-        cell(row.col_d) + cell(row.col_e) + cell(row.col_f) +
+        cell(row.col_first) +
+        cell(row.col_yr1) +
+        cell(row.col_m13) +
+        cell(row.col_yr2) +
+        cell(row.col_yr3) +
+        optCell(row.col_m36) +
+        optCell(row.col_m37) +
+        optCell(row.col_yr4) +
         "</tr>"
       );
     }).join("");
@@ -815,6 +1162,43 @@
         renderPayRows([]);
       } finally {
         payBtnLoad.disabled = false;
+      }
+    });
+  }
+
+  // ── 지급률 데이터 초기화 버튼 ────────────────────────────────────────────
+  const payBtnReset = document.getElementById("re-pay-btn-reset");
+  if (payBtnReset) {
+    payBtnReset.addEventListener("click", async function () {
+      if (!confirm("전체 지급률 데이터를 삭제하겠습니까?\n이 작업은 되돌릴 수 없습니다.")) {
+        return;
+      }
+      if (!PAY_RESET_URL) {
+        showPayError("초기화 URL이 설정되지 않았습니다.");
+        return;
+      }
+      payBtnReset.disabled = true;
+      clearPayError();
+      try {
+        const res = await fetch(PAY_RESET_URL, {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "X-CSRFToken": window.csrfToken || "" },
+        });
+        const json = await readJsonOrThrow(res);
+        // 테이블 초기화 후 안내 메시지
+        payRowsOriginal = [];
+        setPayUpdatedInfo(null);
+        resetPayFilters();
+        if (payTbody) {
+          payTbody.innerHTML =
+            `<tr><td colspan="10" class="text-center text-muted py-3">${json.message || "데이터가 삭제되었습니다."}</td></tr>`;
+        }
+        if (payCountLabel) payCountLabel.textContent = "";
+      } catch (err) {
+        showPayError(err.message || "초기화 중 오류가 발생했습니다.");
+      } finally {
+        payBtnReset.disabled = false;
       }
     });
   }

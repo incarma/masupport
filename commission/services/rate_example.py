@@ -97,14 +97,14 @@ class RateExampleService:
             normalize_mode = "replace"  # 지급률은 항상 전체 교체
         
         # ─────────────────────────────────────────────────────
-        # KDB/교보/농협/동양/라이나 생명보험 환산율/수정률
+        # KDB/교보/농협/동양/라이나/메트 생명보험 환산율/수정률
         # - 별도 상품 구분 없이 보험사 선택만으로 정규화한다.
         # - product_kind는 빈 값으로 고정한다.
         # ─────────────────────────────────────────────────────
         if (
             insurer_type == RateExample.TYPE_LIFE
             and category == RateExample.CAT_CONV
-            and insurer in {"KDB", "교보", "농협", "동양", "라이나"}
+            and insurer in {"KDB", "교보", "농협", "동양", "라이나", "메트"}
         ):
             product_kind = ""
 

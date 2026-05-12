@@ -230,3 +230,51 @@ def rate_example_conversion_strategy_update(request):
             "strategy_flag": row.strategy_flag,
         },
     )
+
+
+# ── 환산율 정규화 데이터 초기화 (보험사 단위) ────────────────────────────────
+@login_required
+@grade_required("superuser", forbidden_template=None)
+@require_POST
+def rate_example_conversion_reset(request):
+    """
+    특정 보험사의 환산율 정규화 데이터(RateExampleConversionRow) 전체 삭제.
+
+    POST params:
+        insurer_type: "life" 고정
+        insurer: 삭제 대상 보험사명
+    """
+    from commission.models import RateExampleConversionRow  # noqa: PLC0415
+    from audit.constants import ACTION  # noqa: PLC0415
+    from audit.services import log_action  # noqa: PLC0415
+
+    insurer_type = request.POST.get("insurer_type", "").strip()
+    insurer      = request.POST.get("insurer", "").strip()
+
+    if not insurer_type or not insurer:
+        return _json_error("insurer_type 및 insurer 파라미터가 필요합니다.")
+
+    deleted_count, _ = RateExampleConversionRow.objects.filter(
+        insurer_type=insurer_type,
+        insurer=insurer,
+    ).delete()
+
+    try:
+        log_action(
+            request,
+            ACTION.COMMISSION_RATE_EXAMPLE_UPLOAD,   # 가장 근접한 기존 ACTION 재사용
+            meta={
+                "action_detail": "conversion_reset",
+                "insurer_type": insurer_type,
+                "insurer": insurer,
+                "deleted_count": deleted_count,
+            },
+            success=True,
+        )
+    except Exception:
+        logger.exception("rate_example conversion_reset audit log failed")
+
+    return _json_ok(
+        f"{insurer} 환산율 데이터 {deleted_count}건을 삭제했습니다.",
+        data={"deleted_count": deleted_count},
+    )

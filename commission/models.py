@@ -765,13 +765,17 @@ class RateExamplePayRow(models.Model):
     tier          = models.CharField(max_length=20, blank=True, default="5천만↑", verbose_name="지급구간")
     coverage_type = models.CharField(max_length=50, blank=True, default="", verbose_name="상품군")
 
-    # ── 지급률 수치 컬럼 (보험사별 회차 레이블이 달라 raw 순서 기반 저장) ──
-    col_a = models.DecimalField(max_digits=12, decimal_places=4, null=True, blank=True, verbose_name="초회")
-    col_b = models.DecimalField(max_digits=12, decimal_places=4, null=True, blank=True, verbose_name="1차년")
-    col_c = models.DecimalField(max_digits=12, decimal_places=4, null=True, blank=True, verbose_name="13회")
-    col_d = models.DecimalField(max_digits=12, decimal_places=4, null=True, blank=True, verbose_name="2차년구간")
-    col_e = models.DecimalField(max_digits=12, decimal_places=4, null=True, blank=True, verbose_name="3차년구간")
-    col_f = models.DecimalField(max_digits=12, decimal_places=4, null=True, blank=True, verbose_name="4차년구간")
+    # ── 지급률 수치 컬럼 (8개, 회차 의미 기반 영문 명칭) ──────────────────
+    # col_m36 / col_m37: 보험사별 별도 기재 시에만 값, 없으면 None
+    # col_yr4: 4차년 이후 통합 구간 (보험사에 따라 37~48회, 37~42회, 37-39회 등 상이)
+    col_first = models.DecimalField(max_digits=12, decimal_places=4, null=True, blank=True, verbose_name="초회")
+    col_yr1   = models.DecimalField(max_digits=12, decimal_places=4, null=True, blank=True, verbose_name="1차년")
+    col_m13   = models.DecimalField(max_digits=12, decimal_places=4, null=True, blank=True, verbose_name="13회")
+    col_yr2   = models.DecimalField(max_digits=12, decimal_places=4, null=True, blank=True, verbose_name="2차년구간")
+    col_yr3   = models.DecimalField(max_digits=12, decimal_places=4, null=True, blank=True, verbose_name="3차년구간")
+    col_m36   = models.DecimalField(max_digits=12, decimal_places=4, null=True, blank=True, verbose_name="36회")
+    col_m37   = models.DecimalField(max_digits=12, decimal_places=4, null=True, blank=True, verbose_name="37회")
+    col_yr4   = models.DecimalField(max_digits=12, decimal_places=4, null=True, blank=True, verbose_name="4차년구간")
 
     created_at = models.DateTimeField(auto_now_add=True)
 

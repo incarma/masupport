@@ -90,6 +90,21 @@ _RATE_EXAMPLE_API = {
         "commission.views.api_rate_example_pay",
         "rate_example_pay_list",
     ),
+    # 환산율 정규화 초기화 (보험사 단위)
+    "rate_example_conversion_reset": (
+        "commission.views.api_rate_example_conversion",
+        "rate_example_conversion_reset",
+    ),
+    # 지급률 정규화 전체 초기화
+    "rate_example_pay_reset": (
+        "commission.views.api_rate_example_pay",
+        "rate_example_pay_reset",
+    ),
+    # 수수료 예시표 메인 계산 테이블 옵션 조회 API
+    "rate_example_options": (
+        "commission.views.api_rate_example_options",
+        "rate_example_options",
+    ),
 }
 
 # Collect Notice export
@@ -235,6 +250,9 @@ __all__ = [
     "rate_example_download",
     "rate_example_delete",
     "rate_example_conversion_list",
+    "rate_example_options",
     "rate_example_conversion_strategy_update",
     "rate_example_pay_list",
+    "rate_example_conversion_reset",
+    "rate_example_pay_reset",
 ]

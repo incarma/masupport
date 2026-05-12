@@ -16,6 +16,16 @@ from __future__ import annotations
 보안/운영 원칙:
 - 파일 URL 직접 접근 금지. FieldFile.path만 서버 내부에서 사용.
 - 파싱 실패 시 예외를 raise — 호출부 transaction.atomic()이 rollback 처리.
+
+컬럼 설계 (8개, 영문 필드명 / verbose_name 한글):
+- col_first : 초회
+- col_yr1   : 1차년
+- col_m13   : 13회
+- col_yr2   : 2차년구간 (보험사별 13~24회, 14~24회 등 상이)
+- col_yr3   : 3차년구간 (보험사별 25~36회, 25~35회 등 상이)
+- col_m36   : 36회 — IM·한화·흥국만 별도 기재, 나머지 None
+- col_m37   : 37회 — 삼성·신한·DB·KB·KDB·미래·카디프·메트만 별도 기재, 나머지 None
+- col_yr4   : 4차년 이후 통합 구간 — ABL(37~48회)·처브(37~48회)·한화(37~42회)·교보(37-39회)만 존재, 나머지 None
 """
 
 import logging
@@ -46,54 +56,89 @@ COVERAGE_MAP: dict[str, str] = {
 }
 
 # ── 보험사별 컬럼 매핑 ─────────────────────────────────────────────────────────
-# 형식: {insurer_db_name: (col_a, col_b, col_c, col_d, col_e, col_f)}
-# 값은 1-indexed 열 번호. None = 해당 컬럼 없음 (DB에 None 저장).
-# insurer_db_name: RateExample.LIFE_INSURERS 의 약칭과 일치
+# tuple 형식: (col_first, col_yr1, col_m13, col_yr2, col_yr3, col_m36, col_m37, col_yr4)
+# 값: 1-indexed 열 번호. None = 해당 보험사에 없는 회차 (DB에 NULL 저장).
+#
+# ── 36회/37회/4차년 유무 근거 (파일 헤더 직접 분석) ──────────────────────────
+# col_m36 있음: IM(col17=36회), 한화(col31=36회), 흥국(col23=36회)
+# col_m37 있음: 삼성(col17=37회), 신한(col24=37회), DB(col10=37회),
+#               KB(col24=37회), KDB(col10=37회), 미래(col17=37회),
+#               카디프(col39=37회), 메트(col16=37회)
+# col_yr4 있음: ABL(col10=37~48회), 처브(col24=37~48회),
+#               한화(col32=37~42회), 교보(col36=37-39회)
+# ─────────────────────────────────────────────────────────────────────────────
 
 # 그룹1 (헤더행 3, 데이터 5천만↑ 행 5~16)
+# ABL  : first=5, yr1=6, m13=7, yr2=8(14~24회/19~24회), yr3=9(25~36회), yr4=10(37~48회)
+# 삼성 : first=12, yr1=13, m13=14, yr2=15(19~24회), yr3=16(25~36회), m37=17
+# 신한 : first=19, yr1=20, m13=21, yr2=22(14~24회), yr3=23(25~36회), m37=24
+# 하나 : first=26, yr1=27, m13=28, yr2=29(14~24회), yr3=30(25~36회)
 _GROUP1_ROWS = (5, 16)
 _GROUP1: dict[str, tuple] = {
-    "ABL": (5,  6,  7,  8,  9,  10),
-    "삼성": (12, 13, 14, 15, 16, 17),
-    "신한": (19, 20, 21, 22, 23, 24),
-    "하나": (26, 27, 28, 29, 30, None),
-    # IBK는 별도 처리 — 이 dict에 포함하지 않음
+    #        first  yr1   m13   yr2   yr3   m36   m37   yr4
+    "ABL":  ( 5,    6,    7,    8,    9,   None, None,   10),
+    "삼성":  (12,   13,   14,   15,   16,  None,   17,  None),
+    "신한":  (19,   20,   21,   22,   23,  None,   24,  None),
+    "하나":  (26,   27,   28,   29,   30,  None, None,  None),
+    # IBK는 별도 처리 블록 사용
 }
 
 # 그룹2 (헤더행 30, 데이터 5천만↑ 행 32~43)
+# DB   : first=5, yr1=6, m13=7, yr2=8(13~24회), yr3=9(25~36회), m37=10
+# IM   : first=12, yr1=13, m13=14, yr2=15(14~24회/19~24회), yr3=16(25~35회), m36=17
+# KB   : first=19, yr1=20, m13=21, yr2=22(14~24회), yr3=23(25~36회), m37=24
+# 농협 : first=26, yr1=27, m13=28, yr2=29(19~24회), yr3=30(25~36회)
+# 라이나: first=32, yr1=33, m13=34, yr2=35(14~24회/14~18회), yr3=36(25~36회)
 _GROUP2_ROWS = (32, 43)
 _GROUP2: dict[str, tuple] = {
-    "DB":   (5,  6,  7,  8,  9,  10),
-    "IM":   (12, 13, 14, 15, 16, 17),
-    "KB":   (19, 20, 21, 22, 23, 24),
-    "농협":  (26, 27, 28, 29, 30, None),
-    "라이나": (32, 33, 34, 35, 36, None),
+    #          first  yr1   m13   yr2   yr3   m36   m37   yr4
+    "DB":    ( 5,    6,    7,    8,    9,   None,   10,  None),
+    "IM":    (12,   13,   14,   15,   16,    17,  None,  None),
+    "KB":    (19,   20,   21,   22,   23,  None,   24,  None),
+    "농협":   (26,   27,   28,   29,   30,  None, None,  None),
+    "라이나":  (32,   33,   34,   35,   36,  None, None,  None),
 }
 
 # 그룹3 (헤더행 57, 데이터 5천만↑ 행 59~70)
+# KDB  : first=5, yr1=6, m13=7, yr2=8(14~24회), yr3=9(25~36회), m37=10
+# 미래 : first=12, yr1=13, m13=14, yr2=15(14~24회), yr3=16(25~36회), m37=17
+# 처브 : first=19, yr1=20, m13=21, yr2=22(14~24회), yr3=23(25~36회), yr4=24(37~48회)
+# 한화 : first=26, yr1=27, m13=28, yr2=29(14~24회), yr3=30(25~35회), m36=31, yr4=32(37~42회)
+# 카디프: first=34, yr1=35(1차년/11~12회), m13=36, yr2=37(14~24회), yr3=38(25~36회), m37=39
 _GROUP3_ROWS = (59, 70)
 _GROUP3: dict[str, tuple] = {
-    "KDB":  (5,  6,  7,  8,  9,  10),
-    "미래":  (12, 13, 14, 15, 16, 17),
-    "처브":  (19, 20, 21, 22, 23, 24),
-    "한화":  (26, 27, 28, 29, 30, 31),
-    "카디프": (34, 35, 36, 37, 38, 39),
+    #           first  yr1   m13   yr2   yr3   m36   m37   yr4
+    "KDB":    ( 5,    6,    7,    8,    9,   None,   10,  None),
+    "미래":    (12,   13,   14,   15,   16,  None,   17,  None),
+    "처브":    (19,   20,   21,   22,   23,  None, None,   24),
+    "한화":    (26,   27,   28,   29,   30,    31, None,   32),
+    "카디프":   (34,   35,   36,   37,   38,  None,   39,  None),
 }
 
 # 그룹4 (헤더행 84, 데이터 5천만↑ 행 86~97)
+# 동양   : first=5, yr1=6, m13=7, yr2=8(19~24회), yr3=9(25~36회)
+# 메트   : first=11, yr1=12, m13=13, yr2=14(14~24회), yr3=15(25~36회), m37=16
+# 흥국   : first=18, yr1=19, m13=20, yr2=21(14~15회), yr3=22(25회), m36=23
+#           ※ 흥국 특이: 2차(14~15회), 3차(25회) 구간이 타 보험사와 상이
+# 푸본현대: first=25, yr1=26, m13=27, yr2=28(14~24회), yr3=29(25~36회)
+# 교보   : first=31, yr1=32, m13=33, yr2=34(14~24회), yr3=35(25~36회), yr4=36(37-39회)
 _GROUP4_ROWS = (86, 97)
 _GROUP4: dict[str, tuple] = {
-    "동양":   (5,  6,  7,  8,  9,  None),
-    "메트":   (11, 12, 13, 14, 15, 16),
-    "흥국":   (18, 19, 20, 21, 22, 23),
-    "푸본현대": (25, 26, 27, 28, 29, None),
-    "교보":   (31, 32, 33, 34, 35, 36),
+    #             first  yr1   m13   yr2   yr3   m36   m37   yr4
+    "동양":     ( 5,    6,    7,    8,    9,   None, None,  None),
+    "메트":     (11,   12,   13,   14,   15,  None,   16,  None),
+    "흥국":     (18,   19,   20,   21,   22,    23, None,  None),
+    "푸본현대":  (25,   26,   27,   28,   29,  None, None,  None),
+    "교보":     (31,   32,   33,   34,   35,  None, None,   36),
 }
 
-# IBK 전용 (그룹1 데이터 행 공유 5~16, 컬럼 시작 col35)
-_IBK_ROWS       = (5, 16)
-_IBK_PRODUCT_COL = 32      # 1-indexed: col32 = IBK 자체 상품명
-_IBK_COLS        = (35, 36, 37, 38, 39, None)
+# IBK 전용 (그룹1 데이터 행 공유 5~16)
+# IBK: first=35, yr1=36, m13=37, yr2=38(14~24회), yr3=39(25~36회)
+#      m36/m37/yr4 없음
+_IBK_ROWS        = (5, 16)
+_IBK_PRODUCT_COL = 32       # 1-indexed: col32 = IBK 자체 상품명
+#              first  yr1   m13   yr2   yr3   m36   m37   yr4
+_IBK_COLS    = (35,   36,   37,   38,   39,  None, None,  None)
 
 # 전체 그룹 목록 (순서 유지)
 _GROUPS: list[tuple] = [
@@ -182,7 +227,8 @@ def normalize_pay_rate_example(
     # ── 일반 19개 보험사 처리 ──────────────────────────────────────────────────
     for (row_start, row_end), insurer_map in _GROUPS:
         for insurer_name, col_tuple in insurer_map.items():
-            col_a, col_b, col_c, col_d, col_e, col_f = col_tuple
+            # col_tuple: (first, yr1, m13, yr2, yr3, m36, m37, yr4)
+            c_first, c_yr1, c_m13, c_yr2, c_yr3, c_m36, c_m37, c_yr4 = col_tuple
             coverage_carry: "str | None" = None
 
             for row_1idx in range(row_start, row_end + 1):
@@ -204,17 +250,20 @@ def normalize_pay_rate_example(
                     insurer       = insurer_name,
                     tier          = "5천만↑",
                     coverage_type = coverage_type,
-                    col_a = _get_col(r, col_a),
-                    col_b = _get_col(r, col_b),
-                    col_c = _get_col(r, col_c),
-                    col_d = _get_col(r, col_d),
-                    col_e = _get_col(r, col_e),
-                    col_f = _get_col(r, col_f),
+                    col_first = _get_col(r, c_first),
+                    col_yr1   = _get_col(r, c_yr1),
+                    col_m13   = _get_col(r, c_m13),
+                    col_yr2   = _get_col(r, c_yr2),
+                    col_yr3   = _get_col(r, c_yr3),
+                    col_m36   = _get_col(r, c_m36),
+                    col_m37   = _get_col(r, c_m37),
+                    col_yr4   = _get_col(r, c_yr4),
                 ))
 
     # ── IBK 전용 처리 ─────────────────────────────────────────────────────────
     # IBK는 상품군(col4) 대신 col32 자체 상품명을 coverage_type 키로 사용
-    ibk_a, ibk_b, ibk_c, ibk_d, ibk_e, ibk_f = _IBK_COLS
+    ibk_first, ibk_yr1, ibk_m13, ibk_yr2, ibk_yr3, ibk_m36, ibk_m37, ibk_yr4 = _IBK_COLS
+
     for row_1idx in range(_IBK_ROWS[0], _IBK_ROWS[1] + 1):
         r = all_rows[row_1idx - 1]
         raw_product = r[_IBK_PRODUCT_COL - 1]   # col32 → index 31
@@ -231,12 +280,14 @@ def normalize_pay_rate_example(
             insurer       = "IBK",
             tier          = "5천만↑",
             coverage_type = coverage_type,
-            col_a = _get_col(r, ibk_a),
-            col_b = _get_col(r, ibk_b),
-            col_c = _get_col(r, ibk_c),
-            col_d = _get_col(r, ibk_d),
-            col_e = _get_col(r, ibk_e),
-            col_f = _get_col(r, ibk_f),
+            col_first = _get_col(r, ibk_first),
+            col_yr1   = _get_col(r, ibk_yr1),
+            col_m13   = _get_col(r, ibk_m13),
+            col_yr2   = _get_col(r, ibk_yr2),
+            col_yr3   = _get_col(r, ibk_yr3),
+            col_m36   = _get_col(r, ibk_m36),
+            col_m37   = _get_col(r, ibk_m37),
+            col_yr4   = _get_col(r, ibk_yr4),
         ))
 
     # ── replace / append 모드 처리 ─────────────────────────────────────────────
