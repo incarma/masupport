@@ -57,7 +57,10 @@ def rate_example_options(request):
             plan_type=(request.GET.get("plan_type") or "").strip(),
         )
         items = get_rate_example_options(query)
-        return _json_ok({"items": items})
+        return _json_ok(
+            "조회되었습니다.",
+            data={"items": items},
+        )
     except Exception:
         logger.exception("[rate_example_options] failed")
         return _json_error("옵션 조회 중 오류가 발생했습니다.", status=500)

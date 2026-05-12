@@ -9,6 +9,7 @@
   // ── URL / CSRF ─────────────────────────────────────────────────────────────
   const UPLOAD_URL = root.dataset.uploadUrl;
   const OPTIONS_URL = root.dataset.optionsUrl;
+  const CALCULATE_URL = root.dataset.calculateUrl;
   const CONVERSION_LIST_URL = root.dataset.conversionListUrl;
   const CONVERSION_STRATEGY_UPDATE_URL = root.dataset.conversionStrategyUpdateUrl;
   // 환산율 정규화 초기화 URL (보험사 단위)
@@ -146,7 +147,7 @@
       headers: { "X-Requested-With": "XMLHttpRequest" },
     });
     const json = await readJsonOrThrow(res);
-    return json.data?.items || [];
+    return json.data?.items || json.message?.items || [];
   }
 
   async function refreshProductsByInsurer(row) {
@@ -228,8 +229,17 @@
       menu.innerHTML = "";
       menu.hidden = true;
     });
-    row.querySelectorAll(".re-calc-placeholder").forEach(function (td) {
+    row.querySelectorAll(
+      ".re-calc-placeholder, .re-calc-amount, .re-calc-na, .re-calc-total, .re-calc-subtotal"
+    ).forEach(function (td) {
       td.textContent = "-";
+      td.classList.remove(
+        "re-calc-amount",
+        "re-calc-na",
+        "re-calc-total",
+        "re-calc-subtotal"
+      );
+      td.classList.add("re-calc-placeholder");
     });
     return row;
   }
@@ -391,9 +401,124 @@
     hideActiveComboMenu();
   });
 
+  // ── 수수료 예시표 계산 API 연동 ─────────────────────────────────────
+  function parseMoneyInput(value) {
+    return String(value || "").replace(/[^\d]/g, "");
+  }
+
+  function formatMoneyValue(value) {
+    if (value === null || value === undefined || value === "") return "-";
+    return Number(value).toLocaleString("ko-KR");
+  }
+
+  function formatRatioValue(value) {
+    if (value === null || value === undefined || value === "") return "-";
+    return String(value) + "%";
+  }
+
+  function getResultCells(row) {
+    return Array.from(row.querySelectorAll(".re-calc-placeholder, .re-calc-amount, .re-calc-na, .re-calc-total"));
+  }
+
+  function resetResultCells(row) {
+    getResultCells(row).forEach(function (td) {
+      td.textContent = "-";
+      td.classList.remove("re-calc-amount", "re-calc-na", "re-calc-total", "re-calc-subtotal");
+      td.classList.add("re-calc-placeholder");
+    });
+  }
+
+  function renderCalcResult(row, data) {
+    const cells = getResultCells(row);
+    const values = [
+      formatMoneyValue(data.next_month_first),
+      formatMoneyValue(data.next_month_subtotal),
+      formatMoneyValue(data.month_13),
+      formatMoneyValue(data.year2),
+      formatMoneyValue(data.year3),
+      formatMoneyValue(data.month_36),
+      formatMoneyValue(data.month_37),
+      formatMoneyValue(data.year4),
+      formatMoneyValue(data.renewal_subtotal),
+      formatMoneyValue(data.total_amount),
+      formatRatioValue(data.total_ratio),
+    ];
+
+    cells.forEach(function (td, idx) {
+      td.textContent = values[idx] || "-";
+      td.classList.remove("re-calc-placeholder", "re-calc-amount", "re-calc-na", "re-calc-total", "re-calc-subtotal");
+      if (idx === 1 || idx === 8) {
+        td.classList.add("re-calc-subtotal");
+      } else if (idx >= 9) {
+        td.classList.add("re-calc-total");
+      } else if (values[idx] === "-") {
+        td.classList.add("re-calc-na");
+      } else {
+        td.classList.add("re-calc-amount");
+      }
+    });
+  }
+
+  function collectCalcPayload(row) {
+    const els = rowEls(row);
+    return {
+      insurer: (els.insurer?.value || "").trim(),
+      product_name: (els.product?.value || "").trim(),
+      plan_type: (els.plan?.value || "").trim(),
+      pay_period: (els.period?.value || "").trim(),
+      premium: parseMoneyInput(premiumInput?.value || ""),
+      commission_rate: String(commissionRateInput?.value || "").trim(),
+    };
+  }
+
+  async function calculateOneRow(row) {
+    resetResultCells(row);
+    const payload = collectCalcPayload(row);
+
+    if (!payload.insurer && !payload.product_name && !payload.plan_type && !payload.pay_period) {
+      return;
+    }
+    if (!payload.insurer || !payload.product_name || !payload.pay_period) {
+      throw new Error("보험사, 상품명, 납기를 모두 선택해 주세요.");
+    }
+    if (!payload.premium || Number(payload.premium) <= 0) {
+      throw new Error("보험료를 입력해 주세요.");
+    }
+    if (!payload.commission_rate || Number(payload.commission_rate) <= 0) {
+      throw new Error("수수료율을 입력해 주세요.");
+    }
+
+    const res = await fetch(CALCULATE_URL, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRFToken": window.csrfToken || "",
+        "X-Requested-With": "XMLHttpRequest",
+      },
+      body: JSON.stringify(payload),
+    });
+    const json = await readJsonOrThrow(res);
+    renderCalcResult(row, json.data || {});
+  }
+
   if (calcSearchBtn) {
-    calcSearchBtn.addEventListener("click", function () {
-      alert("조회/계산 기능은 추후 calculator API 개발 단계에서 연결됩니다.");
+    calcSearchBtn.addEventListener("click", async function () {
+      if (!CALCULATE_URL) {
+        alert("계산 URL이 설정되지 않았습니다.");
+        return;
+      }
+      const rows = Array.from(calcTbody?.querySelectorAll(".re-calc-row") || []);
+      calcSearchBtn.disabled = true;
+      try {
+        for (const row of rows) {
+          await calculateOneRow(row);
+        }
+      } catch (err) {
+        alert(err.message || "계산 중 오류가 발생했습니다.");
+      } finally {
+        calcSearchBtn.disabled = false;
+      }
     });
   }
 

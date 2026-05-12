@@ -179,6 +179,38 @@ def _split_product_and_plan(raw_product: Any) -> tuple[str, str]:
     return product_name, ", ".join(plans)
 
 
+def _is_health_header_or_noise_row(
+    *,
+    raw_type: Any,
+    raw_product: Any,
+    pay_period: Any,
+) -> bool:
+    """
+    KB 건강보험 raw의 헤더/노이즈 행을 제외한다.
+
+    건강보험 raw는 일부 시트에서 4~5행에 헤더가 있고 6행부터 데이터가 시작된다.
+    단순히 1~3행만 제외하면 C열 헤더 '상품'이 정규화 row로 들어갈 수 있으므로
+    컬럼 헤더 텍스트를 명시적으로 차단한다.
+    """
+    type_text = _clean_text(raw_type)
+    product_text = _clean_text(raw_product)
+    pay_period_text = _clean_text(pay_period)
+
+    if not type_text and not product_text and not pay_period_text:
+        return True
+
+    if product_text in {"상품", "상품명"}:
+        return True
+
+    if pay_period_text in {"납입기간", "납기"}:
+        return True
+
+    if type_text in {"구분"}:
+        return True
+
+    return False
+
+
 def _plan_type(*, age_premium: Any, min_premium: Any, insured_amount: Any) -> str:
     """
     정규화 테이블의 구분 컬럼 산출.
@@ -331,6 +363,13 @@ def build_life_kb_health_conversion_rows(
 
             if RIDER_KEYWORD in raw_type:
                 break
+
+            if _is_health_header_or_noise_row(
+                raw_type=raw_type,
+                raw_product=raw_product,
+                pay_period=pay_period,
+            ):
+                continue
 
             product_name, plan_type = _split_product_and_plan(raw_product)
 
