@@ -1043,6 +1043,295 @@ PDF 정책:
 
 ---
 
+
+## 18.10 처브생명 FINAL
+
+파일:
+
+```text
+commission/services/rate_example_normalizers/life_chubb.py
+```
+
+지원 형식:
+
+| 조건 | 값 |
+| --- | --- |
+| 보험사 | 처브 |
+| 파일 | PDF |
+| category | conv |
+
+### 18.10.1 PDF 정규화 정책
+
+처브는 PDF 기반 parser 사용.
+
+의존성:
+
+```python
+pypdf>=4.0.0
+```
+
+원칙:
+
+* PDF 원본은 `example.file.open("rb")` 로만 접근
+* public URL/file.url 직접 접근 금지
+* "특약" 페이지 등장 시 해당 페이지와 이후 페이지 전체 제외
+* 주계약 데이터만 정규화
+
+### 18.10.2 특약 페이지 차단 정책
+
+다음 키워드 등장 시 parser 중단:
+
+```text
+■ 특약
+```
+
+또는:
+
+```text
+특약
+```
+
+단:
+
+```text
+주계약
+```
+
+동시 포함 페이지는 제외하지 않는다.
+
+구현 함수:
+
+```python
+_is_rider_page()
+```
+
+### 18.10.3 상품명(product_name) 정책 FINAL
+
+raw PDF의 "상품" 컬럼 기준.
+
+정책:
+
+* 줄바꿈은 공백 1칸으로 병합
+* 다중 공백 제거
+* continuation line 병합
+* `무배당` 포함 continuation은 신규 상품으로 처리
+
+예:
+
+```text
+Chubb 간편가입 New 수(秀) 종신보험 무배당
+(1종/일반납입형, 2종/체감납입형)
+```
+
+↓
+
+```text
+Chubb 간편가입 New 수(秀) 종신보험 무배당 (1종/일반납입형, 2종/체감납입형)
+```
+
+### 18.10.4 1종/2종 분리 정책 FINAL
+
+상품명에:
+
+```text
+1종
+2종
+```
+
+이 동시에 존재하면 동일 row를 복제한다.
+
+예:
+
+```text
+Chubb 간편가입 New 수(秀) 종신보험 무배당
+(1종/일반납입형, 2종/체감납입형)
+```
+
+↓
+
+```text
+Chubb 간편가입 New 수(秀) 종신보험 무배당 (1종/일반납입형)
+Chubb 간편가입 New 수(秀) 종신보험 무배당 (2종/체감납입형)
+```
+
+환산율 정책:
+
+| 상품명 | 사용 환산율 컬럼 |
+| --- | --- |
+| 1종 포함 | 1종 환산율 |
+| 2종 포함 | 2종 환산율 |
+
+### 18.10.5 보종(coverage_type) 정책 FINAL
+
+| 조건 | coverage_type |
+| --- | --- |
+| 상품명에 종신 포함 | 종신/CI |
+| 기타 | 기타(보장성) |
+
+### 18.10.6 구분(plan_type) 정책 FINAL
+
+raw PDF의:
+
+```text
+보장금액(FA)
+보험료(P)
+보험기간(CP)
+```
+
+조건을 정규화.
+
+번역 정책:
+
+| raw | 변환 |
+| --- | --- |
+| FA | 가입금액 |
+| P | 보험료 |
+| CP | 보험기간 |
+
+금액 정책:
+
+| raw | 변환 |
+| --- | --- |
+| 20m | 2,000만 |
+| 100m | 1억 |
+
+부등호 정책:
+
+| raw | 결과 |
+| --- | --- |
+| FA≥20m | 가입금액 2,000만 이상 |
+| P<10,000원 | 보험료 10,000원 미만 |
+| 30m≤FA<100m | 가입금액 3,000만 이상 |
+
+### 18.10.7 PDF continuation row 병합 정책 FINAL
+
+처브 PDF는 table row가 줄 단위로 분리되어 추출될 수 있다.
+
+예:
+
+```text
+FA=70m, 100m,
+200m 26% 26%
+```
+
+정책:
+
+* `200m` 는 독립 row로 저장 금지
+* 직전 조건과 결합:
+
+```text
+FA=70m, 100m, 200m
+```
+
+으로 복원
+
+구현 함수:
+
+```python
+_is_incomplete_plan_fragment()
+_is_amount_only_continuation()
+_merge_plan_fragments()
+```
+
+### 18.10.8 placeholder '-' 제거 정책 FINAL
+
+PDF 빈 셀 placeholder:
+
+```text
+-
+```
+
+는 저장 금지.
+
+예:
+
+| raw | 저장값 |
+| --- | --- |
+| - P≥10,000원 | P≥10,000원 |
+| FA≥100m - | FA≥100m |
+
+구현 함수:
+
+```python
+_strip_placeholder_dash()
+```
+
+### 18.10.9 납기(pay_period) 정책 FINAL
+
+raw PDF의:
+
+```text
+납입기간(PPP)
+```
+
+조건을 납기로 변환.
+
+예:
+
+| raw | 결과 |
+| --- | --- |
+| PPP=7 | 7년 |
+| 10≤PPP<15 | 10년 이상 |
+| 20≤PPP | 20년 이상 |
+
+### 18.10.10 환산율 저장 정책 FINAL
+
+처브는 raw % 값에 12를 곱하여 저장한다.
+
+예:
+
+| raw | DB 저장 |
+| --- | --- |
+| 47% | 564 |
+| 26% | 312 |
+| 11% | 132 |
+
+저장 정책:
+
+```python
+year1 = rate * 12
+year2 = rate * 12
+year3 = rate * 12
+year4 = rate * 12
+```
+
+### 18.10.11 dispatcher 등록 FINAL
+
+파일:
+
+```text
+commission/services/rate_example_normalizers/__init__.py
+commission/services/rate_example_normalizer.py
+```
+
+등록 함수명:
+
+```python
+build_life_chubb_pdf_conversion_rows
+```
+
+PDF dispatcher:
+
+```python
+if example.insurer == "처브":
+    normalized_rows = build_life_chubb_pdf_conversion_rows(example)
+```
+
+### 18.10.12 처브 회귀 체크리스트 FINAL
+
+검증 항목:
+
+* 특약 페이지 제외 정상
+* PDF normalized_count > 0
+* 1종/2종 row 분리 정상
+* continuation row 병합 정상
+* `200m` 단독 저장 없음
+* `- P≥10,000원` 저장 없음
+* placeholder '-' 제거 정상
+* year1~year4 동일 저장 정상
+* raw % × 12 저장 정상
+* 환산율 확인 모달 조회 정상
+
 # 19. 전략상품 저장 정책
 
 정규화 row의 `strategy_flag` 필드 사용.
@@ -1237,3 +1526,430 @@ print('col_yr4 있는 보험사:', list(RateExamplePayRow.objects.exclude(col_yr
 9. ABL 36회/37회 컬럼 `-` 표시 확인
 10. 삼성 37회 컬럼 값 존재 확인
 11. 한화 36회/4차년 컬럼 값 존재 확인
+
+---
+
+# 26. 수수료 계산 엔진 FINAL (2026-05 업데이트)
+
+## 26.1 계산 구조 개요
+
+수수료 계산 엔진은 다음 우선순위로 동작한다.
+
+```text
+1. 보험사 판정
+2. 환산율 row 조회(conv)
+3. 지급률 row 조회(pay)
+4. 전략상품 여부 판정
+5. 회차별 금액 계산
+6. 총량 계산
+```
+
+파일:
+
+```text
+commission/services/rate_example_calculator.py
+```
+
+---
+
+## 26.2 보험사별 계산 분기 FINAL
+
+| 보험사 | 계산 방식 |
+| --- | --- |
+| 일반 보험사 | 환산율 × 지급률 × 수수료율 |
+| DB | 별도 계산 로직 |
+| IBK | 지급률만 사용 (환산율 미사용) |
+
+### 일반 보험사 목록
+
+```text
+ABL
+삼성
+신한
+하나
+IM
+KB
+농협
+라이나
+KDB
+미래
+처브
+한화
+카디프
+동양
+메트
+흥국
+푸본현대
+교보
+```
+
+### 중요 변경 사항
+
+기존:
+
+```text
+처브 / 카디프 계산 제외
+```
+
+변경 후:
+
+```text
+처브 / 카디프도 일반 보험사 로직으로 계산
+```
+
+---
+
+## 26.3 일반 보험사 계산식 FINAL
+
+### 기본 계산식
+
+```text
+보험료 × 환산율 × 지급률 × 수수료율
+```
+
+### 회차별 계산식
+
+| 구간 | 계산 |
+| --- | --- |
+| 익월 | 보험료 × year1 × col_first × 수수료율 |
+| 13회 | 보험료 × year2 × col_m13 × 수수료율 |
+| 2차년 | 보험료 × year2 × col_yr2 × 수수료율 |
+| 3차년 | 보험료 × year3 × col_yr3 × 수수료율 |
+| 36회 | 보험료 × year3 × col_m36 × 수수료율 |
+| 37회 | 보험료 × year4 × col_m37 × 수수료율 |
+| 4차년 | 보험료 × year4 × col_yr4 × 수수료율 |
+
+### 총량 계산
+
+```text
+익월 소계 = 익월
+
+계속 소계 =
+13회 +
+2차년 +
+3차년 +
+36회 +
+37회 +
+4차년
+
+총 금액 =
+익월 소계 + 계속 소계
+```
+
+---
+
+## 26.4 전략상품 지급률 우선 적용 FINAL
+
+### 기존 정책
+
+기존에는 지급률 조회 시:
+
+```python
+coverage_type
+```
+
+만 사용하였다.
+
+예:
+
+```text
+종신/CI
+연금
+기타(보장성)
+```
+
+### 변경 정책 FINAL
+
+환산율 row의:
+
+```python
+strategy_flag
+```
+
+값이 존재하면,
+보종보다 전략상품 지급률을 우선 사용한다.
+
+### 우선순위
+
+```text
+1순위:
+strategy_flag 존재
+→ pay.coverage_type = strategy_flag
+
+2순위:
+strategy_flag 없음
+→ pay.coverage_type = coverage_type
+```
+
+### 예시
+
+환산율 row:
+
+```text
+보험사: ABL
+보종: 종신/CI
+전략유무: 전략상품1
+```
+
+↓
+
+지급률 조회:
+
+```text
+보험사 = ABL
+상품군 = 전략상품1
+```
+
+### 전략상품 허용값
+
+```text
+전략상품1
+전략상품2
+전략상품3
+전략상품4
+```
+
+---
+
+## 26.5 IBK 계산 로직 FINAL
+
+### 핵심 정책
+
+IBK는:
+
+```text
+환산율(conv)을 사용하지 않는다.
+```
+
+지급률(pay) 테이블의 상품군만 사용한다.
+
+### 상품군 구조
+
+지급률 정규화 저장:
+
+```text
+coverage_type = "[IBK]상품군명"
+```
+
+프론트 표시:
+
+```text
+상품군명만 표시
+```
+
+### UI 정책 FINAL
+
+보험사 = IBK 선택 시:
+
+| 항목 | 정책 |
+| --- | --- |
+| 상품명 | IBK 상품군 dropdown |
+| 구분 | disabled |
+| 납기 | disabled |
+| 환산율 조회 | 사용 안 함 |
+
+---
+
+## 26.6 IBK 계산식 FINAL
+
+### 중요
+
+IBK는:
+
+```text
+보험료 × 지급률 × 수수료율
+```
+
+만 사용한다.
+
+환산율 multiplier 사용 금지.
+
+### 회차별 계산식 FINAL
+
+| 구간 | 계산 |
+| --- | --- |
+| 익월 | 보험료 × col_first × 수수료율 |
+| 익월소계 | 익월 금액 그대로 |
+| 13회 | 보험료 × col_m13 × 수수료율 |
+| 2차년 | 보험료 × col_yr2 × 수수료율 |
+| 3차년 | 보험료 × col_yr3 × 수수료율 |
+| 36회 | 보험료 × col_m36 × 수수료율 |
+| 37회 | 보험료 × col_m37 × 수수료율 |
+| 4차년 | 보험료 × col_yr4 × 수수료율 |
+
+### 중요 수정 사항
+
+기존 잘못된 설계:
+
+```text
+익월 = col_yr1 사용
+```
+
+최종 정책:
+
+```text
+익월 = col_first 사용
+```
+
+즉:
+
+```python
+next_month_first = premium * pay.col_first * commission_rate
+```
+
+이 최종 기준이다.
+
+---
+
+## 26.7 IBK 지급률 컬럼 정책 FINAL
+
+| 컬럼 | 의미 |
+| --- | --- |
+| col_first | 초회 |
+| col_m13 | 13회 |
+| col_yr2 | 2차년구간 |
+| col_yr3 | 3차년구간 |
+| col_m36 | 36회 |
+| col_m37 | 37회 |
+| col_yr4 | 4차년구간 |
+
+현재 지급률 파일에 값이 없는 경우:
+
+```python
+None
+```
+
+저장 후 UI에서:
+
+```text
+-
+```
+
+표시.
+
+0 저장 금지.
+
+---
+
+## 26.8 옵션 조회 정책 FINAL
+
+파일:
+
+```text
+commission/services/rate_example_options.py
+```
+
+### 일반 보험사
+
+```text
+환산율(conv) master 기준 조회
+```
+
+흐름:
+
+```text
+보험사
+→ 상품명
+→ 구분
+→ 납기
+```
+
+### IBK
+
+```text
+지급률(pay) master 기준 조회
+```
+
+흐름:
+
+```text
+보험사=IBK
+→ 상품군
+```
+
+구분/납기 조회 없음.
+
+---
+
+## 26.9 프론트 JS 정책 FINAL
+
+파일:
+
+```text
+static/js/commission/rate_example.js
+```
+
+### IBK 선택 시
+
+```javascript
+plan.disabled = true;
+period.disabled = true;
+```
+
+### 일반 보험사 복귀 시
+
+```javascript
+plan.disabled = false;
+period.disabled = false;
+```
+
+### placeholder 정책
+
+| 상태 | placeholder |
+| --- | --- |
+| 일반 보험사 | 상품명 |
+| IBK | IBK 상품군 |
+
+---
+
+## 26.10 API payload 정책 FINAL
+
+### 일반 보험사
+
+```json
+{
+  "insurer": "ABL",
+  "product_name": "상품명",
+  "plan_type": "구분",
+  "pay_period": "20년",
+  "premium": "100000",
+  "commission_rate": "70"
+}
+```
+
+### IBK
+
+```json
+{
+  "insurer": "IBK",
+  "product_name": "종신형",
+  "plan_type": "",
+  "pay_period": "",
+  "premium": "100000",
+  "commission_rate": "70"
+}
+```
+
+---
+
+## 26.11 회귀 위험 체크리스트 FINAL
+
+### 일반 보험사
+
+- 처브 계산 정상
+- 카디프 계산 정상
+- 전략상품 지급률 우선 적용 정상
+- strategy_flag 없는 경우 coverage_type fallback 정상
+
+### IBK
+
+- 상품군 dropdown 정상
+- 구분 disabled 정상
+- 납기 disabled 정상
+- col_first 기반 익월 계산 정상
+- 환산율 미사용 정상
+- 36회/37회/4차년 None 표시 정상
+
+### DB
+
+- 기존 제외 정책 유지

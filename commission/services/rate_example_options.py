@@ -13,12 +13,16 @@ RateExample 옵션 조회 서비스.
 주의:
 - 계산 로직은 포함하지 않는다.
 - 환산율/수정률 정규화 데이터(conv)만 조회한다.
-- 지급률(pay) 데이터는 이 옵션 조회의 기준이 아니다.
+- 기본 옵션은 환산율(conv) 기준이지만,
+- IBK 상품군은 지급률(pay) 테이블을 기준으로 제공한다.
 """
 
 from dataclasses import dataclass
 
-from commission.models import RateExample, RateExampleConversionRow
+from commission.models import RateExample, RateExampleConversionRow, RateExamplePayRow
+
+
+IBK_PREFIX = "[IBK]"
 
 
 @dataclass(frozen=True)
@@ -70,6 +74,37 @@ def _distinct_values(field: str, qs) -> list[str]:
     return sorted({_clean(v) for v in values if _clean(v)}, key=lambda x: x)
 
 
+def _ibk_product_options() -> list[str]:
+    """
+    IBK 상품군 옵션.
+
+    IBK는 환산율 정규화 테이블이 아니라 지급률 정규화 테이블의
+    coverage_type("[IBK]상품군")을 상품명 드랍다운으로 사용한다.
+    """
+    values = (
+        RateExamplePayRow.objects
+        .filter(
+            insurer_type=RateExample.TYPE_LIFE,
+            category=RateExample.CAT_PAY,
+            insurer="IBK",
+            tier="5천만↑",
+        )
+        .exclude(coverage_type="")
+        .values_list("coverage_type", flat=True)
+        .distinct()
+    )
+    items = []
+    for value in values:
+        text = _clean(value)
+        if not text:
+            continue
+        if text.startswith(IBK_PREFIX):
+            text = text[len(IBK_PREFIX):]
+        if text:
+            items.append(text)
+    return sorted(set(items), key=lambda x: x)
+
+
 def get_rate_example_options(query: RateExampleOptionQuery) -> list[str]:
     """
     옵션 목록 조회.
@@ -101,15 +136,21 @@ def get_rate_example_options(query: RateExampleOptionQuery) -> list[str]:
     if kind == "products":
         if not insurer:
             return []
+        if insurer == "IBK":
+            return _ibk_product_options()
         return _distinct_values("product_name", qs)
 
     if kind == "plan_types":
+        if insurer == "IBK":
+            return []
         if not insurer or not product_name:
             return []
         qs = qs.filter(product_name=product_name)
         return _distinct_values("plan_type", qs)
 
     if kind == "pay_periods":
+        if insurer == "IBK":
+            return []
         if not insurer or not product_name:
             return []
         qs = qs.filter(product_name=product_name)
