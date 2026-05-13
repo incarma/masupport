@@ -88,6 +88,10 @@ urlpatterns = [
      path("rate-examples/conversions/strategy/",
          views.rate_example_conversion_strategy_update,
          name="rate_example_conversion_strategy_update"),
+     # 환산율 확인 모달 수정 모드 저장 API
+     path("rate-examples/conversions/bulk-edit/",
+         views.rate_example_conversion_bulk_edit,
+         name="rate_example_conversion_bulk_edit"),
      # 지급률 정규화 데이터 조회 (superuser 전용)
      path("rate-examples/pay/list/",
          views.rate_example_pay_list,

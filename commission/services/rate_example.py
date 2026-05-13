@@ -70,7 +70,7 @@ class RateExampleService:
             }
         
         # ─────────────────────────────────────────────────────
-        # KB 생명보험 환산율/수정률 상품 구분 검증
+        # KB/한화 생명보험 환산율/수정률 상품 구분 검증
         # - DB 모델 추가 없이 업로드 분기값으로만 사용
         # - 현재 지원: 일반상품, 건강보험
         # ─────────────────────────────────────────────────────
@@ -83,6 +83,17 @@ class RateExampleService:
                 return {
                     "ok": False,
                     "message": "KB 상품 구분 값이 올바르지 않습니다.",
+                }
+
+        elif (
+            insurer_type == RateExample.TYPE_LIFE
+            and category == RateExample.CAT_CONV
+            and insurer == "한화"
+        ):
+            if product_kind not in {"hanhwa_whole", "hanhwa_annuity", "hanhwa_general"}:
+                return {
+                    "ok": False,
+                    "message": "한화 상품 구분 값이 올바르지 않습니다.",
                 }
 
         else:

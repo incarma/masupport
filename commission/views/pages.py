@@ -349,6 +349,8 @@ def rate_example_home(request):
         "calculate_url": reverse("commission:rate_example_calculate"),
         "conversion_list_url": reverse("commission:rate_example_conversion_list"),
         "conversion_strategy_update_url": reverse("commission:rate_example_conversion_strategy_update"),
+        # 환산율 확인 모달의 수정 모드 저장 API
+        "conversion_bulk_edit_url": reverse("commission:rate_example_conversion_bulk_edit"),
         "conversion_reset_url":           reverse("commission:rate_example_conversion_reset"),
         # 지급률 확인 모달이 AJAX로 조회하는 엔드포인트
         "pay_list_url": reverse("commission:rate_example_pay_list"),

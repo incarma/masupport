@@ -15,6 +15,7 @@
      data-calculate-url="{{ calculate_url }}"
      data-conversion-list-url="{{ conversion_list_url }}"
      data-conversion-strategy-update-url="{{ conversion_strategy_update_url }}"
+     data-conversion-bulk-edit-url="{{ conversion_bulk_edit_url }}"
      data-conversion-reset-url="{{ conversion_reset_url }}"
      data-pay-list-url="{{ pay_list_url }}"
      data-pay-reset-url="{{ pay_reset_url }}"
@@ -192,19 +193,19 @@
           </select>
         </div>
         <!--
-          KB 생명보험 환산율/수정률 전용 상품 구분.
-          - 생명보험 > 환산율/수정률 > KB 선택 시에만 활성화
+          생명보험 환산율/수정률 상품 구분.
+          - KB 선택 시: 일반상품 / 건강보험
+          - 한화 선택 시: 종신보험 / 연금보험 / 일반보장
           - 서버에는 product_kind 값으로 전달한다.
-          - 현재 정규화 지원: general(일반상품)
         -->
         <div class="mb-3 d-none" id="re-modal-product-kind-wrap">
           <label class="form-label fw-semibold">상품</label>
           <select class="form-select form-select-sm" id="re-modal-product-kind" disabled>
             <option value="">선택</option>
-            <option value="general">일반상품</option>
-            <option value="health">건강보험</option>
           </select>
-          <div class="form-text">KB 환산율/수정률 파일 업로드 시 선택합니다.</div>
+          <div class="form-text" id="re-modal-product-kind-help">
+            KB 또는 한화 환산율/수정률 파일 업로드 시 선택합니다.
+          </div>
         </div>
         <!--
           정규화 데이터 저장 방식.
@@ -434,8 +435,21 @@
 
         <div class="table-responsive re-conv-table-wrap">
           <table class="table table-sm table-bordered align-middle mb-0" id="re-conv-table">
+            <colgroup>
+              <col class="re-conv-col-check re-conv-edit-only d-none">
+              <col class="re-conv-col-coverage">
+              <col class="re-conv-col-strategy">
+              <col class="re-conv-col-product">
+              <col class="re-conv-col-plan">
+              <col class="re-conv-col-period">
+              <col class="re-conv-col-rate">
+              <col class="re-conv-col-rate">
+              <col class="re-conv-col-rate">
+              <col class="re-conv-col-rate">
+            </colgroup>
             <thead class="table-light">
               <tr>
+                <th class="text-center re-conv-edit-only d-none">선택</th>
                 <th class="text-center">
                   <button type="button" class="re-sort-btn" data-sort-key="coverage_type">보종</button>
                 </th>
@@ -459,7 +473,7 @@
             </thead>
             <tbody id="re-conv-tbody">
               <tr>
-                <td colspan="9" class="text-center text-muted py-3">
+                <td colspan="10" class="text-center text-muted py-3">
                   보험사를 선택 후 조회해 주세요.
                 </td>
               </tr>
@@ -468,13 +482,40 @@
         </div>
       </div>
       <div class="modal-footer justify-content-between">
-        <!-- 초기화: 현재 조회된 보험사 데이터 전체 삭제 -->
-        <button type="button" class="btn btn-outline-danger btn-sm"
-                id="re-conv-btn-reset">
-          데이터 초기화
-        </button>
-        <button type="button" class="btn btn-outline-secondary btn-sm"
-                data-bs-dismiss="modal">닫기</button>
+        <div class="d-flex gap-2">
+          <!-- 초기화: 현재 조회된 보험사 데이터 전체 삭제 -->
+          <button type="button" class="btn btn-outline-danger btn-sm"
+                  id="re-conv-btn-reset">
+            데이터 초기화
+          </button>
+          <!-- 수정 모드에서만 사용: 신규 행 추가 / 선택 행 삭제 -->
+          <button type="button" class="btn btn-outline-primary btn-sm d-none"
+                  id="re-conv-btn-add-row">
+            행 추가
+          </button>
+          <button type="button" class="btn btn-outline-danger btn-sm d-none"
+                  id="re-conv-btn-delete-row">
+            행 삭제
+          </button>
+        </div>
+        <div class="d-flex gap-2">
+          <!-- 환산율 직접수정 진입 버튼 -->
+          <button type="button" class="btn btn-outline-primary btn-sm"
+                  id="re-conv-btn-edit">
+            수정하기
+          </button>
+          <button type="button" class="btn btn-primary btn-sm d-none"
+                  id="re-conv-btn-save-edit">
+            저장
+          </button>
+          <button type="button" class="btn btn-outline-secondary btn-sm d-none"
+                  id="re-conv-btn-cancel-edit">
+            취소
+          </button>
+          <button type="button" class="btn btn-outline-secondary btn-sm"
+                  id="re-conv-btn-close"
+                  data-bs-dismiss="modal">닫기</button>
+        </div>
       </div>
     </div>
   </div>

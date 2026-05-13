@@ -85,6 +85,10 @@ _RATE_EXAMPLE_API = {
         "commission.views.api_rate_example_conversion",
         "rate_example_conversion_strategy_update",
     ),
+    "rate_example_conversion_bulk_edit": (
+        "commission.views.api_rate_example_conversion",
+        "rate_example_conversion_bulk_edit",
+    ),
     # 지급률 정규화 데이터 조회 API
     "rate_example_pay_list": (
         "commission.views.api_rate_example_pay",
@@ -258,6 +262,7 @@ __all__ = [
     "rate_example_options",
     "rate_example_calculate",
     "rate_example_conversion_strategy_update",
+    "rate_example_conversion_bulk_edit",
     "rate_example_pay_list",
     "rate_example_conversion_reset",
     "rate_example_pay_reset",

@@ -725,31 +725,77 @@
   padding: 0.22rem 0.32rem;
 }
 
-/* 9컬럼 기준: 보험사 컬럼 삭제 후 모달 폭 안에 수용 */
+/* 10컬럼 공통 기준: 첫 번째 선택 컬럼은 숨김/수정모드 전용
+   - 보기 모드에서도 DOM상 1번째 컬럼이 존재하므로 nth-child는 10컬럼 기준으로 계산한다.
+   - 보종/전략유무는 축소하고 상품명 폭을 우선 확보한다.
+*/
 #rateExampleConvModal #re-conv-table th:nth-child(1),
-#rateExampleConvModal #re-conv-table td:nth-child(1) { width: 9%; }
+#rateExampleConvModal #re-conv-table td:nth-child(1) { width: 4%; }
 
 #rateExampleConvModal #re-conv-table th:nth-child(2),
-#rateExampleConvModal #re-conv-table td:nth-child(2) { width: 13%; }
+#rateExampleConvModal #re-conv-table td:nth-child(2) { width: 8%; }
 
 #rateExampleConvModal #re-conv-table th:nth-child(3),
-#rateExampleConvModal #re-conv-table td:nth-child(3) { width: 35%; }
+#rateExampleConvModal #re-conv-table td:nth-child(3) { width: 9%; }
 
 #rateExampleConvModal #re-conv-table th:nth-child(4),
-#rateExampleConvModal #re-conv-table td:nth-child(4) { width: 11%; }
+#rateExampleConvModal #re-conv-table td:nth-child(4) { width: 39%; }
 
 #rateExampleConvModal #re-conv-table th:nth-child(5),
-#rateExampleConvModal #re-conv-table td:nth-child(5) { width: 10%; }
+#rateExampleConvModal #re-conv-table td:nth-child(5) { width: 8%; }
 
 #rateExampleConvModal #re-conv-table th:nth-child(6),
-#rateExampleConvModal #re-conv-table td:nth-child(6),
+#rateExampleConvModal #re-conv-table td:nth-child(6) { width: 8%; }
+
 #rateExampleConvModal #re-conv-table th:nth-child(7),
 #rateExampleConvModal #re-conv-table td:nth-child(7),
 #rateExampleConvModal #re-conv-table th:nth-child(8),
 #rateExampleConvModal #re-conv-table td:nth-child(8),
 #rateExampleConvModal #re-conv-table th:nth-child(9),
-#rateExampleConvModal #re-conv-table td:nth-child(9) {
-  width: 5.5%;
+#rateExampleConvModal #re-conv-table td:nth-child(9),
+#rateExampleConvModal #re-conv-table th:nth-child(10),
+#rateExampleConvModal #re-conv-table td:nth-child(10) {
+  width: 6%;
+}
+
+/* 10컬럼 수정 모드 기준: 선택 컬럼 추가 시에도 상품명 폭 우선 확보 */
+#rateExampleConvModal #re-conv-table:has(.re-conv-edit-row) th:nth-child(1),
+#rateExampleConvModal #re-conv-table:has(.re-conv-edit-row) td:nth-child(1) { width: 4%; }
+
+#rateExampleConvModal #re-conv-table:has(.re-conv-edit-row) th:nth-child(2),
+#rateExampleConvModal #re-conv-table:has(.re-conv-edit-row) td:nth-child(2) { width: 8%; }
+
+#rateExampleConvModal #re-conv-table:has(.re-conv-edit-row) th:nth-child(3),
+#rateExampleConvModal #re-conv-table:has(.re-conv-edit-row) td:nth-child(3) { width: 9%; }
+
+#rateExampleConvModal #re-conv-table:has(.re-conv-edit-row) th:nth-child(4),
+#rateExampleConvModal #re-conv-table:has(.re-conv-edit-row) td:nth-child(4) { width: 39%; }
+
+#rateExampleConvModal #re-conv-table:has(.re-conv-edit-row) th:nth-child(5),
+#rateExampleConvModal #re-conv-table:has(.re-conv-edit-row) td:nth-child(5) { width: 8%; }
+
+#rateExampleConvModal #re-conv-table:has(.re-conv-edit-row) th:nth-child(6),
+#rateExampleConvModal #re-conv-table:has(.re-conv-edit-row) td:nth-child(6) { width: 8%; }
+
+#rateExampleConvModal #re-conv-table:has(.re-conv-edit-row) th:nth-child(7),
+#rateExampleConvModal #re-conv-table:has(.re-conv-edit-row) td:nth-child(7),
+#rateExampleConvModal #re-conv-table:has(.re-conv-edit-row) th:nth-child(8),
+#rateExampleConvModal #re-conv-table:has(.re-conv-edit-row) td:nth-child(8),
+#rateExampleConvModal #re-conv-table:has(.re-conv-edit-row) th:nth-child(9),
+#rateExampleConvModal #re-conv-table:has(.re-conv-edit-row) td:nth-child(9),
+#rateExampleConvModal #re-conv-table:has(.re-conv-edit-row) th:nth-child(10),
+#rateExampleConvModal #re-conv-table:has(.re-conv-edit-row) td:nth-child(10) {
+  width: 6%;
+}
+
+/* 수정 모드 input/select: 컬럼폭을 밀어내지 않도록 강제 */
+#rateExampleConvModal .re-conv-edit-input {
+  width: 100%;
+  min-width: 0;
+  height: 24px;
+  padding: 0 0.25rem;
+  font-size: 0.66rem !important;
+  line-height: 1.1;
 }
 
 #rateExampleConvModal #re-conv-table .re-rate-num {

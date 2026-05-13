@@ -10,6 +10,8 @@ from __future__ import annotations
 """
 
 import logging
+import json
+from json import JSONDecodeError
 
 from django.contrib.auth.decorators import login_required
 from django.utils import timezone
@@ -19,6 +21,10 @@ from accounts.decorators import grade_required
 from audit.constants import ACTION
 from audit.services import log_action
 from commission.models import RateExample, RateExampleConversionRow
+from commission.services.rate_example_conversion_edit import (
+    RateExampleConversionEditError,
+    bulk_edit_conversion_rows,
+)
 from commission.views.utils_json import _json_error, _json_ok
 
 logger = logging.getLogger(__name__)
@@ -174,6 +180,57 @@ def rate_example_conversion_list(request):
             "last_updated_by": getattr(latest_uploader, "name", "") or "",
             "source_file_name": getattr(latest_file, "original_name", "") or "",
         },
+    )
+
+
+@login_required
+@grade_required("superuser", forbidden_template=None)
+@require_POST
+def rate_example_conversion_bulk_edit(request):
+    """
+    환산율/수정률 정규화 row 일괄 수정 API.
+
+    역할:
+    - 환산율 확인 모달의 수정 모드에서 전달한 create/update/delete 요청을 처리한다.
+    - 기존 업로드 replace/append 정책은 건드리지 않고, 정규화 master row만 직접 수정한다.
+
+    보안:
+    - superuser 전용
+    - CSRF 유지
+    - row id가 요청 보험사 scope에 속하는지 서비스에서 재검증한다.
+    """
+    try:
+        payload = json.loads(request.body.decode("utf-8") or "{}")
+    except (UnicodeDecodeError, JSONDecodeError):
+        return _json_error("요청 JSON 형식이 올바르지 않습니다.", status=400)
+
+    try:
+        result = bulk_edit_conversion_rows(payload=payload, actor=request.user)
+    except RateExampleConversionEditError as exc:
+        return _json_error(str(exc), status=400)
+    except Exception:
+        logger.exception("[rate_example_conversion_bulk_edit] unexpected error")
+        return _json_error("환산율 저장 중 오류가 발생했습니다.", status=500)
+
+    try:
+        log_action(
+            request,
+            ACTION.COMMISSION_RATE_EXAMPLE_CONVERSION_BULK_EDIT,
+            meta={
+                "insurer_type": result["insurer_type"],
+                "insurer": result["insurer"],
+                "created_count": result["created_count"],
+                "updated_count": result["updated_count"],
+                "deleted_count": result["deleted_count"],
+            },
+            success=True,
+        )
+    except Exception:
+        logger.exception("rate_example conversion bulk_edit audit log failed")
+
+    return _json_ok(
+        "저장되었습니다.",
+        data=result,
     )
 
 

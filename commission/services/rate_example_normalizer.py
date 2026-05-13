@@ -76,6 +76,9 @@ from commission.services.rate_example_normalizers.life_hana import (
 from commission.services.rate_example_normalizers.life_heungkuk import (
     build_life_heungkuk_pdf_conversion_rows,
 )
+from commission.services.rate_example_normalizers.life_hanhwa import (
+    build_life_hanhwa_conversion_rows,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -105,6 +108,7 @@ def normalize_rate_example(
     - 생명보험 / 환산율·수정률 / 푸본현대 / pdf
     - 생명보험 / 환산율·수정률 / 하나 / pdf
     - 생명보험 / 환산율·수정률 / 흥국 / pdf
+    - 생명보험 / 환산율·수정률 / 한화 / xlsx
 
     반환:
     - 생성된 RateExampleConversionRow 수
@@ -124,7 +128,11 @@ def normalize_rate_example(
     if not (
         example.insurer_type == RateExample.TYPE_LIFE
         and example.category == RateExample.CAT_CONV
-        and example.insurer in {"ABL", "DB", "IM", "KB", "KDB", "교보", "농협", "동양", "라이나", "메트", "미래", "삼성", "신한", "처브", "카디프", "푸본현대", "하나", "흥국"}  # conv 대상 보험사
+        and example.insurer in {
+            "ABL", "DB", "IM", "KB", "KDB", "교보", "농협", "동양",
+            "라이나", "메트", "미래", "삼성", "신한", "처브", "카디프",
+            "푸본현대", "하나", "한화", "흥국",
+        }  # conv 대상 보험사
     ):
         return 0
 
@@ -393,6 +401,18 @@ def normalize_rate_example(
     # - "건강" 포함 시트: A8~J8 헤더, A열이 "주보험"인 행만 정규화
     elif example.insurer == "신한":
         normalized_rows.extend(build_life_shinhan_conversion_rows(example, wb))
+    
+    # ── 한화생명 XLSX 정규화 ─────────────────────────────────────
+    # product_kind:
+    # - hanhwa_whole   : 종신보험
+    # - hanhwa_annuity : 연금보험
+    # - hanhwa_general : 일반보장
+    elif example.insurer == "한화":
+        normalized_rows.extend(build_life_hanhwa_conversion_rows(
+            example,
+            wb,
+            product_kind=product_kind,
+        ))
 
     # 동일 보험사/구분의 정규화 master 처리.
     # - replace: 기존 방식. 기존 row 삭제 후 새 데이터 적재.
