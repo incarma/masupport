@@ -121,4 +121,5 @@ class ACTION:
     COMMISSION_RATE_EXAMPLE_DELETE          = "commission.rate_example.delete"
     COMMISSION_RATE_EXAMPLE_NORMALIZE       = "commission.rate_example.normalize"
     COMMISSION_RATE_EXAMPLE_STRATEGY_UPDATE = "commission.rate_example.strategy_update"
+    COMMISSION_RATE_EXAMPLE_CONVERSION_BULK_EDIT = "commission.rate_example.conversion.bulk_edit"
     COMMISSION_RATE_EXAMPLE_CALCULATE       = "commission.rate_example.calculate"

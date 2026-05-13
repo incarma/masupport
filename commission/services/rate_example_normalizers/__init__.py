@@ -65,6 +65,9 @@ from commission.services.rate_example_normalizers.life_hana import (
 from commission.services.rate_example_normalizers.life_heungkuk import (
     build_life_heungkuk_pdf_conversion_rows,
 )
+from commission.services.rate_example_normalizers.life_hanhwa import (
+    build_life_hanhwa_conversion_rows,
+)
 
 __all__ = [
     "build_life_abl_conversion_rows",
@@ -87,4 +90,5 @@ __all__ = [
     "build_life_fubon_pdf_conversion_rows",
     "build_life_hana_pdf_conversion_rows",
     "build_life_heungkuk_pdf_conversion_rows",
+    "build_life_hanhwa_conversion_rows",
 ]

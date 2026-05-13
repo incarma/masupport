@@ -12,6 +12,7 @@
   const CALCULATE_URL = root.dataset.calculateUrl;
   const CONVERSION_LIST_URL = root.dataset.conversionListUrl;
   const CONVERSION_STRATEGY_UPDATE_URL = root.dataset.conversionStrategyUpdateUrl;
+  const CONVERSION_BULK_EDIT_URL = root.dataset.conversionBulkEditUrl;
   // 환산율 정규화 초기화 URL (보험사 단위)
   const CONVERSION_RESET_URL         = root.dataset.conversionResetUrl;
   // 지급률 확인 모달 조회 URL — data-pay-list-url dataset에서 주입
@@ -43,6 +44,16 @@
   const btnResetRows = document.getElementById("re-btn-reset-rows");
   const MAX_CALC_ROWS = 10;
   const IBK_INSURER = "IBK";
+  const CONV_COVERAGE_CHOICES = [
+    "종신,CI",
+    "연금",
+    "변액연금",
+    "저축",
+    "VUL",
+    "연금저축",
+    "기타(보장성)",
+    "CEO정기",
+  ];
 
   let activeComboInput = null;
   let activeComboMenu = null;
@@ -210,10 +221,36 @@
     setIbkRowMode(row);
     if (insurer === IBK_INSURER) return;
     if (!insurer || !productName) return;
+
     const plans = await loadOptionList("plan_types", {
       insurer,
       product_name: productName,
     });
+
+    /*
+     * 한화 연금보험처럼 정규화 row의 plan_type이 공란인 상품은
+     * 구분 select를 "사용안함"으로 고정하고,
+     * plan_type="" 조건으로 납기 목록을 즉시 조회한다.
+     *
+     * 계산 API는 plan_type 공란을 허용하므로,
+     * 사용자는 보험사/상품명/납기만 선택하면 된다.
+     */
+    if (!plans || plans.length === 0) {
+      fillSelect(els.plan, [], "사용안함");
+      if (els.plan) els.plan.disabled = true;
+      row.dataset.selectedPlanType = "";
+
+      const periods = await loadOptionList("pay_periods", {
+        insurer,
+        product_name: productName,
+        plan_type: "",
+      });
+      fillSelect(els.period, periods, "선택");
+      if (els.period) els.period.disabled = false;
+      return;
+    }
+
+    if (els.plan) els.plan.disabled = false;
     fillSelect(els.plan, plans, "선택");
   }
 
@@ -596,7 +633,7 @@
     if (!rows || rows.length === 0) {
       convTbody.innerHTML = `
         <tr>
-          <td colspan="9" class="text-center text-muted py-3">
+          <td colspan="10" class="text-center text-muted py-3">
             조회된 정규화 데이터가 없습니다.
           </td>
         </tr>`;
@@ -604,8 +641,27 @@
     }
 
     convTbody.innerHTML = rows.map(function (row) {
+      if (convEditMode) {
+        return `
+          <tr class="re-conv-edit-row" data-row-id="${escapeHtml(row.id || "")}">
+            <td class="text-center">
+              <input type="checkbox" class="form-check-input re-conv-row-check" aria-label="행 선택">
+            </td>
+            <td>${convCoverageInput(row)}</td>
+            <td>${convStrategyInput(row)}</td>
+            <td>${convInputCell(row, "product_name")}</td>
+            <td>${convInputCell(row, "plan_type")}</td>
+            <td>${convInputCell(row, "pay_period")}</td>
+            <td>${convInputCell(row, "year1", "text-end")}</td>
+            <td>${convInputCell(row, "year2", "text-end")}</td>
+            <td>${convInputCell(row, "year3", "text-end")}</td>
+            <td>${convInputCell(row, "year4", "text-end")}</td>
+          </tr>`;
+      }
+
       return `
         <tr>
+          <td class="text-center re-conv-edit-only d-none"></td>
           <td class="text-center">${ellipsisCell(row.coverage_type, "보종")}</td>
           <td class="text-center">${strategySelect(row.id, row.strategy_flag)}</td>
           <td>${ellipsisCell(row.product_name, "상품명", "re-product-name")}</td>
@@ -638,16 +694,35 @@
   const modalInsurer = document.getElementById("re-modal-insurer");
   const modalProductKindWrap = document.getElementById("re-modal-product-kind-wrap");
   const modalProductKind = document.getElementById("re-modal-product-kind");
+  const modalProductKindHelp = document.getElementById("re-modal-product-kind-help");
 
-  // ── KB 생명보험 환산율/수정률 상품 구분 활성화 ─────────────────────────
-  function updateKbProductKindVisibility() {
+  const PRODUCT_KIND_OPTIONS = {
+    KB: [
+      ["general", "일반상품"],
+      ["health", "건강보험"],
+    ],
+    "한화": [
+      ["hanhwa_whole", "종신보험"],
+      ["hanhwa_annuity", "연금보험"],
+      ["hanhwa_general", "일반보장"],
+    ],
+  };
+
+  // ── 보험사별 환산율/수정률 상품 구분 활성화 ─────────────────────
+  function updateProductKindVisibility() {
     if (!modalProductKindWrap || !modalProductKind) return;
 
     const insurer = modalInsurer?.value || "";
+    const options = PRODUCT_KIND_OPTIONS[insurer] || [];
+    const shouldShow = options.length > 0;
 
-    const shouldShow = (
-      insurer === "KB"
-    );
+    modalProductKind.innerHTML = '<option value="">선택</option>';
+    options.forEach(function ([value, label]) {
+      const opt = document.createElement("option");
+      opt.value = value;
+      opt.textContent = label;
+      modalProductKind.appendChild(opt);
+    });
 
     modalProductKindWrap.classList.toggle("d-none", !shouldShow);
     modalProductKind.disabled = !shouldShow;
@@ -655,17 +730,28 @@
     if (!shouldShow) {
       modalProductKind.value = "";
     }
+
+    if (modalProductKindHelp) {
+      modalProductKindHelp.textContent = insurer === "한화"
+        ? "한화 환산율/수정률 파일 업로드 시 종신보험/연금보험/일반보장 중 하나를 선택합니다."
+        : "KB 환산율/수정률 파일 업로드 시 일반상품/건강보험 중 하나를 선택합니다.";
+    }
   }
 
   if (modalInsurer) {
-    modalInsurer.addEventListener("change", updateKbProductKindVisibility);
+    modalInsurer.addEventListener("change", updateProductKindVisibility);
   }
 
-  function populateLifeInsurerSelect(sel, placeholder) {
+  function populateLifeInsurerSelect(sel, placeholder, options) {
     if (!sel) return;
+    const opts = options || {};
     sel.disabled = false;
     sel.innerHTML = `<option value="">${placeholder || "선택"}</option>`;
-    LIFE_INSURERS.forEach(function (name) {
+    LIFE_INSURERS.filter(function (name) {
+      // 환산율 업데이트/확인 모달에서는 IBK 제외.
+      // IBK는 지급률(pay) 기반 계산 특수 보험사이므로 메인 계산 입력에서는 유지한다.
+      return !(opts.excludeIbk === true && name === IBK_INSURER);
+    }).forEach(function (name) {
       const opt = document.createElement("option");
       opt.value = name;
       opt.textContent = name;
@@ -681,13 +767,83 @@
   const convFilterEls = Array.from(document.querySelectorAll(".re-conv-filter"));
   const convKeyword = document.getElementById("re-conv-keyword");
   const convSortBtns = Array.from(document.querySelectorAll(".re-sort-btn"));
+  const convEditOnlyEls = Array.from(document.querySelectorAll(".re-conv-edit-only"));
+  const convBtnEdit = document.getElementById("re-conv-btn-edit");
+  const convBtnSaveEdit = document.getElementById("re-conv-btn-save-edit");
+  const convBtnCancelEdit = document.getElementById("re-conv-btn-cancel-edit");
+  const convBtnAddRow = document.getElementById("re-conv-btn-add-row");
+  const convBtnDeleteRow = document.getElementById("re-conv-btn-delete-row");
+  const convBtnClose = document.getElementById("re-conv-btn-close");
   const fullTextModalEl = document.getElementById("reCellFullTextModal");
   const fullTextTitleEl = document.getElementById("re-cell-fulltext-title");
   const fullTextBodyEl = document.getElementById("re-cell-fulltext-body");
 
   let convRowsOriginal = [];
+  let convEditSnapshot = [];
+  let convEditMode = false;
+  let convDeletedIds = [];
   let convSortKey = "";
   let convSortDir = "asc";
+
+  function stripPercent(value) {
+    return String(value ?? "").replace(/,/g, "").replace(/%/g, "").trim();
+  }
+
+  function convInputCell(row, key, alignClass) {
+    const value = stripPercent(row[key]);
+    return `
+      <input type="text"
+             class="form-control form-control-sm re-conv-edit-input ${alignClass || ""}"
+             data-field="${escapeHtml(key)}"
+             value="${escapeHtml(value)}">`;
+  }
+
+  function convCoverageInput(row) {
+    const selected = String(row.coverage_type || "");
+    return `
+      <select class="form-select form-select-sm re-conv-edit-input"
+              data-field="coverage_type">
+        <option value="">선택</option>
+        ${CONV_COVERAGE_CHOICES.map(function (choice) {
+          const isSelected = choice === selected ? " selected" : "";
+          return `<option value="${escapeHtml(choice)}"${isSelected}>${escapeHtml(choice)}</option>`;
+        }).join("")}
+      </select>`;
+  }
+
+  function convStrategyInput(row) {
+    const selected = String(row.strategy_flag || "");
+    const choices = ["", "전략상품1", "전략상품2", "전략상품3", "전략상품4"];
+    return `
+      <select class="form-select form-select-sm re-conv-edit-input"
+              data-field="strategy_flag">
+        ${choices.map(function (choice) {
+          const label = choice || "선택";
+          const isSelected = choice === selected ? " selected" : "";
+          return `<option value="${escapeHtml(choice)}"${isSelected}>${escapeHtml(label)}</option>`;
+        }).join("")}
+      </select>`;
+  }
+
+  function setConvEditMode(enabled) {
+    convEditMode = enabled;
+
+    convEditOnlyEls.forEach(function (el) {
+      el.classList.toggle("d-none", !enabled);
+    });
+    [convBtnSaveEdit, convBtnCancelEdit, convBtnAddRow, convBtnDeleteRow].forEach(function (btn) {
+      if (btn) btn.classList.toggle("d-none", !enabled);
+    });
+    if (convBtnEdit) convBtnEdit.classList.toggle("d-none", enabled);
+    if (convBtnReset) convBtnReset.disabled = enabled;
+    if (convBtnApply) convBtnApply.disabled = enabled;
+    if (convInsurer) convInsurer.disabled = enabled;
+    if (convBtnClose) convBtnClose.disabled = enabled;
+
+    convFilterEls.forEach(function (sel) { sel.disabled = enabled; });
+    if (convKeyword) convKeyword.disabled = enabled;
+    convSortBtns.forEach(function (btn) { btn.disabled = enabled; });
+  }
 
   function setConvUpdatedInfo(data) {
     if (!convUpdatedAt) return;
@@ -790,7 +946,11 @@
   }
 
   function applyConvView() {
-    renderConvRows(sortedConvRows(filteredConvRows()));
+    if (convEditMode) {
+      renderConvRows(convRowsOriginal);
+    } else {
+      renderConvRows(sortedConvRows(filteredConvRows()));
+    }
     updateSortButtons();
   }
 
@@ -852,11 +1012,8 @@
       const file = fileInput?.files[0];
 
       if (!insurer) { showError("보험사를 선택해 주세요."); return; }
-      if (
-        insurer === "KB" &&
-        !productKind
-      ) {
-        showError("KB 상품 구분을 선택해 주세요.");
+      if (["KB", "한화"].includes(insurer) && !productKind) {
+        showError(`${insurer} 상품 구분을 선택해 주세요.`);
         return;
       }
       if (!file) { showError("파일을 선택해 주세요."); return; }
@@ -972,6 +1129,7 @@
     convTbody.addEventListener("change", async function (e) {
       const sel = e.target.closest(".re-strategy-select");
       if (!sel) return;
+      if (convEditMode) return;
 
       const rowId = sel.dataset.rowId || "";
       const value = sel.value || "";
@@ -1013,6 +1171,148 @@
         sel.value = prev;
       } finally {
         sel.disabled = false;
+      }
+    });
+  }
+
+  function enterConvEditMode() {
+    if (!convInsurer?.value) {
+      showConvError("보험사를 선택 후 조회해 주세요.");
+      return;
+    }
+    if (!convRowsOriginal.length) {
+      showConvError("수정할 환산율 데이터가 없습니다.");
+      return;
+    }
+    clearConvError();
+    convEditSnapshot = JSON.parse(JSON.stringify(convRowsOriginal));
+    convDeletedIds = [];
+    convFilterEls.forEach(function (sel) { sel.value = ""; });
+    if (convKeyword) convKeyword.value = "";
+    convSortKey = "";
+    convSortDir = "asc";
+    setConvEditMode(true);
+    applyConvView();
+  }
+
+  function exitConvEditMode(restore) {
+    if (restore) {
+      convRowsOriginal = JSON.parse(JSON.stringify(convEditSnapshot));
+    }
+    convEditSnapshot = [];
+    convDeletedIds = [];
+    setConvEditMode(false);
+    populateConvFilters(convRowsOriginal);
+    applyConvView();
+  }
+
+  function collectConvEditRows() {
+    return Array.from(convTbody?.querySelectorAll(".re-conv-edit-row") || []).map(function (tr) {
+      const row = { id: tr.dataset.rowId || "" };
+      tr.querySelectorAll(".re-conv-edit-input").forEach(function (input) {
+        const field = input.dataset.field || "";
+        if (field) row[field] = input.value || "";
+      });
+      return row;
+    });
+  }
+
+  async function reloadConvRowsAfterEdit() {
+    if (!convBtnApply) return;
+    convBtnApply.disabled = false;
+    convBtnApply.click();
+  }
+
+  if (convBtnEdit) {
+    convBtnEdit.addEventListener("click", enterConvEditMode);
+  }
+
+  if (convBtnCancelEdit) {
+    convBtnCancelEdit.addEventListener("click", function () {
+      if (!confirm("수정 중인 내용을 취소하시겠습니까?")) return;
+      exitConvEditMode(true);
+    });
+  }
+
+  if (convBtnAddRow) {
+    convBtnAddRow.addEventListener("click", function () {
+      if (!convEditMode) return;
+      convRowsOriginal.push({
+        id: "",
+        coverage_type: "",
+        strategy_flag: "",
+        product_name: "",
+        plan_type: "",
+        pay_period: "",
+        year1: "",
+        year2: "",
+        year3: "",
+        year4: "",
+      });
+      applyConvView();
+    });
+  }
+
+  if (convBtnDeleteRow) {
+    convBtnDeleteRow.addEventListener("click", function () {
+      if (!convEditMode) return;
+      const checkedRows = Array.from(convTbody?.querySelectorAll(".re-conv-edit-row") || [])
+        .filter(function (tr) {
+          return tr.querySelector(".re-conv-row-check")?.checked;
+        });
+      if (!checkedRows.length) {
+        showConvError("삭제할 행을 선택해 주세요.");
+        return;
+      }
+      checkedRows.forEach(function (tr) {
+        const rowId = tr.dataset.rowId || "";
+        if (rowId) convDeletedIds.push(rowId);
+        tr.remove();
+      });
+      clearConvError();
+    });
+  }
+
+  if (convBtnSaveEdit) {
+    convBtnSaveEdit.addEventListener("click", async function () {
+      if (!CONVERSION_BULK_EDIT_URL) {
+        showConvError("저장 URL이 설정되지 않았습니다.");
+        return;
+      }
+      const insurerVal = convInsurer?.value || "";
+      if (!insurerVal) {
+        showConvError("보험사를 선택해 주세요.");
+        return;
+      }
+      const payload = {
+        insurer_type: "life",
+        insurer: insurerVal,
+        rows: collectConvEditRows(),
+        deleted_ids: convDeletedIds,
+      };
+
+      convBtnSaveEdit.disabled = true;
+      clearConvError();
+      try {
+        const res = await fetch(CONVERSION_BULK_EDIT_URL, {
+          method: "POST",
+          credentials: "same-origin",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": window.csrfToken || "",
+            "X-Requested-With": "XMLHttpRequest",
+          },
+          body: JSON.stringify(payload),
+        });
+        await readJsonOrThrow(res);
+        setConvEditMode(false);
+        convEditSnapshot = [];
+        convDeletedIds = [];
+        await reloadConvRowsAfterEdit();
+      } catch (err) {
+        showConvError(err.message || "저장 중 오류가 발생했습니다.");
+      } finally {
+        convBtnSaveEdit.disabled = false;
       }
     });
   }
@@ -1127,7 +1427,7 @@
         if (el.tagName === "INPUT") el.value = "";
       });
       if (modalInsurer) {
-        populateLifeInsurerSelect(modalInsurer, "선택");
+        populateLifeInsurerSelect(modalInsurer, "선택", { excludeIbk: true });
       }
 
       const replaceMode = document.getElementById("re-modal-normalize-mode-replace");
@@ -1135,7 +1435,7 @@
         replaceMode.checked = true;
       }
 
-      updateKbProductKindVisibility();
+      updateProductKindVisibility();
     });
   }
   // ── 환산율/수정률 모달 초기화 (열릴 때 선택값 리셋) ──────────────────────
@@ -1143,8 +1443,11 @@
   if (convModal) {
     convModal.addEventListener("show.bs.modal", function () {
       if (convInsurer) {
-        populateLifeInsurerSelect(convInsurer, "선택");
+        populateLifeInsurerSelect(convInsurer, "선택", { excludeIbk: true });
       }
+      setConvEditMode(false);
+      convEditSnapshot = [];
+      convDeletedIds = [];
       convRowsOriginal = [];
       convSortKey = "";
       convSortDir = "asc";
