@@ -299,6 +299,9 @@ def _parse_named_health_sheet(
         if not product_name:
             continue
 
+        if "보험" not in product_name:
+            continue
+
         if "판매중지" in product_name:
             excluded_source_rows.add(row_no)
             excluded_source_rows.add(row_no - 1)
