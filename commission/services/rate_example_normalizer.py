@@ -61,6 +61,22 @@ from commission.services.rate_example_normalizers.life_chubb import (
 from commission.services.rate_example_normalizers.life_cardif import (
     build_life_cardif_pdf_conversion_rows,
 )
+from commission.services.rate_example_normalizers.life_mirae import (
+    build_life_mirae_conversion_rows,
+)
+from commission.services.rate_example_normalizers.life_samsung import (
+    build_life_samsung_conversion_rows,
+)
+from commission.services.rate_example_normalizers.life_fubon import (
+    build_life_fubon_pdf_conversion_rows,
+)
+from commission.services.rate_example_normalizers.life_hana import (
+    build_life_hana_pdf_conversion_rows,
+)
+from commission.services.rate_example_normalizers.life_heungkuk import (
+    build_life_heungkuk_pdf_conversion_rows,
+)
+
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +100,11 @@ def normalize_rate_example(
     - 생명보험 / 환산율·수정률 / 교보 / xlsx
     - 생명보험 / 환산율·수정률 / 라이나 / xlsx
     - 생명보험 / 환산율·수정률 / 라이나 / pdf
+    - 생명보험 / 환산율·수정률 / 미래 / xlsx
+    - 생명보험 / 환산율·수정률 / 삼성 / xlsx
+    - 생명보험 / 환산율·수정률 / 푸본현대 / pdf
+    - 생명보험 / 환산율·수정률 / 하나 / pdf
+    - 생명보험 / 환산율·수정률 / 흥국 / pdf
 
     반환:
     - 생성된 RateExampleConversionRow 수
@@ -103,7 +124,7 @@ def normalize_rate_example(
     if not (
         example.insurer_type == RateExample.TYPE_LIFE
         and example.category == RateExample.CAT_CONV
-        and example.insurer in {"ABL", "DB", "IM", "KB", "KDB", "교보", "농협", "동양", "라이나", "메트", "신한", "처브", "카디프"}  # conv 대상 보험사
+        and example.insurer in {"ABL", "DB", "IM", "KB", "KDB", "교보", "농협", "동양", "라이나", "메트", "미래", "삼성", "신한", "처브", "카디프", "푸본현대", "하나", "흥국"}  # conv 대상 보험사
     ):
         return 0
 
@@ -144,6 +165,65 @@ def normalize_rate_example(
         # - PDF raw % 값에 12를 곱해 year1~year4에 저장
         if example.insurer == "카디프":
             normalized_rows = build_life_cardif_pdf_conversion_rows(example)
+
+            if normalize_mode == "replace":
+                RateExampleConversionRow.objects.filter(
+                    insurer_type=example.insurer_type,
+                    category=example.category,
+                    insurer=example.insurer,
+                ).delete()
+
+            if normalized_rows:
+                RateExampleConversionRow.objects.bulk_create(normalized_rows, batch_size=500)
+
+            return len(normalized_rows)
+        
+        # ── 푸본현대 PDF 전용 정규화 ─────────────────────────────────────
+        # - "■" 상품 블록 기준으로 상품명을 전파
+        # - 상품명/행 라벨에 특약·패키지가 포함된 행은 제외
+        # - 초년도 → year1, 차년도 → year2~year4
+        if example.insurer == "푸본현대":
+            normalized_rows = build_life_fubon_pdf_conversion_rows(example)
+
+            if normalize_mode == "replace":
+                RateExampleConversionRow.objects.filter(
+                    insurer_type=example.insurer_type,
+                    category=example.category,
+                    insurer=example.insurer,
+                ).delete()
+
+            if normalized_rows:
+                RateExampleConversionRow.objects.bulk_create(normalized_rows, batch_size=500)
+
+            return len(normalized_rows)
+        
+        # ── 하나생명 PDF 전용 정규화 ─────────────────────────────────────
+        # - PDF 첫 번째 페이지만 정규화
+        # - PDF 테이블의 병합/공백 셀은 상단 값 carry-down으로 전개
+        # - 상품명 + 심사유형을 결합하여 상품명으로 저장
+        # - 3차년~ 값은 year3/year4에 동일 저장
+        if example.insurer == "하나":
+            normalized_rows = build_life_hana_pdf_conversion_rows(example)
+
+            if normalize_mode == "replace":
+                RateExampleConversionRow.objects.filter(
+                    insurer_type=example.insurer_type,
+                    category=example.category,
+                    insurer=example.insurer,
+                ).delete()
+
+            if normalized_rows:
+                RateExampleConversionRow.objects.bulk_create(normalized_rows, batch_size=500)
+
+            return len(normalized_rows)
+        
+        # ── 흥국생명 PDF 전용 정규화 ─────────────────────────────────────
+        # - "흥국생명 보장성(주보험) 환산율" 포함 페이지 중 PDF 두 번째 페이지만 정규화
+        # - 상품코드/비고 컬럼은 정규화 대상에서 제외
+        # - 병합 셀은 구획 기준 carry-down으로 전개
+        # - 납기별 환산율을 year1~year4에 동일 저장
+        if example.insurer == "흥국":
+            normalized_rows = build_life_heungkuk_pdf_conversion_rows(example)
 
             if normalize_mode == "replace":
                 RateExampleConversionRow.objects.filter(
@@ -284,6 +364,25 @@ def normalize_rate_example(
     # - 상품명(C), 납기(E), 보험료(F)/가입금액(G), 1~4차년(K~N) 매핑
     elif example.insurer == "메트":
         normalized_rows.extend(build_life_met_conversion_rows(example, wb))
+    
+    # ── 미래에셋 생명 환산율/수정률 정규화 ─────────────────────────
+    # 미래에셋 규칙:
+    # - "보장성" 시트: 상품명/보종구분/납입기간/환산성적 기준 정규화
+    # - "보장성_*" 시트: 주계약 영역만 정규화, A열 "특약" 이하 제외
+    # - "저축성" 시트: 환산성적/유지성적을 1~4차년에 분리 반영
+    # - 병합 셀/줄바꿈 상품명은 행 단위 한 줄 텍스트로 정규화
+    elif example.insurer == "미래":
+        normalized_rows.extend(build_life_mirae_conversion_rows(example, wb))
+
+    # ── 삼성 생명 환산율/수정률 정규화 ─────────────────────────────
+    # 삼성 규칙:
+    # - "보장성": F 상품명, G 구분, I~P 납기별 환산율
+    # - "건강상해": 실손 상품 제외, 기타(보장성) 고정
+    # - "건강상해(...)": F 상품, 구분 사용안함, 판매중지/특약 제외
+    # - "연금저축": F 상품명, G 구분, H~M 납기별 환산율
+    # - 각 납기 환산율을 year1~year4에 동일 반영
+    elif example.insurer == "삼성":
+        normalized_rows.extend(build_life_samsung_conversion_rows(example, wb))
     
     # ── 신한 생명 환산율/수정률 정규화 ─────────────────────────────
     # 신한 규칙:

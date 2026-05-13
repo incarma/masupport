@@ -50,7 +50,21 @@ from commission.services.rate_example_normalizers.life_chubb import (
 from commission.services.rate_example_normalizers.life_cardif import (
     build_life_cardif_pdf_conversion_rows,
 )
-
+from commission.services.rate_example_normalizers.life_mirae import (
+    build_life_mirae_conversion_rows,
+)
+from commission.services.rate_example_normalizers.life_samsung import (
+    build_life_samsung_conversion_rows,
+)
+from commission.services.rate_example_normalizers.life_fubon import (
+    build_life_fubon_pdf_conversion_rows,
+)
+from commission.services.rate_example_normalizers.life_hana import (
+    build_life_hana_pdf_conversion_rows,
+)
+from commission.services.rate_example_normalizers.life_heungkuk import (
+    build_life_heungkuk_pdf_conversion_rows,
+)
 
 __all__ = [
     "build_life_abl_conversion_rows",
@@ -68,4 +82,9 @@ __all__ = [
     "build_life_shinhan_conversion_rows",
     "build_life_chubb_pdf_conversion_rows",
     "build_life_cardif_pdf_conversion_rows",
+    "build_life_mirae_conversion_rows",
+    "build_life_samsung_conversion_rows",
+    "build_life_fubon_pdf_conversion_rows",
+    "build_life_hana_pdf_conversion_rows",
+    "build_life_heungkuk_pdf_conversion_rows",
 ]
