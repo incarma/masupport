@@ -692,6 +692,280 @@ python manage.py shell -c "from commission.models import RateExampleConversionRo
 
 ---
 
+
+# 5-17. 흥국생명
+
+파일:
+
+```python
+life_heungkuk.py
+```
+
+규칙:
+
+- PDF raw 파일 기반 정규화
+- `"흥국생명 보장성(주보험) 환산율"` 키워드 포함 PDF의 두 번째 페이지(`PDF Page 2`)만 사용
+- 보험사 컬럼은 항상 `흥국` 저장
+- 정규화 함수명은 `build_life_heungkuk_pdf_conversion_rows`
+- 상품코드 컬럼 제거
+- 비고 컬럼 제거
+- 병합셀/시각적 병합 구조는 carry-down 방식으로 전개
+- 줄바꿈 상품명은 한 줄로 병합
+- 보험종목 컬럼 → `plan_type`
+- 환산율(GA) 납기 컬럼 기반 row 분리
+- 빈 셀 및 `-` 값은 제외
+- 각 납기 환산율은 `year1~year4`에 동일 저장
+
+---
+
+## 핵심 진입점 등록
+
+`commission/services/rate_example_normalizers/__init__.py`
+
+```python
+from commission.services.rate_example_normalizers.life_heungkuk import (
+    build_life_heungkuk_pdf_conversion_rows,
+)
+```
+
+`__all__`에도 export 추가.
+
+```python
+"build_life_heungkuk_pdf_conversion_rows",
+```
+
+`commission/services/rate_example_normalizer.py`
+
+```python
+if example.insurer == "흥국":
+    normalized_rows = build_life_heungkuk_pdf_conversion_rows(example)
+```
+
+`commission/services/rate_example.py`
+
+```python
+and insurer in {
+    ...,
+    "흥국",
+}
+```
+
+---
+
+## PDF 페이지 정책
+
+- PDF 두 번째 페이지(0-based index = 1)만 사용
+- 첫 번째 페이지의 표지/안내 영역은 제외
+- 세 번째 페이지 이후 특약/보조표는 제외
+- `source_sheet`는 `"PDF 2p"` 저장
+
+---
+
+## PDF 추출 정책
+
+흥국 PDF는 다음 특징을 가진다.
+
+- 시각적 병합 구조 다수 존재
+- 상품명/보험종목/납기 헤더가 좌표 기반으로 배치
+- 줄바꿈 텍스트가 실제 행 구획과 다를 수 있음
+- 단순 text line split으로는 정상 정규화 불가
+
+따라서 parser는 반드시 좌표 기반(word coordinates)으로 처리한다.
+
+권장 방식:
+
+```python
+page.get_text("words")
+```
+
+사용.
+
+---
+
+## 병합/구획 처리 규칙
+
+### 핵심 원칙
+
+단순 줄바꿈 기준이 아니라 실제 표 구획 기준으로 row 생성.
+
+예:
+
+```text
+치매담은시니어보장보험
+ ├─ 해약환급금미지급형
+ ├─ 해약환급금일부지급형
+ └─ 표준형
+```
+
+→ 반드시 3개의 별도 row로 정규화.
+
+---
+
+## 상품명(product_name) 규칙
+
+raw PDF의 상품명 컬럼 값을 사용한다.
+
+줄바꿈 상품명:
+
+```text
+첫번째줄
+두번째줄
+세번째줄
+```
+
+↓
+
+```text
+첫번째줄 두번째줄 세번째줄
+```
+
+공백 1칸으로 연결 후 저장.
+
+---
+
+## 보종(coverage_type) 규칙
+
+```python
+if "종신" in product_name:
+    coverage_type = "종신/CI"
+else:
+    coverage_type = "기타(보장성)"
+```
+
+---
+
+## 구분(plan_type) 규칙
+
+raw PDF의 `보험종목` 컬럼 값을 사용한다.
+
+예:
+
+```text
+해약환급금미지급형
+해약환급금일부지급형
+표준형
+갱신형
+```
+
+---
+
+## 납기(pay_period) 규칙
+
+환산율(GA) 영역의 납기 헤더 중 실제 숫자값이 존재하는 컬럼만 row 생성한다.
+
+예:
+
+| 20년↑ | 15년↑ | 10년↑ | 5년↑ |
+|---|---|---|---|
+| 120 | - | 98 | - |
+
+↓
+
+생성 row:
+
+```text
+20년↑
+10년↑
+```
+
+만 생성.
+
+---
+
+## 환산율(year1~year4) 규칙
+
+선택된 납기의 환산율 값을 `year1~year4`에 동일 저장.
+
+예:
+
+```text
+20년↑ = 132
+```
+
+↓
+
+```python
+year1 = Decimal("132")
+year2 = Decimal("132")
+year3 = Decimal("132")
+year4 = Decimal("132")
+```
+
+---
+
+## 제외/방어 규칙
+
+다음은 정규화 제외.
+
+- 상품코드 컬럼
+- 비고 컬럼
+- 표 헤더
+- 빈 상품명 행
+- 환산율이 모두 `-` 인 행
+- 환산율 숫자가 없는 납기 컬럼
+- noise line
+- 페이지 제목/기준일 라인
+
+---
+
+## 좌표 기반 핵심 구조
+
+```python
+@dataclass(frozen=True)
+class _Word:
+    text: str
+    x0: float
+    y0: float
+    x1: float
+    y1: float
+```
+
+라인 그룹화:
+
+```python
+_group_words_to_lines(words)
+```
+
+납기 헤더 탐지:
+
+```python
+_detect_rate_header_x(words)
+```
+
+환산율 추출:
+
+```python
+_extract_rates_by_header(words, header_x)
+```
+
+---
+
+## 검증 명령
+
+```powershell
+python manage.py check
+```
+
+```powershell
+python manage.py shell -c "from commission.models import RateExampleConversionRow as R; qs=R.objects.filter(insurer='흥국'); print(qs.count())"
+```
+
+추가 검증:
+
+```powershell
+python manage.py shell -c "from commission.models import RateExampleConversionRow as R; qs=R.objects.filter(insurer='흥국').order_by('product_name','plan_type','pay_period'); print('\n'.join([f'{r.product_name} | {r.plan_type} | {r.pay_period} | {r.year1}' for r in qs[:50]]))"
+```
+
+체크 포인트:
+
+1. 상품코드/비고 데이터가 섞이지 않는지
+2. 보험종목별 row 분리가 정상인지
+3. 줄바꿈 상품명이 정상 병합되는지
+4. 납기별 row 생성이 정상인지
+5. `-` 값 납기가 제외되는지
+6. `year1~year4` 동일 저장 여부
+
+
 # 6. 지급률 정규화 정책
 
 지급률은 환산율과 별도 테이블 관리.
