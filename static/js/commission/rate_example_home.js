@@ -204,6 +204,7 @@
     const els = rowEls(row);
     const insurer = (els.insurer?.value || "").trim();
     const productName = (els.product?.value || "").trim();
+    row.dataset.selectedPlanType = "";
     fillSelect(els.plan, [], "선택");
     fillSelect(els.period, [], "선택");
     setIbkRowMode(row);
@@ -221,6 +222,7 @@
     const insurer = (els.insurer?.value || "").trim();
     const productName = (els.product?.value || "").trim();
     const planType = (els.plan?.value || "").trim();
+    row.dataset.selectedPlanType = planType;
     fillSelect(els.period, [], "선택");
     setIbkRowMode(row);
     if (insurer === IBK_INSURER) return;
@@ -478,10 +480,16 @@
     cells.forEach(function (td, idx) {
       td.textContent = values[idx] || "-";
       td.classList.remove("re-calc-placeholder", "re-calc-amount", "re-calc-na", "re-calc-total", "re-calc-subtotal");
+
       if (idx === 1 || idx === 8) {
         td.classList.add("re-calc-subtotal");
       } else if (idx >= 9) {
+        // 총합 금액 / 비율: 하늘색 바탕 + 남색 굵은 폰트 유지
         td.classList.add("re-calc-total");
+      } else if ([2, 3, 4, 5, 6, 7].includes(idx)) {
+        // 13회 / 2차년 / 3차년 / 36회 / 37회	/ 4차년
+        // 익월과 동일하게 흰색 바탕 + 굵은 글씨
+        td.classList.add("re-calc-amount");
       } else if (values[idx] === "-") {
         td.classList.add("re-calc-na");
       } else {
@@ -494,10 +502,11 @@
     const els = rowEls(row);
     const insurer = (els.insurer?.value || "").trim();
     const isIbk = insurer === IBK_INSURER;
+    const selectedPlanType = (els.plan?.value || row.dataset.selectedPlanType || "").trim();
     return {
       insurer: insurer,
       product_name: (els.product?.value || "").trim(),
-      plan_type: isIbk ? "" : (els.plan?.value || "").trim(),
+      plan_type: isIbk ? "" : selectedPlanType,
       pay_period: isIbk ? "" : (els.period?.value || "").trim(),
       premium: parseMoneyInput(premiumInput?.value || ""),
       commission_rate: String(commissionRateInput?.value || "").trim(),

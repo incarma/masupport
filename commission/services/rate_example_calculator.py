@@ -19,13 +19,21 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Any
+import re
+import unicodedata
+import logging
 
 from commission.models import RateExample, RateExampleConversionRow, RateExamplePayRow
+
+
+logger = logging.getLogger(__name__)
 
 
 EXCLUDED_CALC_INSURERS = {"DB"}
 IBK_PREFIX = "[IBK]"
 DEFAULT_PAY_TIER = "5천만↑"
+
+EMPTY_PLAN_TYPE_VALUES = {"", "-", "없음", "사용안함", "해당없음", "N/A", "n/a"}
 
 
 class RateExampleCalcError(ValueError):
@@ -87,11 +95,57 @@ def _amount_or_none(
     return _money_round(premium * conv * pay * comm)
 
 
+def _normalize_text(value: Any) -> str:
+    """
+    계산 매칭용 공통 문자열 정규화.
+    - 유니코드 호환문자 정규화
+    - 앞뒤 공백 제거
+    - 내부 연속 공백 1칸으로 축약
+    """
+    text = unicodedata.normalize("NFKC", str(value or ""))
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
+def _match_key(value: Any) -> str:
+    """
+    후보 row 비교용 key.
+    공백 차이 때문에 같은 상품/납기가 불일치하지 않도록 공백을 제거한다.
+
+    보험사 raw 표현 차이도 흡수:
+    - &, /, ·, ,  → 동일 구분자 취급
+    - 괄호 종류 통일
+    - "만기", "납" 사이 공백 제거
+    """
+    text = _normalize_text(value)
+
+    # 괄호 normalize
+    text = (
+        text.replace("[", "(")
+        .replace("]", ")")
+        .replace("{", "(")
+        .replace("}", ")")
+    )
+
+    # 구분자 normalize
+    text = re.sub(r"\s*[&/,·]\s*", "/", text)
+
+    # 불필요 공백 제거
+    text = text.replace(" ", "")
+
+    return text.lower()
+
+
+def _normalize_plan_type(value: Any) -> str:
+    text = _normalize_text(value)
+    return "" if text in EMPTY_PLAN_TYPE_VALUES else text
+
+
 def _parse_input(payload: dict[str, Any]) -> CalcInput:
-    insurer = str(payload.get("insurer") or "").strip()
-    product_name = str(payload.get("product_name") or "").strip()
-    plan_type = str(payload.get("plan_type") or "").strip()
-    pay_period = str(payload.get("pay_period") or "").strip()
+    insurer = _normalize_text(payload.get("insurer"))
+    product_name = _normalize_text(payload.get("product_name"))
+    plan_type = _normalize_plan_type(payload.get("plan_type"))
+    pay_period = _normalize_text(payload.get("pay_period"))
 
     if not insurer:
         raise RateExampleCalcError("보험사를 선택해 주세요.")
@@ -130,6 +184,7 @@ def _get_conversion_row(data: CalcInput) -> RateExampleConversionRow:
 
     plan_type은 공란 상품도 존재하므로 정확히 공란까지 매칭한다.
     """
+    # 1차: 정규화된 입력값 기준 exact match
     row = (
         RateExampleConversionRow.objects
         .filter(
@@ -145,10 +200,67 @@ def _get_conversion_row(data: CalcInput) -> RateExampleConversionRow:
         .first()
     )
 
-    if row is None:
-        raise RateExampleCalcError("계산에 필요한 환산율 정규화 데이터가 없습니다.")
+    if row is not None:
+        return row
 
-    return row
+    # 2차: 구분 없음 표시값/빈값 차이를 흡수
+    if data.plan_type == "":
+        row = (
+            RateExampleConversionRow.objects
+            .filter(
+                insurer_type=RateExample.TYPE_LIFE,
+                category=RateExample.CAT_CONV,
+                insurer=data.insurer,
+                product_name=data.product_name,
+                plan_type__in=["", "-", "없음", "사용안함"],
+                pay_period=data.pay_period,
+            )
+            .select_related("source_file")
+            .order_by("-source_file__created_at", "-id")
+            .first()
+        )
+        if row is not None:
+            return row
+
+    # 3차: 상품명/구분/납기의 공백·표시 차이를 Python 비교로 흡수
+    candidates = (
+        RateExampleConversionRow.objects
+        .filter(
+            insurer_type=RateExample.TYPE_LIFE,
+            category=RateExample.CAT_CONV,
+            insurer=data.insurer,
+        )
+        .select_related("source_file")
+        .order_by("-source_file__created_at", "-id")[:5000]
+    )
+
+    target_product = _match_key(data.product_name)
+    target_plan = _match_key(data.plan_type)
+    target_period = _match_key(data.pay_period)
+
+    for cand in candidates:
+        cand_plan = _match_key(_normalize_plan_type(cand.plan_type))
+        if (
+            _match_key(cand.product_name) == target_product
+            and cand_plan == target_plan
+            and _match_key(cand.pay_period) == target_period
+        ):
+            return cand
+    
+    logger.warning(
+        "[rate_example_calculator] conversion row not found "
+        "insurer=%s product=%s plan_type=%s pay_period=%s "
+        "target_product_key=%s target_plan_key=%s target_period_key=%s",
+        data.insurer,
+        data.product_name,
+        data.plan_type,
+        data.pay_period,
+        target_product,
+        target_plan,
+        target_period,
+    )
+
+    raise RateExampleCalcError("계산에 필요한 환산율 정규화 데이터가 없습니다.")
 
 
 def _get_pay_row(insurer: str, coverage_type: str) -> RateExamplePayRow:

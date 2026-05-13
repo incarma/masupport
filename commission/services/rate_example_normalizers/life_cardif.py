@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 INSURER = "카디프"
 DEC4 = Decimal("0.0001")
 MULTIPLIER = Decimal("12")
+NO_PLAN_TYPE = "사용안함"
 
 
 def _clean_text(value) -> str:
@@ -66,6 +67,23 @@ def _coverage_type(product_name: str) -> str:
     if "경영" in name:
         return "CEO정기"
     return "기타(보장성)"
+
+
+def _normalize_plan_type(value: str, *, has_plan_col: bool) -> str:
+    """
+    카디프 구분(plan_type) 정규화.
+
+    PDF raw에서 '체증형' 컬럼이 없는 상품은 기존에는 plan_type=""로 저장됐다.
+    그러나 계산 입력 UI는 보험사 → 상품명 → 구분 → 납기 순서로 옵션을 조회하므로,
+    공란 plan_type은 options API의 빈 값 제거 정책에 의해 선택지로 반환되지 않는다.
+
+    따라서 카디프에 한해 체증형이 없는 row는 '사용안함' sentinel로 저장한다.
+    계산 서비스는 '사용안함'을 빈 구분값과 동일하게 흡수한다.
+    """
+    text = _clean_text(value)
+    if has_plan_col and text:
+        return text
+    return NO_PLAN_TYPE
 
 
 def _normalize_pay_period(pay: str, maturity: str = "") -> str:
@@ -274,7 +292,10 @@ def build_life_cardif_pdf_conversion_rows(example: RateExample) -> list[RateExam
                         if not product_name or "특약" in product_name:
                             continue
 
-                        plan_type = current_plan if plan_col is not None else ""
+                        plan_type = _normalize_plan_type(
+                            current_plan,
+                            has_plan_col=(plan_col is not None),
+                        )
 
                         if single_rate_col is not None:
                             pay_period = "일시납"
