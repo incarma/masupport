@@ -14,14 +14,13 @@
   table-layout: fixed;
 }
 
-/* 개인정보 워터마크 — 2행×3열 6개 배치 */
+/* 개인정보 워터마크 — 3행×4열 12개 배치 */
 .privacy-watermark {
   position: fixed;
   inset: 0;
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  grid-template-rows: 40vh 40vh;
-  align-content: center;
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(3, 1fr);
   pointer-events: none;
   user-select: none;
   z-index: 2147483000;
@@ -31,12 +30,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: clamp(28px, 3.2vw, 80px);
+  font-size: clamp(18px, 2.2vw, 56px);
   font-weight: 800;
   letter-spacing: 0.10em;
   text-align: center;
   white-space: nowrap;
-  color: rgba(0, 0, 0, 0.008);
+  color: rgba(0, 0, 0, 0.006);
   transform: rotate(-22deg);
-  text-shadow: 0 0 1px rgba(0,0,0,0.04);
+  text-shadow: 0 0 1px rgba(0,0,0,0.03);
 }

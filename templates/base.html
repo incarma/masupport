@@ -179,12 +179,7 @@
 
   {% if user.is_authenticated %}
     <div class="privacy-watermark" aria-hidden="true">
-      <span class="privacy-watermark__text">{{ user.branch|default:"" }}<br>{{ user.name }} / {{ user.id }}</span>
-      <span class="privacy-watermark__text">{{ user.branch|default:"" }}<br>{{ user.name }} / {{ user.id }}</span>
-      <span class="privacy-watermark__text">{{ user.branch|default:"" }}<br>{{ user.name }} / {{ user.id }}</span>
-      <span class="privacy-watermark__text">{{ user.branch|default:"" }}<br>{{ user.name }} / {{ user.id }}</span>
-      <span class="privacy-watermark__text">{{ user.branch|default:"" }}<br>{{ user.name }} / {{ user.id }}</span>
-      <span class="privacy-watermark__text">{{ user.branch|default:"" }}<br>{{ user.name }} / {{ user.id }}</span>
+      {% for i in "123456789012" %}<span class="privacy-watermark__text">{{ user.branch|default:"" }}<br>{{ user.name }} / {{ user.id }}<br>{% now "Y/m/d" %}</span>{% endfor %}
     </div>
   {% endif %}
 
