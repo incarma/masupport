@@ -31,7 +31,7 @@
 
   // ── 현재 보험 구분 페이지 상태 ────────────────────────────────────────
   // 기본값은 기존 화면과 동일한 생명보험(life)이다.
-  const ACTIVE_INSURER_TYPE = ["life", "nonlife"].includes(root.dataset.activeInsurerType)
+  const ACTIVE_INSURER_TYPE = ["life", "fire"].includes(root.dataset.activeInsurerType)
     ? root.dataset.activeInsurerType
     : "life";
 
@@ -55,7 +55,7 @@
   ];
 
   function getModalInsurers() {
-    if (ACTIVE_INSURER_TYPE === "nonlife") {
+    if (ACTIVE_INSURER_TYPE === "fire") {
       return NONLIFE_MODAL_INSURERS;
     }
     return LIFE_INSURERS;
@@ -67,7 +67,7 @@
   const uploadModalTitle = document.getElementById("rateExampleUploadModalTitle");
   const convModalTitle = document.getElementById("rateExampleConvModalTitle");
 
-  if (ACTIVE_INSURER_TYPE === "nonlife") {
+  if (ACTIVE_INSURER_TYPE === "fire") {
     if (uploadModalTitle) {
       uploadModalTitle.textContent = "수정률 업데이트";
     }
@@ -78,7 +78,7 @@
   }
 
   function isNonlifePage() {
-    return ACTIVE_INSURER_TYPE === "nonlife";
+    return ACTIVE_INSURER_TYPE === "fire";
   }
 
   function getRateLabel() {
@@ -86,7 +86,7 @@
   }
 
   function getActiveInsurers() {
-    return ACTIVE_INSURER_TYPE === "nonlife" ? NONLIFE_INSURERS : LIFE_INSURERS;
+    return ACTIVE_INSURER_TYPE === "fire" ? NONLIFE_INSURERS : LIFE_INSURERS;
   }
 
   // =========================================================================
@@ -178,6 +178,28 @@
     if (activeComboMenu) activeComboMenu.hidden = true;
     activeComboInput = null;
     activeComboMenu = null;
+  }
+
+  function selectComboItem(btn) {
+    if (!btn) return;
+
+    const combo = btn.closest(".re-combo");
+    const selectedInput = combo?.querySelector(".re-calc-insurer, .re-calc-product");
+    if (!selectedInput) return;
+
+    const row = getRow(selectedInput);
+    selectedInput.value = btn.dataset.value || "";
+
+    selectedInput.dispatchEvent(new Event("input", { bubbles: true }));
+    selectedInput.dispatchEvent(new Event("change", { bubbles: true }));
+
+    hideActiveComboMenu();
+
+    if (selectedInput.classList.contains("re-calc-insurer")) {
+      refreshProductsByInsurer(row);
+    } else if (selectedInput.classList.contains("re-calc-product")) {
+      refreshPlansByProduct(row);
+    }
   }
 
   function getRow(el) {
@@ -526,21 +548,12 @@
       }, 0);
     });
 
-    calcTbody.addEventListener("mousedown", function (e) {
+    calcTbody.addEventListener("pointerdown", function (e) {
       const btn = e.target.closest(".re-combo-item");
-      if (!btn || !activeComboInput) return;
+      if (!btn) return;
       e.preventDefault();
-
-      const selectedInput = activeComboInput;
-      const row = getRow(selectedInput);
-      selectedInput.value = btn.dataset.value || "";
-      hideActiveComboMenu();
-
-      if (selectedInput.classList.contains("re-calc-insurer")) {
-        refreshProductsByInsurer(row);
-      } else if (selectedInput.classList.contains("re-calc-product")) {
-        refreshPlansByProduct(row);
-      }
+      e.stopPropagation();
+      selectComboItem(btn);
     });
   }
 
@@ -1570,6 +1583,7 @@
   const payModalEl       = document.getElementById("rateExamplePayModal");
   const payUploadModalEl = document.getElementById("rateExamplePayUploadModal");
   const payTbody         = document.getElementById("re-pay-tbody");
+  const payTable         = document.getElementById("re-pay-table");
   const payErrBox        = document.getElementById("re-pay-error");
   const payUpdatedInfo   = document.getElementById("re-pay-updated-at");
   const payCountLabel    = document.getElementById("re-pay-count-label");
@@ -1580,6 +1594,44 @@
   const btnPaySave       = document.getElementById("re-pay-btn-save");
 
   let payRowsOriginal = [];
+
+  // ── 지급률 확인 모달 헤더 전환 ─────────────────────────────────
+  // life: 생명보험 지급률 컬럼
+  // fire: 손해보험 지급률 컬럼
+  function syncPayTableHeader() {
+    if (!payTable) return;
+    const thead = payTable.querySelector("thead");
+    if (!thead) return;
+
+    if (isNonlifePage()) {
+      thead.innerHTML = `
+        <tr>
+          <th>보험사</th>
+          <th>상품군</th>
+          <th class="text-end">초회</th>
+          <th class="text-end">2~6회</th>
+          <th class="text-end">7~12회</th>
+          <th class="text-end">13회</th>
+          <th class="text-end">14회</th>
+          <th class="text-end">15회</th>
+        </tr>`;
+      return;
+    }
+
+    thead.innerHTML = `
+      <tr>
+        <th>보험사</th>
+        <th>상품군</th>
+        <th class="text-end">초회</th>
+        <th class="text-end">1차년</th>
+        <th class="text-end">13회</th>
+        <th class="text-end">2차년구간</th>
+        <th class="text-end">3차년구간</th>
+        <th class="text-end re-pay-opt-th">36회</th>
+        <th class="text-end re-pay-opt-th">37회</th>
+        <th class="text-end">4차년구간</th>
+      </tr>`;
+  }
 
   // ── 에러 헬퍼 ───────────────────────────────────────────────────────────────
   function showPayError(msg) {
@@ -1664,13 +1716,27 @@
     if (!payTbody) return;
     if (!rows || rows.length === 0) {
       payTbody.innerHTML =
-        '<tr><td colspan="8" class="text-center text-muted py-3">조회된 데이터가 없습니다.</td></tr>';
+        `<tr><td colspan="${isNonlifePage() ? 8 : 10}" class="text-center text-muted py-3">조회된 데이터가 없습니다.</td></tr>`;
       if (payCountLabel) payCountLabel.textContent = "";
       return;
     }
     payTbody.innerHTML = rows.map(function (row) {
       function cell(v) {
         return '<td class="text-end re-pay-num">' + escapeHtml(v || "0") + "</td>";
+      }
+      if (isNonlifePage()) {
+        return (
+          "<tr>" +
+          "<td>" + escapeHtml(row.insurer || "") + "</td>" +
+          "<td>" + escapeHtml(row.coverage_type || "") + "</td>" +
+          cell(row.col_first) +
+          cell(row.col_yr1) +
+          cell(row.col_m13) +
+          cell(row.col_yr2) +
+          cell(row.col_yr3) +
+          cell(row.col_m36) +
+          "</tr>"
+        );
       }
       // col_m36 / col_m37 / col_yr4: 해당 보험사에 없으면 "" → "-" 표시
       function optCell(v) {
@@ -1711,10 +1777,13 @@
       payBtnLoad.disabled = true;
       if (payTbody) {
         payTbody.innerHTML =
-          '<tr><td colspan="8" class="text-center text-muted py-3">조회 중입니다...</td></tr>';
+          `<tr><td colspan="${isNonlifePage() ? 8 : 10}" class="text-center text-muted py-3">조회 중입니다...</td></tr>`;
       }
       try {
-        const res = await fetch(PAY_LIST_URL, {
+        const url = new URL(PAY_LIST_URL, window.location.origin);
+        url.searchParams.set("insurer_type", ACTIVE_INSURER_TYPE);
+
+        const res = await fetch(url.toString(), {
           method: "GET",
           credentials: "same-origin",
           headers: { "X-Requested-With": "XMLHttpRequest" },
@@ -1750,10 +1819,14 @@
       payBtnReset.disabled = true;
       clearPayError();
       try {
+        const fd = new FormData();
+        fd.append("insurer_type", ACTIVE_INSURER_TYPE);
+
         const res = await fetch(PAY_RESET_URL, {
           method: "POST",
           credentials: "same-origin",
           headers: { "X-CSRFToken": window.csrfToken || "" },
+          body: fd,
         });
         const json = await readJsonOrThrow(res);
         // 테이블 초기화 후 안내 메시지
@@ -1788,7 +1861,7 @@
       if (!file) { showPayError("파일을 선택해 주세요."); return; }
 
       const fd = new FormData();
-      fd.append("insurer_type",   "life");
+      fd.append("insurer_type",   ACTIVE_INSURER_TYPE);
       fd.append("category",       "pay");
       fd.append("normalize_mode", "replace");
       fd.append("file",           file);
@@ -1832,6 +1905,7 @@
   if (payModalEl) {
     payModalEl.addEventListener("show.bs.modal", function () {
       clearPayError();
+      syncPayTableHeader();
     });
   }
 })();

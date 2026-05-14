@@ -88,7 +88,7 @@ def _to_decimal_or_none(value: object, *, field_name: str) -> Decimal | None:
 
 def _validate_scope(insurer_type: str, insurer: str) -> None:
     """수정 가능한 환산율 scope 검증."""
-    if insurer_type not in {RateExample.TYPE_LIFE, RateExample.TYPE_NONLIFE}:
+    if insurer_type not in {RateExample.TYPE_LIFE, RateExample.TYPE_FIRE}:
         raise RateExampleConversionEditError("손생구분 값이 올바르지 않습니다.")
 
     if not insurer:

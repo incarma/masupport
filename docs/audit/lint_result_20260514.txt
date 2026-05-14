@@ -1,7 +1,7 @@
 ========================================
  django_ma Harness Lint 결과
- 실행일시: 2026-05-14 10:15:16
- 기준 커밋: 6c24b0f
+ 실행일시: 2026-05-14 20:38:52
+ 기준 커밋: dd6b8d9
 ========================================
 
 ────────────────────────────────────────
@@ -22,6 +22,7 @@
 ========================================
 
 ⚠️  [BF-01] BFCache 가드(dataset.inited) 누락 파일 (경고만, 커밋 차단 안 함)
+     static/js/accounts/login_recaptcha.js
      static/js/admin_user_excel.js
      static/js/board/form_submit_lock.js
      static/js/board/worktask_form.js
@@ -75,7 +76,7 @@ beat_schedule 등록 task (9건):
   board.tasks.holidays.sync_kr_holidays_for_year  <- board/tasks/holidays.py:24
   board.tasks.holidays.sync_kr_holidays_window  <- board/tasks/holidays.py:35
   board.tasks.industry_info.collect_board_industry_news  <- board/tasks/industry_info.py:74
-  board.tasks.industry_info.cleanup_old_industry_articles  <- board/tasks/industry_info.py:223
+  board.tasks.industry_info.cleanup_old_industry_articles  <- board/tasks/industry_info.py:234
   board.tasks.generate_monthly_worktasks  <- board/tasks/worktask_tasks.py:37
   board.tasks.notify_due_worktasks  <- board/tasks/worktask_tasks.py:76
   dash.tasks.pipeline.build_sales_forecasts_for_yms  <- dash/tasks/pipeline.py:299

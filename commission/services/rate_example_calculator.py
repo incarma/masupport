@@ -29,7 +29,7 @@ from commission.models import RateExample, RateExampleConversionRow, RateExample
 logger = logging.getLogger(__name__)
 
 
-EXCLUDED_CALC_INSURERS = {"DB"}
+EXCLUDED_CALC_INSURERS = set()
 IBK_PREFIX = "[IBK]"
 DEFAULT_PAY_TIER = "5천만↑"
 
@@ -93,6 +93,29 @@ def _amount_or_none(
         return None
 
     return _money_round(premium * conv * pay * comm)
+
+
+def _amount_or_none_with_conversion_multiplier(
+    *,
+    premium: Decimal,
+    conversion_multiplier: Decimal | None,
+    pay_rate: Decimal | None,
+    commission_rate: Decimal,
+) -> int | None:
+    """
+    DB생명 전용 계산 보조.
+
+    DB생명은 일부 회차에서 단일 환산율이 아니라
+    1차년+2차년 환산율 합계를 사용하므로,
+    이미 /100 처리된 conversion multiplier를 직접 받는다.
+    """
+    pay = _pct_to_multiplier(pay_rate)
+    comm = _pct_to_multiplier(commission_rate)
+
+    if conversion_multiplier is None or pay is None or comm is None:
+        return None
+
+    return _money_round(premium * conversion_multiplier * pay * comm)
 
 
 def _normalize_text(value: Any) -> str:
@@ -380,12 +403,60 @@ def _build_result(
     next_month_first = amount(year1_rate, pay.col_first)
     next_month_subtotal = next_month_first or 0
 
-    month_13 = amount(year2_rate, pay.col_m13)
-    year2 = amount(year2_rate, pay.col_yr2)
-    year3 = amount(year3_rate, pay.col_yr3)
-    month_36 = amount(year3_rate, pay.col_m36)
-    month_37 = amount(year4_rate, pay.col_m37)
-    year4 = amount(year4_rate, pay.col_yr4)
+    if data.insurer == "DB" and use_conversion:
+        # DB생명 전용 예외 산식
+        # - 13회: 1차년 환산율 + 2차년 환산율
+        # - 36회/37회: 1차년 환산율
+        # - 나머지 계속분: 각 연차 환산율 사용
+        y1 = _pct_to_multiplier(year1_rate)
+        y2 = _pct_to_multiplier(year2_rate)
+        y3 = _pct_to_multiplier(year3_rate)
+        y4 = _pct_to_multiplier(year4_rate)
+        y1_plus_y2 = (y1 + y2) if y1 is not None and y2 is not None else None
+
+        month_13 = _amount_or_none_with_conversion_multiplier(
+            premium=data.premium,
+            conversion_multiplier=y1_plus_y2,
+            pay_rate=pay.col_m13,
+            commission_rate=data.commission_rate,
+        )
+        year2 = _amount_or_none_with_conversion_multiplier(
+            premium=data.premium,
+            conversion_multiplier=y2,
+            pay_rate=pay.col_yr2,
+            commission_rate=data.commission_rate,
+        )
+        year3 = _amount_or_none_with_conversion_multiplier(
+            premium=data.premium,
+            conversion_multiplier=y3,
+            pay_rate=pay.col_yr3,
+            commission_rate=data.commission_rate,
+        )
+        month_36 = _amount_or_none_with_conversion_multiplier(
+            premium=data.premium,
+            conversion_multiplier=y1,
+            pay_rate=pay.col_m36,
+            commission_rate=data.commission_rate,
+        )
+        month_37 = _amount_or_none_with_conversion_multiplier(
+            premium=data.premium,
+            conversion_multiplier=y1,
+            pay_rate=pay.col_m37,
+            commission_rate=data.commission_rate,
+        )
+        year4 = _amount_or_none_with_conversion_multiplier(
+            premium=data.premium,
+            conversion_multiplier=y4,
+            pay_rate=pay.col_yr4,
+            commission_rate=data.commission_rate,
+        )
+    else:
+        month_13 = amount(year2_rate, pay.col_m13)
+        year2 = amount(year2_rate, pay.col_yr2)
+        year3 = amount(year3_rate, pay.col_yr3)
+        month_36 = amount(year3_rate, pay.col_m36)
+        month_37 = amount(year4_rate, pay.col_m37)
+        year4 = amount(year4_rate, pay.col_yr4)
 
     renewal_subtotal = _sum_optional(
         month_13,
@@ -431,6 +502,11 @@ def calculate_rate_example_commission(payload: dict[str, Any]) -> dict[str, Any]
     - 36회 = 보험료 × 3차년 환산율 × 36회 지급률 × 수수료율
     - 37회 = 보험료 × 4차년 환산율 × 37회 지급률 × 수수료율
     - 4차년 = 보험료 × 4차년 환산율 × 4차년구간 지급률 × 수수료율
+
+     DB생명 예외:
+    - 13회 = 보험료 × (1차년 환산율 + 2차년 환산율) × 13회/2차년 지급률 × 수수료율
+    - 36회 = 보험료 × 1차년 환산율 × 36회 지급률 × 수수료율
+    - 37회 = 보험료 × 1차년 환산율 × 37회 지급률 × 수수료율
     """
     data = _parse_input(payload)
 

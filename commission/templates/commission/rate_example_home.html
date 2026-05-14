@@ -39,10 +39,10 @@
       </a>
     </li>
     <li class="nav-item">
-      <a class="nav-link re-insurer-type-link {% if active_insurer_type == 'nonlife' %}active{% endif %}"
-         href="{% url 'commission:rate_example_home' %}?insurer_type=nonlife"
-         {% if active_insurer_type == 'nonlife' %}aria-current="page"{% endif %}
-         data-insurer-type-link="nonlife">
+      <a class="nav-link re-insurer-type-link {% if active_insurer_type == 'fire' %}active{% endif %}"
+         href="{% url 'commission:rate_example_home' %}?insurer_type=fire"
+         {% if active_insurer_type == 'fire' %}aria-current="page"{% endif %}
+         data-insurer-type-link="fire">
         손해보험
       </a>
     </li>
@@ -55,7 +55,7 @@
       <button class="btn btn-success btn-sm text-nowrap"
               data-bs-toggle="modal"
               data-bs-target="#rateExampleUploadModal">
-        {% if active_insurer_type == 'nonlife' %}
+        {% if active_insurer_type == 'fire' %}
           수정률 업데이트
         {% else %}
           환산율 업데이트
@@ -71,7 +71,7 @@
               id="re-btn-open-conv"
               data-bs-toggle="modal"
               data-bs-target="#rateExampleConvModal">
-        {% if active_insurer_type == 'nonlife' %}
+        {% if active_insurer_type == 'fire' %}
           수정률 확인
         {% else %}
           환산율 확인
@@ -216,7 +216,7 @@
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title" id="rateExampleUploadModalTitle">
-          {% if active_insurer_type == 'nonlife' %}수정률 업데이트{% else %}환산율 업데이트{% endif %}
+          {% if active_insurer_type == 'fire' %}수정률 업데이트{% else %}환산율 업데이트{% endif %}
         </h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
@@ -407,7 +407,7 @@
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title" id="rateExampleConvModalTitle">
-          {% if active_insurer_type == 'nonlife' %}수정률 확인{% else %}환산율 확인{% endif %}
+          {% if active_insurer_type == 'fire' %}수정률 확인{% else %}환산율 확인{% endif %}
         </h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>

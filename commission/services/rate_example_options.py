@@ -7,7 +7,7 @@ RateExample 옵션 조회 서비스.
 역할:
 - rate_example_home.html의 계산 입력 테이블에서 사용하는
   보험사 → 상품명 → 구분 → 납기 연동 옵션을 제공한다.
-- 생명보험(life) / 손해보험(nonlife) 탭 상태를 insurer_type으로 분기한다.
+- 생명보험(life) / 손해보험(fire) 탭 상태를 insurer_type으로 분기한다.
 - 정규화 master인 RateExampleConversionRow를 SSOT로 사용한다.
 - view에서는 쿼리 로직을 직접 작성하지 않고 본 서비스를 호출한다.
 
@@ -24,7 +24,17 @@ from commission.models import RateExample, RateExampleConversionRow, RateExample
 
 
 IBK_PREFIX = "[IBK]"
-VALID_INSURER_TYPES = {RateExample.TYPE_LIFE, RateExample.TYPE_NONLIFE}
+
+VALID_INSURER_TYPES = {RateExample.TYPE_LIFE, RateExample.TYPE_FIRE}
+
+INSURER_CANONICAL_MAP = {
+    "db": "DB",
+    "abl": "ABL",
+    "im": "IM",
+    "kb": "KB",
+    "kdb": "KDB",
+    "ibk": "IBK",
+}
 
 
 @dataclass(frozen=True)
@@ -54,6 +64,8 @@ def _normalize_insurer_type(value: str) -> str:
     오입력/미입력은 기존 생명보험 동작 보장을 위해 life로 fallback한다.
     """
     value = (value or RateExample.TYPE_LIFE).strip()
+    if value == "nonlife":
+        return RateExample.TYPE_FIRE
     return value if value in VALID_INSURER_TYPES else RateExample.TYPE_LIFE
 
 
@@ -62,12 +74,24 @@ def _clean(value: object) -> str:
     return str(value or "").strip()
 
 
+def _normalize_insurer(value: object) -> str:
+    """
+    보험사명 정규화.
+
+    프론트에서 select value가 소문자(db)로 전달되더라도
+    정규화 테이블의 저장값(DB)과 매칭되도록 보정한다.
+    한글 보험사명은 원문을 유지한다.
+    """
+    raw = _clean(value)
+    return INSURER_CANONICAL_MAP.get(raw.lower(), raw)
+
+
 def _base_qs(insurer_type: str):
     """
     환산율/수정률 정규화 row 기본 queryset.
 
     [SSOT]
-    - insurer_type: life 또는 nonlife
+    - insurer_type: life 또는 fire
     - category: conv
     - 정규화 row 기준 옵션 조회
     """
@@ -93,10 +117,10 @@ def _insurer_options(insurer_type: str) -> list[str]:
     보험사 목록 옵션.
 
     - life: 기존 생보 보험사 목록 유지
-    - nonlife: 손보 보험사 목록 제공
+    - fire: 손보 보험사 목록 제공
     """
     insurer_type = _normalize_insurer_type(insurer_type)
-    if insurer_type == RateExample.TYPE_NONLIFE:
+    if insurer_type == RateExample.TYPE_FIRE:
         return list(RateExample.NONLIFE_INSURERS)
     return list(RateExample.LIFE_INSURERS)
 
@@ -155,7 +179,7 @@ def get_rate_example_options(query: RateExampleOptionQuery) -> list[str]:
 
     qs = _base_qs(insurer_type)
 
-    insurer = _clean(query.insurer)
+    insurer = _normalize_insurer(query.insurer)
     product_name = _clean(query.product_name)
     plan_type = _clean(query.plan_type)
 
