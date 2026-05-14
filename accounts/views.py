@@ -37,6 +37,7 @@ from .forms import ActiveOnlyAuthenticationForm, StrictPasswordChangeForm
 from .search_api import search_users_for_api
 
 import logging
+import requests as _requests
 from django.http import HttpResponseForbidden
 
 from audit.constants import ACTION
@@ -46,6 +47,53 @@ from audit.utils import mask_value
 logger = logging.getLogger("django.security.csrf")
 access_logger = logging.getLogger("accounts.access")
 UserModel = get_user_model()
+
+
+# =============================================================================
+# reCAPTCHA v3 헬퍼 — SSOT: /login/ 전용
+# =============================================================================
+
+def _verify_recaptcha_v3(token: str, remote_ip: str = "") -> bool:
+    """
+    Google reCAPTCHA v3 서버사이드 검증 헬퍼.
+
+    정책:
+    - RECAPTCHA_PRIVATE_KEY 미설정 → True (dev/테스트 안전망)
+    - Google 서버 오류 → True, fail-open (서비스 가용성 우선)
+    - score < RECAPTCHA_SCORE_THRESHOLD → False (봇 판정)
+    """
+    secret = getattr(settings, "RECAPTCHA_PRIVATE_KEY", "")
+    if not secret:
+        return True
+
+    try:
+        resp = _requests.post(
+            "https://www.google.com/recaptcha/api/siteverify",
+            data={"secret": secret, "response": token, "remoteip": remote_ip},
+            timeout=5,
+        )
+        resp.raise_for_status()
+        result = resp.json()
+    except Exception as e:
+        logger.warning("[recaptcha] 검증 요청 실패(fail-open): %s", e)
+        return True
+
+    success = result.get("success", False)
+    score = result.get("score", 0.0)
+    threshold = getattr(settings, "RECAPTCHA_SCORE_THRESHOLD", 0.5)
+
+    if not success:
+        logger.warning("[recaptcha] 검증 실패 error-codes=%s", result.get("error-codes"))
+        return False
+
+    if score < threshold:
+        logger.warning(
+            "[recaptcha] score 미달 score=%.2f threshold=%.2f ip=%s",
+            score, threshold, remote_ip,
+        )
+        return False
+
+    return True
 
 UPLOAD_TASK_OWNER_PREFIX = "accounts_upload_owner"
 
@@ -361,14 +409,32 @@ class SessionCloseLoginView(LoginView):
                 target.save(update_fields=update_fields)
 
     # -------------------------------------------------------------------------
+    # Context
+    # -------------------------------------------------------------------------
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["recaptcha_site_key"] = getattr(settings, "RECAPTCHA_PUBLIC_KEY", "")
+        return context
+
+    # -------------------------------------------------------------------------
     # Request handlers
     # -------------------------------------------------------------------------
 
     def post(self, request: HttpRequest, *args, **kwargs) -> HttpResponse:
         """
-        잠긴 계정은 비밀번호가 맞더라도 로그인 시도 자체를 막는다.
-        form_invalid 경로로 내려 보내 잠금 메시지를 동일하게 렌더한다.
+        reCAPTCHA v3 검증 후 잠긴 계정 체크, 이후 기존 LoginView 흐름.
         """
+        token = request.POST.get("g-recaptcha-response", "")
+        remote_ip = (
+            request.META.get("HTTP_X_FORWARDED_FOR", "").split(",")[0].strip()
+            or request.META.get("REMOTE_ADDR", "")
+        )
+        if not _verify_recaptcha_v3(token, remote_ip):
+            form = self.get_form()
+            form.add_error(None, "자동화된 요청이 감지되었습니다. 잠시 후 다시 시도해 주세요.")
+            return self.form_invalid(form)
+
         submitted_user = self._get_submitted_user()
         if submitted_user and getattr(submitted_user, "is_locked", False):
             form = self.get_form()

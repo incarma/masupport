@@ -125,7 +125,8 @@ def fetch_naver_news(query: str, display: int = 20, start: int = 1, sort: str = 
     req.add_header("X-Naver-Client-Id", client_id)
     req.add_header("X-Naver-Client-Secret", client_secret)
 
-    with urlopen(req, timeout=20) as resp:
+    timeout = getattr(settings, "NAVER_SEARCH_API_TIMEOUT", 20)
+    with urlopen(req, timeout=timeout) as resp:
         payload = resp.read().decode("utf-8")
 
     return json.loads(payload)

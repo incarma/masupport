@@ -77,6 +77,8 @@ def _cleanup_days_policy() -> tuple[int, int, int]:
     autoretry_for=(Exception,),
     retry_backoff=True,
     retry_kwargs={"max_retries": 3},
+    soft_time_limit=120,
+    time_limit=180,
 )
 def collect_board_industry_news(self, query: str = "", pages: int = 2, actor_id: str = ""):
     """
@@ -86,6 +88,15 @@ def collect_board_industry_news(self, query: str = "", pages: int = 2, actor_id:
     - 사용자 요청 시 외부 API를 직접 호출하지 않음
     - 배치 수집 + DB 조회 구조 유지
     """
+    from celery.exceptions import SoftTimeLimitExceeded
+    try:
+        return _collect_board_industry_news_body(self, query=query, pages=pages, actor_id=actor_id)
+    except SoftTimeLimitExceeded:
+        logger.warning("[collect_news] soft_time_limit 초과 — 조기 종료")
+        return {"ok": False, "reason": "soft_time_limit_exceeded"}
+
+
+def _collect_board_industry_news_body(self, *, query: str = "", pages: int = 2, actor_id: str = ""):
     pages = _safe_positive_int(pages, default=2, minimum=1, maximum=10)
     query = str(query or "").strip()
     actor_id = str(actor_id or "").strip()

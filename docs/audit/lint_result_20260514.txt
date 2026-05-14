@@ -1,0 +1,107 @@
+========================================
+ django_ma Harness Lint 결과
+ 실행일시: 2026-05-14 10:15:16
+ 기준 커밋: 6c24b0f
+========================================
+
+────────────────────────────────────────
+[1/4] 보안 위반 탐지
+────────────────────────────────────────
+========================================
+ 보안 위반 탐지 (HARNESS_RULES.md)
+========================================
+
+========================================
+✅ 보안 점검 통과
+
+────────────────────────────────────────
+[2/4] 코드 품질 위반 탐지
+────────────────────────────────────────
+========================================
+ 코드 품질 위반 탐지 (QUALITY_RULES.md)
+========================================
+
+⚠️  [BF-01] BFCache 가드(dataset.inited) 누락 파일 (경고만, 커밋 차단 안 함)
+     static/js/admin_user_excel.js
+     static/js/board/form_submit_lock.js
+     static/js/board/worktask_form.js
+     static/js/commission/approval_excel_upload.js
+     static/js/commission/approval_home_export.js
+     static/js/commission/deposit_home.js
+     static/js/commission/_modals.js
+     static/js/dash/dash_sales_page.js
+     static/js/dash/product_modal.js
+     static/js/datatable_config.js
+     static/js/excel_upload.js
+     static/js/landing/index.js
+     static/js/login_page.js
+     static/js/manual/create_manual_modal.js
+     static/js/manual/manual_detail_block/quill.js
+     static/js/manual/manual_detail_block/section_subnav.js
+     static/js/manual/manual_list_edit.js
+     static/js/manual/_shared.js
+     static/js/partner/esign_confirm/fetch.js
+     static/js/partner/esign_confirm/index.js
+     static/js/partner/esign_confirm/save.js
+     static/js/partner/esign_confirm/sign.js
+     static/js/partner/join_form.js
+     static/js/partner/manage_grades/index.js
+     static/js/partner/pdf_processing.js
+     static/js/utils/file_upload_utils.js
+
+========================================
+✅ 품질 점검 통과
+
+────────────────────────────────────────
+[3/4] Celery task 이름 정합성
+────────────────────────────────────────
+beat_schedule 등록 task (9건):
+  [board-industry-news-collect] -> board.tasks.industry_info.collect_board_industry_news
+  [board-industry-cleanup-daily] -> board.tasks.industry_info.cleanup_old_industry_articles
+  [dash-agg-hourly] -> dash.tasks.build_sales_aggs_hourly
+  [dash-forecast-daily] -> dash.tasks.build_sales_forecasts_daily
+  [dash-forecast-hourly] -> dash.tasks.build_sales_forecasts_hourly
+  [generate-monthly-worktasks] -> board.tasks.generate_monthly_worktasks
+  [notify-due-worktasks] -> board.tasks.notify_due_worktasks
+  [board-kr-holidays-sync-daily] -> board.tasks.holidays.sync_kr_holidays_window
+  [board-kr-holidays-sync-monthly] -> board.tasks.holidays.sync_kr_holidays_window
+
+@shared_task(name=) 등록 태스크 (15건):
+  dash.tasks.build_sales_aggs_hourly  <- dash/tasks/__init__.py:36
+  dash.tasks.build_sales_forecasts_daily  <- dash/tasks/__init__.py:45
+  dash.tasks.build_sales_forecasts_hourly  <- dash/tasks/__init__.py:54
+  dash.tasks.build_sales_forecasts_for_yms  <- dash/tasks/__init__.py:63
+  dash.tasks.dash_refresh_agg_and_forecast  <- dash/tasks/__init__.py:76
+  board.tasks.holidays.sync_kr_holidays_for_year  <- board/tasks/holidays.py:24
+  board.tasks.holidays.sync_kr_holidays_window  <- board/tasks/holidays.py:35
+  board.tasks.industry_info.collect_board_industry_news  <- board/tasks/industry_info.py:74
+  board.tasks.industry_info.cleanup_old_industry_articles  <- board/tasks/industry_info.py:223
+  board.tasks.generate_monthly_worktasks  <- board/tasks/worktask_tasks.py:37
+  board.tasks.notify_due_worktasks  <- board/tasks/worktask_tasks.py:76
+  dash.tasks.pipeline.build_sales_forecasts_for_yms  <- dash/tasks/pipeline.py:299
+  dash.tasks.pipeline.build_sales_aggs_hourly  <- dash/tasks/pipeline.py:352
+  dash.tasks.pipeline.build_sales_forecasts_daily  <- dash/tasks/pipeline.py:365
+  dash.tasks.pipeline.build_sales_forecasts_hourly  <- dash/tasks/pipeline.py:380
+
+========================================
+[OK] Celery task 이름 점검 통과
+
+────────────────────────────────────────
+[4/4] CSS 스코프 위반 탐지
+────────────────────────────────────────
+========================================
+ CSS 스코프 위반 탐지
+========================================
+
+[OK] static/css/apps/board.css: '.board-scope / #board-' 스코프 정상
+[OK] static/css/apps/partner.css: '#manage- / #partner- / #esign-confirm' 스코프 정상
+[OK] static/css/base.css: 금지 패턴 없음
+
+[OK] apps/*.css: :root 전역 변수 선언 없음
+
+========================================
+[OK] CSS 스코프 점검 통과
+
+========================================
+✅ 전체 점검 통과 — 커밋 진행 가능
+========================================

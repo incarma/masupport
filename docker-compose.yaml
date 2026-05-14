@@ -2,6 +2,8 @@ services:
   db:
     image: postgres:16-alpine
     container_name: django_db
+    mem_limit: 2g
+    cpus: "2.0"
     env_file:
       - ./docker/.env.prod
     ports:
@@ -18,6 +20,8 @@ services:
   redis:
     image: redis:latest
     container_name: redis_server
+    mem_limit: 256m
+    cpus: "0.5"
     ports:
       - "6379:6379"
     healthcheck:
@@ -31,10 +35,18 @@ services:
     build:
       context: .
     container_name: django_web
+    mem_limit: 1g
+    cpus: "2.0"
     command: >
       gunicorn web_ma.asgi:application
       -k uvicorn.workers.UvicornWorker
+      --workers 3
       --bind 0.0.0.0:8000
+      --timeout 120
+      --graceful-timeout 30
+      --keep-alive 5
+      --max-requests 1000
+      --max-requests-jitter 100
       --log-level info
       --access-logfile -
       --error-logfile -
@@ -70,6 +82,8 @@ services:
     build:
       context: .
     container_name: django_celery
+    mem_limit: 768m
+    cpus: "1.5"
     command: celery -A web_ma worker --loglevel=info
     env_file:
       - ./docker/.env.prod
@@ -90,6 +104,8 @@ services:
     build:
       context: .
     container_name: django_celery_beat
+    mem_limit: 256m
+    cpus: "0.5"
     command: celery -A web_ma beat --loglevel=info
     env_file:
       - ./docker/.env.prod
@@ -109,6 +125,8 @@ services:
   nginx:
     image: nginx:alpine
     container_name: django_nginx
+    mem_limit: 128m
+    cpus: "0.5"
     ports:
       - "80:80"
       - "443:443"

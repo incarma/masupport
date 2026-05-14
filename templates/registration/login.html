@@ -1,12 +1,13 @@
 <!-- django_ma/templates/registration/login.html -->
 
 {% extends 'base.html' %}
+{% load static %}
 {% load widget_tweaks %}
 
 {% block title %}로그인{% endblock %}
 
 {% block content %}
-<div class="mx-auto login-card-wrap">
+<div class="mx-auto login-card-wrap" data-recaptcha-site-key="{{ recaptcha_site_key }}">
   <div class="card p-4 shadow">
     <h3 class="text-center mb-4 login-title">로그인</h3>
 
@@ -35,4 +36,11 @@
     </form>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+{% if recaptcha_site_key %}
+<script src="https://www.google.com/recaptcha/api.js?render={{ recaptcha_site_key }}"></script>
+<script src="{% static 'js/accounts/login_recaptcha.js' %}?v={% now 'U' %}"></script>
+{% endif %}
 {% endblock %}

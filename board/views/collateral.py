@@ -8,6 +8,7 @@
 import json
 import logging
 
+from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_GET, require_POST
 from django.shortcuts import render
@@ -19,6 +20,7 @@ from board.services.collateral import (
     get_eval_history,
     save_collateral_eval,
 )
+from board.services.rate_limit import check_rate_limit, rate_limited_json
 from django.http import JsonResponse
 from board.views._json import _json_ok, _json_err as _json_error
 
@@ -50,6 +52,14 @@ def collateral_calc(request):
     요청 JSON: { property_type, kb_price, prior_debt, address, memo,
                  target_user_id (optional) }
     """
+    rl = check_rate_limit(
+        request,
+        scope="board:collateral_calc",
+        rule=getattr(settings, "BOARD_COLLATERAL_CALC_RATE_LIMIT", "20/60"),
+    )
+    if not rl.allowed:
+        return rate_limited_json(rl)
+
     try:
         body = json.loads(request.body)
     except Exception:
@@ -145,6 +155,14 @@ def collateral_delete(request, eval_id: int):
     - head     : 본인 branch 데이터만
     - 그 외     : 403
     """
+    rl = check_rate_limit(
+        request,
+        scope="board:collateral_delete",
+        rule=getattr(settings, "BOARD_COLLATERAL_DELETE_RATE_LIMIT", "10/60"),
+    )
+    if not rl.allowed:
+        return rate_limited_json(rl)
+
     grade = getattr(request.user, "grade", "")
     if grade not in ("superuser", "head"):
         return _json_error("삭제 권한이 없습니다.", status=403)
