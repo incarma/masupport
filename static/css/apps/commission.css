@@ -479,6 +479,106 @@
   margin-left: calc(-43vw + 50%);
 }
 
+/* 생명보험/손해보험 페이지네이션 */
+#rate-example-root .re-insurer-type-tabs {
+  justify-content: center;
+  gap: 10px;
+}
+
+#rate-example-root .re-insurer-type-tabs .re-insurer-type-link {
+  min-width: 96px;
+  text-align: center;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.5;
+  color: #333 !important;
+  background: #fff;
+  border: 1px solid var(--border-soft, #d2ddec);
+  border-radius: var(--radius-soft, 10px);
+  padding: 0.35rem 1.05rem;
+  margin: 0;
+  box-shadow: var(--shadow-soft, 0 2px 6px rgba(0, 0, 0, 0.05));
+  transition: all 0.25s ease;
+}
+
+#rate-example-root .re-insurer-type-tabs .re-insurer-type-link:hover {
+  color: #005BAC !important;
+  background: #f8fbff;
+  border-color: #b7c9df;
+  transform: translateY(-1px);
+}
+
+#rate-example-root .re-insurer-type-tabs .re-insurer-type-link.active {
+  color: #fff !important;
+  background: linear-gradient(135deg, var(--inka-blue, #005BAC), var(--inka-blue2, #0074D9));
+  border-color: transparent;
+  font-weight: 600;
+  box-shadow: 0 4px 10px rgba(0, 91, 172, 0.28);
+  transform: none;
+}
+
+/* 목록카드 상단 주의 문구 */
+#rate-example-root .re-warning-banner {
+  background: #ffecec;
+  color: #ff0000;
+  font-size: 0.85rem;
+  font-weight: 400;
+  border: 1px solid #ffb3b3;
+  border-radius: 10px;
+  padding: 8px 12px;
+  line-height: 1.45;
+}
+
+/* 목록카드 상단 컨트롤 행 */
+#rate-example-root .re-calc-toolbar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+#rate-example-root .re-calc-toolbar-left,
+#rate-example-root .re-calc-toolbar-right {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  flex-wrap: nowrap;
+}
+
+#rate-example-root .re-calc-control {
+  width: 120px;
+}
+
+#rate-example-root .re-calc-control-premium {
+  width: 180px;
+}
+
+#rate-example-root .re-calc-control-button {
+  width: 72px;
+}
+
+#rate-example-root .re-calc-control-button .btn {
+  width: 100%;
+}
+
+@media (max-width: 768px) {
+  #rate-example-root .re-calc-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  #rate-example-root .re-calc-toolbar-left,
+  #rate-example-root .re-calc-toolbar-right {
+    flex-wrap: wrap;
+  }
+
+  #rate-example-root .re-calc-control,
+  #rate-example-root .re-calc-control-premium,
+  #rate-example-root .re-calc-control-button {
+    width: calc(50% - 4px);
+  }
+}
+
 @media (max-width: 576px) {
   #rate-example-root {
     width: 100%;

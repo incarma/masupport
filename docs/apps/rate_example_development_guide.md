@@ -1219,3 +1219,251 @@ bash scripts/harness/run_all.sh
 - HARNESS_RULES.md
 - QUALITY_RULES.md
 
+
+
+
+# 5-18. 한화생명
+
+파일:
+
+```python
+life_hanhwa.py
+```
+
+정규화 대상:
+
+- XLSX raw 파일 기반 정규화
+- 업로드 시 상품 구분 선택 필수
+- 보험사 컬럼은 항상 `한화`
+- 정규화 함수명은 `build_life_hanhwa_conversion_rows`
+
+상품 구분:
+
+| product_kind | 의미 |
+|---|---|
+| `hanhwa_whole` | 종신보험 |
+| `hanhwa_annuity` | 연금보험 |
+| `hanhwa_general` | 일반보장 |
+
+---
+
+## 핵심 진입점 등록
+
+`commission/services/rate_example_normalizers/__init__.py`
+
+```python
+from commission.services.rate_example_normalizers.life_hanhwa import (
+    build_life_hanhwa_conversion_rows,
+)
+```
+
+`__all__` export 추가:
+
+```python
+"build_life_hanhwa_conversion_rows",
+```
+
+`commission/services/rate_example_normalizer.py`
+
+```python
+elif example.insurer == "한화":
+    normalized_rows.extend(
+        build_life_hanhwa_conversion_rows(
+            example,
+            wb,
+            product_kind=product_kind,
+        )
+    )
+```
+
+`commission/services/rate_example.py`
+
+```python
+if insurer == "한화":
+    product_kind in {
+        "hanhwa_whole",
+        "hanhwa_annuity",
+        "hanhwa_general",
+    }
+```
+
+---
+
+## 공통 정규화 규칙
+
+- 숨김(hidden/veryHidden) 시트는 정규화 제외
+- 각 시트에서 첫 번째 `□ 주계약` 테이블만 사용
+- `독립특약`, `종속특약` 이하 영역 제외
+- 상품명 = 시트명
+- 환산율은 Decimal 백분율 저장
+- 각 납기 환산율은 `year1~year4` 동일 저장
+
+예:
+
+```text
+0.85 → Decimal("85.0000")
+1.60 → Decimal("160.0000")
+160% → Decimal("160.0000")
+```
+
+---
+
+## 종신보험 (`hanhwa_whole`)
+
+규칙:
+
+- 모든 상품 보종 = `종신/CI`
+- 납기 헤더:
+  - `비일시납` 하위
+  - `년납` 포함 컬럼만 사용
+- 특정 납기 환산율 셀이 공란이면 해당 납기 row 제외
+
+### 구분(plan_type) 정책
+
+구분 컬럼은 기본적으로 공란.
+
+단:
+
+- 시트명에 `정기` 포함
+- A/B 열이 분리된 경우
+
+↓
+
+B열 값을 구분으로 사용.
+
+A/B 병합이면:
+
+```python
+plan_type = ""
+```
+
+---
+
+## 연금보험 (`hanhwa_annuity`)
+
+규칙:
+
+- 시트명에 `바로` 포함 시 제외
+- 보종 자동 판별
+
+```python
+"변액" 포함 → 변액연금
+"저축" 포함 → 연금저축
+그 외 연금 → 연금
+```
+
+- 구분(plan_type)은 항상 공란
+- 납기(pay_period):
+  - `구분` 컬럼 값 사용
+- 환산율:
+  - `월납` 컬럼 값 사용
+
+### 헤더 탐지 규칙
+
+주의:
+
+raw 4행에는:
+
+```text
+(월납 P'대비율 ...)
+```
+
+같은 안내 문구가 존재할 수 있다.
+
+따라서 반드시:
+
+- 같은 행에 `구분`
+- 같은 행에 `월납`
+
+헤더가 동시에 존재하는 행만 실제 헤더로 인정한다.
+
+---
+
+## 일반보장 (`hanhwa_general`)
+
+규칙:
+
+- 기본 보종 = `기타(보장성)`
+- 상품명에 `경영` 포함 시:
+  - 보종 = `CEO정기`
+
+납기 헤더:
+
+- `년납`
+- `전기납`
+
+포함 컬럼 사용.
+
+특정 납기 환산율 셀이 공란이면 해당 납기 row 제외.
+
+### 구분(plan_type) 정책
+
+구분 컬럼은 기본적으로 공란.
+
+단:
+
+- 시트명에 `정기` 포함
+- A/B 열 분리
+
+↓
+
+B열 값을 구분으로 사용.
+
+그 외 상품:
+
+```python
+plan_type = ""
+```
+
+---
+
+## 프론트 옵션 연동 규칙
+
+한화 연금보험은:
+
+```python
+plan_type = ""
+```
+
+정규화되므로 프론트는 다음 정책을 사용한다.
+
+- 구분 select:
+  - `사용안함`
+- 납기 목록:
+  - `plan_type=""` 조건으로 즉시 조회
+
+즉:
+
+```text
+보험사 + 상품명 + 납기
+```
+
+만 선택하면 계산 가능해야 한다.
+
+---
+
+## 검증 명령
+
+```powershell
+python manage.py check
+```
+
+```powershell
+python manage.py shell -c "from commission.models import RateExampleConversionRow as R; print(R.objects.filter(insurer='한화').count())"
+```
+
+연금보험 검증:
+
+```powershell
+python manage.py shell -c "from commission.models import RateExampleConversionRow as R; qs=R.objects.filter(insurer='한화', product_name__contains='연금'); print('\\n'.join([f'{r.product_name} | {r.pay_period} | {r.year1}' for r in qs]))"
+```
+
+체크 포인트:
+
+1. 숨김 시트 제외 여부
+2. `바로연금보험` 제외 여부
+3. CEO정기만 구분 사용 여부
+4. 일반보장 구분 공란 여부
+5. 연금보험 구분 `사용안함` 동작 여부
+6. 납기 옵션 정상 노출 여부
+7. `year1~year4` 동일 저장 여부

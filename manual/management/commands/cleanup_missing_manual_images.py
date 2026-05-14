@@ -1,12 +1,11 @@
 # django_ma/management/commands/cleanup_missing_manual_images.py
+# [DEPRECATED] cleanup_manual_files --apply 를 사용할 것
 
 from django.core.management.base import BaseCommand
 
-from manual.models import ManualBlock
-
 
 class Command(BaseCommand):
-    help = "존재하지 않는 이미지 파일을 참조하는 ManualBlock.image 값을 정리합니다."
+    help = "[DEPRECATED] python manage.py cleanup_manual_files --apply 를 사용하세요."
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -18,31 +17,25 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         apply_changes = bool(options["apply"])
 
-        qs = ManualBlock.objects.exclude(image="").exclude(image__isnull=True)
-
-        total = qs.count()
-        missing = 0
-        cleaned = 0
-
         self.stdout.write(
             self.style.WARNING(
-                f"ManualBlock missing image cleanup 시작: total={total}, "
-                f"mode={'APPLY' if apply_changes else 'DRY-RUN'}"
+                "이 명령은 deprecated입니다. "
+                "python manage.py cleanup_manual_files --apply 를 사용하세요."
             )
         )
 
-        for b in qs.iterator(chunk_size=200):
-            if not b.image.storage.exists(b.image.name):
-                missing += 1
-                self.stdout.write(f"- missing block_id={b.id}, file={b.image.name}")
+        from manual.management.commands.cleanup_manual_files import Command as CleanupCmd
 
-                if apply_changes:
-                    b.image = None
-                    b.save(update_fields=["image"])
-                    cleaned += 1
+        cmd = CleanupCmd()
+        cmd.stdout = self.stdout
+        cmd.stderr = self.stderr
+        cmd.style = self.style
+
+        result = cmd._cleanup_missing_block_images(apply_changes=apply_changes)
 
         self.stdout.write(
             self.style.SUCCESS(
-                f"완료: total={total}, missing={missing}, cleaned={cleaned}, applied={apply_changes}"
+                f"완료: total={result['total']}, missing={result['missing']}, "
+                f"cleaned={result['cleaned']}, applied={apply_changes}"
             )
         )

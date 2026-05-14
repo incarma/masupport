@@ -12,6 +12,8 @@
   const subnavEl = document.getElementById("manualSubnav");
   const sectionsRoot = document.getElementById("manualSections");
   if (!subnavEl || !sectionsRoot) return;
+  if (subnavEl.dataset.inited === "1") return;
+  subnavEl.dataset.inited = "1";
 
   const linksWrap = subnavEl.querySelector(".subnav-links");
   if (!linksWrap) return;
