@@ -180,6 +180,28 @@
     activeComboMenu = null;
   }
 
+  function selectComboItem(btn) {
+    if (!btn) return;
+
+    const combo = btn.closest(".re-combo");
+    const selectedInput = combo?.querySelector(".re-calc-insurer, .re-calc-product");
+    if (!selectedInput) return;
+
+    const row = getRow(selectedInput);
+    selectedInput.value = btn.dataset.value || "";
+
+    selectedInput.dispatchEvent(new Event("input", { bubbles: true }));
+    selectedInput.dispatchEvent(new Event("change", { bubbles: true }));
+
+    hideActiveComboMenu();
+
+    if (selectedInput.classList.contains("re-calc-insurer")) {
+      refreshProductsByInsurer(row);
+    } else if (selectedInput.classList.contains("re-calc-product")) {
+      refreshPlansByProduct(row);
+    }
+  }
+
   function getRow(el) {
     return el ? el.closest(".re-calc-row") : null;
   }
@@ -526,21 +548,12 @@
       }, 0);
     });
 
-    calcTbody.addEventListener("mousedown", function (e) {
+    calcTbody.addEventListener("pointerdown", function (e) {
       const btn = e.target.closest(".re-combo-item");
-      if (!btn || !activeComboInput) return;
+      if (!btn) return;
       e.preventDefault();
-
-      const selectedInput = activeComboInput;
-      const row = getRow(selectedInput);
-      selectedInput.value = btn.dataset.value || "";
-      hideActiveComboMenu();
-
-      if (selectedInput.classList.contains("re-calc-insurer")) {
-        refreshProductsByInsurer(row);
-      } else if (selectedInput.classList.contains("re-calc-product")) {
-        refreshPlansByProduct(row);
-      }
+      e.stopPropagation();
+      selectComboItem(btn);
     });
   }
 

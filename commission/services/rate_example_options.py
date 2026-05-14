@@ -24,7 +24,17 @@ from commission.models import RateExample, RateExampleConversionRow, RateExample
 
 
 IBK_PREFIX = "[IBK]"
+
 VALID_INSURER_TYPES = {RateExample.TYPE_LIFE, RateExample.TYPE_NONLIFE}
+
+INSURER_CANONICAL_MAP = {
+    "db": "DB",
+    "abl": "ABL",
+    "im": "IM",
+    "kb": "KB",
+    "kdb": "KDB",
+    "ibk": "IBK",
+}
 
 
 @dataclass(frozen=True)
@@ -60,6 +70,18 @@ def _normalize_insurer_type(value: str) -> str:
 def _clean(value: object) -> str:
     """GET 파라미터/DB 값을 안전한 문자열로 정규화한다."""
     return str(value or "").strip()
+
+
+def _normalize_insurer(value: object) -> str:
+    """
+    보험사명 정규화.
+
+    프론트에서 select value가 소문자(db)로 전달되더라도
+    정규화 테이블의 저장값(DB)과 매칭되도록 보정한다.
+    한글 보험사명은 원문을 유지한다.
+    """
+    raw = _clean(value)
+    return INSURER_CANONICAL_MAP.get(raw.lower(), raw)
 
 
 def _base_qs(insurer_type: str):
@@ -155,7 +177,7 @@ def get_rate_example_options(query: RateExampleOptionQuery) -> list[str]:
 
     qs = _base_qs(insurer_type)
 
-    insurer = _clean(query.insurer)
+    insurer = _normalize_insurer(query.insurer)
     product_name = _clean(query.product_name)
     plan_type = _clean(query.plan_type)
 
