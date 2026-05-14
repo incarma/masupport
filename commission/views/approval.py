@@ -11,10 +11,12 @@ Approval/Efficiency Excel Upload API (superuser only)
 - 공통 업로드(삭제→핸들러→로그 upsert) 흐름은 그대로 유지
 """
 
+from django.conf import settings
 from django.db import transaction
 from django.views.decorators.http import require_POST
 
 from accounts.decorators import grade_required
+from board.services.rate_limit import check_rate_limit, rate_limited_json
 from commission.upload_handlers import (
     _handle_upload_commission_approval,
     _handle_upload_efficiency_pay_excess,
@@ -102,6 +104,14 @@ def approval_upload_excel(request):
     - 1) year/month 방식(레거시)
     - 2) ym(YYYY-MM 또는 YYYYMM) 방식(현행 프론트)
     """
+    rl = check_rate_limit(
+        request,
+        scope="commission:approval",
+        rule=getattr(settings, "COMMISSION_APPROVAL_RATE_LIMIT", "10/60"),
+    )
+    if not rl.allowed:
+        return rate_limited_json(rl)
+
     ym_param = (request.POST.get("ym") or request.GET.get("ym") or "").strip()
     year = (request.POST.get("year") or request.GET.get("year") or "").strip()
     month = (request.POST.get("month") or request.GET.get("month") or "").strip()

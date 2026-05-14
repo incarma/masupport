@@ -55,7 +55,11 @@
       <button class="btn btn-success btn-sm text-nowrap"
               data-bs-toggle="modal"
               data-bs-target="#rateExampleUploadModal">
-        환산율 업데이트
+        {% if active_insurer_type == 'nonlife' %}
+          수정률 업데이트
+        {% else %}
+          환산율 업데이트
+        {% endif %}
       </button>
       <button class="btn btn-primary btn-sm text-nowrap"
               id="re-btn-open-pay-upload"
@@ -67,7 +71,11 @@
               id="re-btn-open-conv"
               data-bs-toggle="modal"
               data-bs-target="#rateExampleConvModal">
-        환산율 확인
+        {% if active_insurer_type == 'nonlife' %}
+          수정률 확인
+        {% else %}
+          환산율 확인
+        {% endif %}
       </button>
       <button class="btn btn-outline-secondary btn-sm text-nowrap"
               id="re-btn-open-pay"
@@ -207,7 +215,9 @@
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title fw-bold">환산율 업데이트</h5>
+        <h5 class="modal-title" id="rateExampleUploadModalTitle">
+          {% if active_insurer_type == 'nonlife' %}수정률 업데이트{% else %}환산율 업데이트{% endif %}
+        </h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
@@ -230,7 +240,7 @@
             <option value="">선택</option>
           </select>
           <div class="form-text" id="re-modal-product-kind-help">
-            KB 또는 한화 환산율/수정률 파일 업로드 시 선택합니다.
+            KB 또는 한화 환산율 파일 업로드 시 선택합니다.
           </div>
         </div>
         <!--
@@ -396,7 +406,9 @@
   <div class="modal-dialog modal-xl modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title fw-bold">환산율 확인</h5>
+        <h5 class="modal-title" id="rateExampleConvModalTitle">
+          {% if active_insurer_type == 'nonlife' %}수정률 확인{% else %}환산율 확인{% endif %}
+        </h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">

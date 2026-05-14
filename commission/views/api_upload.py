@@ -9,10 +9,12 @@ Deposit(채권) Excel Upload API (superuser only)
 - 결과 건수 산정/실패목록 토큰 생성 로직은 그대로 유지
 """
 
+from django.conf import settings
 from django.db import transaction
 from django.views.decorators.http import require_POST
 
 from accounts.decorators import grade_required
+from board.services.rate_limit import check_rate_limit, rate_limited_json
 from commission.upload_handlers import _update_upload_log
 from commission.upload_handlers.registry import get_upload_spec, supported_upload_types
 from commission.upload_utils import _read_excel_safely
@@ -60,6 +62,14 @@ def upload_excel(request):
     - mode=="df"  : 엑셀 -> DataFrame -> handler(df)
     - mode=="file": 파일 경로/원본명 -> handler(file_path, original_name)
     """
+    rl = check_rate_limit(
+        request,
+        scope="commission:upload",
+        rule=getattr(settings, "COMMISSION_UPLOAD_RATE_LIMIT", "5/60"),
+    )
+    if not rl.allowed:
+        return rate_limited_json(rl)
+
     part = (request.POST.get("part") or "").strip()
     upload_type = (request.POST.get("upload_type") or "").strip()
     excel_file = request.FILES.get("excel_file")

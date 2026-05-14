@@ -151,6 +151,7 @@ INSTALLED_APPS = [
     # 3rd party
     "widget_tweaks",
     "django_extensions",
+    "django_recaptcha",
     "audit.apps.AuditConfig",
 ]
 
@@ -412,9 +413,11 @@ AUDIT_PROXY_HEADER_ENABLED = config(
     cast=bool,
 )
 
+# 변경 전 (2026-05-14): "127.0.0.1/32,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+# 변경 후: Docker 내부 브리지 네트워크(172.16.0.0/12)만 신뢰 (T-B-01)
 AUDIT_TRUSTED_PROXY_CIDRS = config(
     "AUDIT_TRUSTED_PROXY_CIDRS",
-    default="127.0.0.1/32,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16",
+    default="127.0.0.1/32,::1/128,172.16.0.0/12",
     cast=lambda v: tuple(s.strip() for s in v.split(",") if s.strip()),
 )
 
@@ -505,6 +508,16 @@ BOARD_SUPPORT_PDF_RATE_LIMIT = config(
 )
 BOARD_STATES_PDF_RATE_LIMIT = config(
     "BOARD_STATES_PDF_RATE_LIMIT",
+    default="10/60",
+)
+
+# commission 업로드/결재 rate limit
+COMMISSION_UPLOAD_RATE_LIMIT = config(
+    "COMMISSION_UPLOAD_RATE_LIMIT",
+    default="5/60",
+)
+COMMISSION_APPROVAL_RATE_LIMIT = config(
+    "COMMISSION_APPROVAL_RATE_LIMIT",
     default="10/60",
 )
 
@@ -733,11 +746,13 @@ CONTENT_SECURITY_POLICY = config(
     "CONTENT_SECURITY_POLICY",
     default=(
         "default-src 'self'; "
-        "script-src 'self' https://ssl.daumcdn.net; "
+        "script-src 'self' https://ssl.daumcdn.net "
+        "https://www.google.com https://www.gstatic.com; "
         "style-src 'self'; "
         "img-src 'self' data: https:; "
         "font-src 'self' data:; "
-        "connect-src 'self'; "
+        "connect-src 'self' https://www.google.com; "
+        "frame-src 'self' https://www.google.com; "
         "object-src 'none'; "
         "frame-ancestors 'none'; "
         "base-uri 'self'; "
@@ -758,3 +773,28 @@ DASH_MODEL_DIR = str(BASE_DIR / "var" / "dash_models")
 # =============================================================================
 NAVER_SEARCH_CLIENT_ID = config("NAVER_SEARCH_CLIENT_ID", default="")
 NAVER_SEARCH_CLIENT_SECRET = config("NAVER_SEARCH_CLIENT_SECRET", default="")
+NAVER_SEARCH_API_TIMEOUT = config(
+    "NAVER_SEARCH_API_TIMEOUT",
+    default=20,
+    cast=int,
+)
+
+# =============================================================================
+# 18) reCAPTCHA v3 (/login/ 전용 봇 방어)
+# -----------------------------------------------------------------------------
+# SSOT: accounts/views.py _verify_recaptcha_v3()
+# 적용 엔드포인트: /login/ 한정
+#
+# dev 테스트용 더미 키 (.env.dev):
+#   RECAPTCHA_PUBLIC_KEY=6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI
+#   RECAPTCHA_PRIVATE_KEY=6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe
+#
+# 운영 키 (.env.prod): Google reCAPTCHA Admin 콘솔에서 발급
+# =============================================================================
+RECAPTCHA_PUBLIC_KEY = config("RECAPTCHA_PUBLIC_KEY", default="")
+RECAPTCHA_PRIVATE_KEY = config("RECAPTCHA_PRIVATE_KEY", default="")
+RECAPTCHA_SCORE_THRESHOLD = config(
+    "RECAPTCHA_SCORE_THRESHOLD",
+    default=0.5,
+    cast=float,
+)

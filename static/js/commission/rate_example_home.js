@@ -24,6 +24,7 @@
   const LIFE_INSURERS = JSON.parse(
     document.getElementById("life-insurers-data").textContent
   );
+
   const NONLIFE_INSURERS = JSON.parse(
     document.getElementById("nonlife-insurers-data").textContent
   );
@@ -33,6 +34,56 @@
   const ACTIVE_INSURER_TYPE = ["life", "nonlife"].includes(root.dataset.activeInsurerType)
     ? root.dataset.activeInsurerType
     : "life";
+
+  // ─────────────────────────────────────────────────────────
+  // 손해보험 전용 보험사 목록
+  // 요구사항:
+  // AIG, DB, KB, 농협, 롯데, 메리츠, 삼성, 하나, 한화, 현대, 흥국
+  // ─────────────────────────────────────────────────────────
+  const NONLIFE_MODAL_INSURERS = [
+    "AIG",
+    "DB",
+    "KB",
+    "농협",
+    "롯데",
+    "메리츠",
+    "삼성",
+    "하나",
+    "한화",
+    "현대",
+    "흥국",
+  ];
+
+  function getModalInsurers() {
+    if (ACTIVE_INSURER_TYPE === "nonlife") {
+      return NONLIFE_MODAL_INSURERS;
+    }
+    return LIFE_INSURERS;
+  }
+
+  // ─────────────────────────────────────────────────────────
+  // 손해보험 페이지 진입 시 모달 제목 변경
+  // ─────────────────────────────────────────────────────────
+  const uploadModalTitle = document.getElementById("rateExampleUploadModalTitle");
+  const convModalTitle = document.getElementById("rateExampleConvModalTitle");
+
+  if (ACTIVE_INSURER_TYPE === "nonlife") {
+    if (uploadModalTitle) {
+      uploadModalTitle.textContent = "수정률 업데이트";
+    }
+
+    if (convModalTitle) {
+      convModalTitle.textContent = "수정률 확인";
+    }
+  }
+
+  function isNonlifePage() {
+    return ACTIVE_INSURER_TYPE === "nonlife";
+  }
+
+  function getRateLabel() {
+    return isNonlifePage() ? "수정률" : "환산율";
+  }
 
   function getActiveInsurers() {
     return ACTIVE_INSURER_TYPE === "nonlife" ? NONLIFE_INSURERS : LIFE_INSURERS;
@@ -458,6 +509,23 @@
      * 메뉴 닫기는 document mousedown에서 combo 외부 클릭일 때만 처리한다.
      */
 
+    calcTbody.addEventListener("focusout", function (e) {
+      const fromCombo = e.target.closest(".re-combo");
+      if (!fromCombo) return;
+
+      window.setTimeout(function () {
+        const activeEl = document.activeElement;
+
+        /*
+         * Tab 이동 후 포커스가 같은 combo 내부에 남아 있으면 유지하고,
+         * 다른 input/select/페이지 영역으로 이동했으면 열린 메뉴를 닫는다.
+         */
+        if (!fromCombo.contains(activeEl)) {
+          hideActiveComboMenu();
+        }
+      }, 0);
+    });
+
     calcTbody.addEventListener("mousedown", function (e) {
       const btn = e.target.closest(".re-combo-item");
       if (!btn || !activeComboInput) return;
@@ -499,7 +567,14 @@
   }
 
   function getResultCells(row) {
-    return Array.from(row.querySelectorAll(".re-calc-placeholder, .re-calc-amount, .re-calc-na, .re-calc-total"));
+    /*
+     * 계산 결과 셀은 조회 후 class가 아래 상태값 중 하나로 바뀐다.
+     * re-calc-subtotal을 누락하면 재조회 시 익월 소계/계속 소계 셀이
+     * 수집 대상에서 빠져 결과값이 한 칸씩 밀리는 문제가 발생한다.
+     */
+    return Array.from(row.querySelectorAll(
+      ".re-calc-placeholder, .re-calc-amount, .re-calc-na, .re-calc-total, .re-calc-subtotal"
+    ));
   }
 
   function resetResultCells(row) {
@@ -703,7 +778,7 @@
   // 기존 메인 목록 필터는 제거됨.
   // 환산율/지급률 확인 모달 내부 필터는 아래 기존 로직을 그대로 유지한다.
 
-  // ── 업로드 모달: 생보 전용 보험사 선택 ────────────────────────────────
+  // ── 업로드 모달: 환산율/수정률 보험사 선택 ─────────────────────────────
   const modalInsurer = document.getElementById("re-modal-insurer");
   const modalProductKindWrap = document.getElementById("re-modal-product-kind-wrap");
   const modalProductKind = document.getElementById("re-modal-product-kind");
@@ -724,6 +799,14 @@
   // ── 보험사별 환산율/수정률 상품 구분 활성화 ─────────────────────
   function updateProductKindVisibility() {
     if (!modalProductKindWrap || !modalProductKind) return;
+
+    if (isNonlifePage()) {
+      modalProductKind.innerHTML = '<option value="">선택</option>';
+      modalProductKind.value = "";
+      modalProductKind.disabled = true;
+      modalProductKindWrap.classList.add("d-none");
+      return;
+    }
 
     const insurer = modalInsurer?.value || "";
     const options = PRODUCT_KIND_OPTIONS[insurer] || [];
@@ -746,8 +829,8 @@
 
     if (modalProductKindHelp) {
       modalProductKindHelp.textContent = insurer === "한화"
-        ? "한화 환산율/수정률 파일 업로드 시 종신보험/연금보험/일반보장 중 하나를 선택합니다."
-        : "KB 환산율/수정률 파일 업로드 시 일반상품/건강보험 중 하나를 선택합니다.";
+        ? "한화 환산율 파일 업로드 시 종신보험/연금보험/일반보장 중 하나를 선택합니다."
+        : "KB 환산율 파일 업로드 시 일반상품/건강보험 중 하나를 선택합니다.";
     }
   }
 
@@ -755,12 +838,12 @@
     modalInsurer.addEventListener("change", updateProductKindVisibility);
   }
 
-  function populateLifeInsurerSelect(sel, placeholder, options) {
+  function populateModalInsurerSelect(sel, placeholder, options) {
     if (!sel) return;
     const opts = options || {};
     sel.disabled = false;
     sel.innerHTML = `<option value="">${placeholder || "선택"}</option>`;
-    LIFE_INSURERS.filter(function (name) {
+    getModalInsurers().filter(function (name) {
       // 환산율 업데이트/확인 모달에서는 IBK 제외.
       // IBK는 지급률(pay) 기반 계산 특수 보험사이므로 메인 계산 입력에서는 유지한다.
       return !(opts.excludeIbk === true && name === IBK_INSURER);
@@ -1014,7 +1097,7 @@
   if (btnSave) {
     btnSave.addEventListener("click", async function () {
       clearError();
-      const insurerType = "life";
+      const insurerType = ACTIVE_INSURER_TYPE;
       const category = "conv";
       const insurer = modalInsurer?.value || "";
       const productKind = modalProductKind?.value || "";
@@ -1025,7 +1108,7 @@
       const file = fileInput?.files[0];
 
       if (!insurer) { showError("보험사를 선택해 주세요."); return; }
-      if (["KB", "한화"].includes(insurer) && !productKind) {
+      if (!isNonlifePage() && ["KB", "한화"].includes(insurer) && !productKind) {
         showError(`${insurer} 상품 구분을 선택해 주세요.`);
         return;
       }
@@ -1075,7 +1158,7 @@
 
   if (convBtnApply) {
     convBtnApply.addEventListener("click", async function () {
-      const typeVal    = "life";
+      const typeVal    = ACTIVE_INSURER_TYPE;
       const insurerVal = convInsurer ? convInsurer.value : "";
 
       clearConvError();
@@ -1298,7 +1381,7 @@
         return;
       }
       const payload = {
-        insurer_type: "life",
+        insurer_type: ACTIVE_INSURER_TYPE,
         insurer: insurerVal,
         rows: collectConvEditRows(),
         deleted_ids: convDeletedIds,
@@ -1339,7 +1422,7 @@
         showConvError("초기화할 보험사를 먼저 선택 후 조회해 주세요.");
         return;
       }
-      if (!confirm(`[${insurerVal}] 환산율 데이터를 전체 삭제하겠습니까?\n이 작업은 되돌릴 수 없습니다.`)) {
+      if (!confirm(`[${insurerVal}] ${getRateLabel()} 데이터를 전체 삭제하겠습니까?\n이 작업은 되돌릴 수 없습니다.`)) {
         return;
       }
       if (!CONVERSION_RESET_URL) {
@@ -1350,7 +1433,7 @@
       clearConvError();
       try {
         const fd = new FormData();
-        fd.append("insurer_type", "life");
+        fd.append("insurer_type", ACTIVE_INSURER_TYPE);
         fd.append("insurer", insurerVal);
         const res = await fetch(CONVERSION_RESET_URL, {
           method: "POST",
@@ -1440,7 +1523,7 @@
         if (el.tagName === "INPUT") el.value = "";
       });
       if (modalInsurer) {
-        populateLifeInsurerSelect(modalInsurer, "선택", { excludeIbk: true });
+        populateModalInsurerSelect(modalInsurer, "선택", { excludeIbk: true });
       }
 
       const replaceMode = document.getElementById("re-modal-normalize-mode-replace");
@@ -1456,7 +1539,7 @@
   if (convModal) {
     convModal.addEventListener("show.bs.modal", function () {
       if (convInsurer) {
-        populateLifeInsurerSelect(convInsurer, "선택", { excludeIbk: true });
+        populateModalInsurerSelect(convInsurer, "선택", { excludeIbk: true });
       }
       setConvEditMode(false);
       convEditSnapshot = [];

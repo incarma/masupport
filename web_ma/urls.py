@@ -4,12 +4,16 @@ URL configuration for web_ma project.
 
 # django_ma/web_ma/urls.py
 
+import os
+
 from django.contrib.auth import views as auth_views
 from django.urls import include, path
 
 from accounts.custom_admin import custom_admin_site
 from accounts.views import SessionCloseLoginView
 from web_ma.views import healthz, landing_view
+
+_ADMIN_PATH = os.environ.get("ADMIN_URL_PATH", "admin")
 
 
 # ✅ 500 에러 핸들러(운영에서 traceback 강제 로깅용)
@@ -36,7 +40,7 @@ urlpatterns = [
     # ---------------------------------------------------------------------
     # Admin (custom admin site)
     # ---------------------------------------------------------------------
-    path("admin/", custom_admin_site.urls),
+    path(f"{_ADMIN_PATH}/", custom_admin_site.urls),
 
     # ---------------------------------------------------------------------
     # Home
