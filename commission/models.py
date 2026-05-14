@@ -604,10 +604,12 @@ class RateExample(models.Model):
 
     # ── 손생 구분 ────────────────────────────────────────────
     TYPE_LIFE    = "life"
-    TYPE_NONLIFE = "nonlife"
+    # 손해보험 canonical key.
+    # 프로젝트 용어 기준으로 nonlife가 아니라 fire를 SSOT로 사용한다.
+    TYPE_FIRE = "fire"
     TYPE_CHOICES = [
         (TYPE_LIFE,    "생명보험"),
-        (TYPE_NONLIFE, "손해보험"),
+        (TYPE_FIRE,    "손해보험"),
     ]
 
     # ── 구분 ─────────────────────────────────────────────────

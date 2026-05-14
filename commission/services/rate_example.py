@@ -10,7 +10,8 @@ logger = logging.getLogger(__name__)
 
 _ALLOWED_INSURERS = {
     RateExample.TYPE_LIFE:    set(RateExample.LIFE_INSURERS),
-    RateExample.TYPE_NONLIFE: set(RateExample.NONLIFE_INSURERS),
+    # 손해보험 canonical key는 nonlife가 아니라 fire를 사용한다.
+    RateExample.TYPE_FIRE: set(RateExample.NONLIFE_INSURERS),
 }
 
 
@@ -47,7 +48,7 @@ class RateExampleService:
              or {"ok": False, "message": str}
         뷰에서 직접 ORM 접근 금지 — 반드시 이 메서드 경유.
         """
-        if insurer_type not in (RateExample.TYPE_LIFE, RateExample.TYPE_NONLIFE):
+        if insurer_type not in (RateExample.TYPE_LIFE, RateExample.TYPE_FIRE):
             return {"ok": False, "message": "손생 구분 값이 올바르지 않습니다."}
         if category not in (RateExample.CAT_CONV, RateExample.CAT_PAY):
             return {"ok": False, "message": "구분 값이 올바르지 않습니다."}

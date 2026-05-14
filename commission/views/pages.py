@@ -342,10 +342,13 @@ def rate_example_home(request):
     # -------------------------------------------------------------------------
     # 보험 구분 페이지네이션 상태
     # - 기본값은 기존 화면과 동일하게 생명보험(life)
-    # - 손해보험(nonlife)은 동일 템플릿/JS 기능을 공유하되 insurer_type만 분기
+    # - 손해보험(fire)은 동일 템플릿/JS 기능을 공유하되 insurer_type만 분기
     # -------------------------------------------------------------------------
     active_insurer_type = (request.GET.get("insurer_type") or "life").strip()
-    if active_insurer_type not in {"life", "nonlife"}:
+    if active_insurer_type == "nonlife":
+        active_insurer_type = "fire"
+
+    if active_insurer_type not in {"life", "fire"}:
         active_insurer_type = "life"
 
     examples = RateExampleService.list_all()

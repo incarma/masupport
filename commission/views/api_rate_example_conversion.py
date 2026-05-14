@@ -131,7 +131,7 @@ def rate_example_conversion_list(request):
     insurer = (request.GET.get("insurer") or "").strip()
     category = RateExample.CAT_CONV
 
-    if insurer_type not in (RateExample.TYPE_LIFE, RateExample.TYPE_NONLIFE):
+    if insurer_type not in (RateExample.TYPE_LIFE, RateExample.TYPE_FIRE):
         return _json_error("손생구분 값이 올바르지 않습니다.", status=400)
     if not insurer:
         return _json_error("보험사를 선택해 주세요.", status=400)

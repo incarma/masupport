@@ -32,6 +32,8 @@ import logging
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from openpyxl import load_workbook
+from commission.models import RateExample
+from commission.services.rate_example_normalizers.fire_pay import build_fire_pay_rows
 
 logger = logging.getLogger(__name__)
 
@@ -224,11 +226,39 @@ def normalize_pay_rate_example(
         "append" : 기존 행 유지 후 신규 행만 추가
     """
     # 늦은 import — 순환 참조 방지
-    from commission.models import RateExamplePayRow  # noqa: PLC0415
+    from commission.models import RateExamplePayRow
 
     if not example.file:
         logger.warning("pay normalizer: file field is empty. pk=%s", example.pk)
         return 0
+    
+    # ── 손해보험(fire) 지급률 정규화 ───────────────────────────────
+    # 생보 지급률 고정 레이아웃과 손보 지급률 레이아웃이 다르므로
+    # fire는 전용 parser로 위임한다.
+    if example.insurer_type == RateExample.TYPE_FIRE:
+        normalized = build_fire_pay_rows(example)
+
+        if normalize_mode == "replace":
+            deleted_count, _ = RateExamplePayRow.objects.filter(
+                insurer_type=RateExample.TYPE_FIRE,
+                category="pay",
+            ).delete()
+            logger.info(
+                "fire pay normalizer: replace mode — deleted %d rows. pk=%s",
+                deleted_count,
+                example.pk,
+            )
+
+        if normalized:
+            RateExamplePayRow.objects.bulk_create(normalized, batch_size=500)
+
+        logger.info(
+            "fire pay normalizer: created %d rows. pk=%s normalize_mode=%s",
+            len(normalized),
+            example.pk,
+            normalize_mode,
+        )
+        return len(normalized)
 
     fname = str(example.original_name or "").lower()
     if not fname.endswith(".xlsx"):
