@@ -6,6 +6,7 @@ RateExample 계산 입력용 옵션 조회 API.
 
 역할:
 - 수수료 예시표 메인 테이블에서 보험사/상품명/구분/납기 연동 옵션 제공
+- 생명보험(life) / 손해보험(nonlife) 탭 상태를 insurer_type으로 받아 동일 API에서 분기
 - 정규화 master(RateExampleConversionRow)를 직접 노출하지 않고
   필요한 distinct option만 JSON으로 반환한다.
 
@@ -29,6 +30,17 @@ from commission.views.utils_json import _json_ok, _json_error
 logger = logging.getLogger(__name__)
 
 
+def _normalize_insurer_type(value: str) -> str:
+    """
+    보험 구분 QueryString 정규화.
+
+    - life/nonlife만 허용한다.
+    - 미입력/오입력은 기존 생명보험 페이지 동작 보장을 위해 life로 fallback한다.
+    """
+    value = (value or "life").strip()
+    return value if value in {"life", "nonlife"} else "life"
+
+
 @require_GET
 @grade_required("superuser", forbidden_template=None)
 def rate_example_options(request):
@@ -37,6 +49,7 @@ def rate_example_options(request):
 
     QueryString:
     - kind=insurers|products|plan_types|pay_periods
+    - insurer_type=life|nonlife
     - insurer=보험사
     - product_name=상품명
     - plan_type=구분
@@ -50,8 +63,11 @@ def rate_example_options(request):
     }
     """
     try:
+        insurer_type = _normalize_insurer_type(request.GET.get("insurer_type"))
+
         query = RateExampleOptionQuery(
             kind=(request.GET.get("kind") or "").strip(),
+            insurer_type=insurer_type,
             insurer=(request.GET.get("insurer") or "").strip(),
             product_name=(request.GET.get("product_name") or "").strip(),
             plan_type=(request.GET.get("plan_type") or "").strip(),

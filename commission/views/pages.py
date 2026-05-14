@@ -339,11 +339,21 @@ def rate_example_home(request):
     업로드/다운로드/삭제 API 뷰(api_rate_example.py)는 superuser 고정이므로
     이 파일 수정만으로 분리가 완성된다.
     """
+    # -------------------------------------------------------------------------
+    # 보험 구분 페이지네이션 상태
+    # - 기본값은 기존 화면과 동일하게 생명보험(life)
+    # - 손해보험(nonlife)은 동일 템플릿/JS 기능을 공유하되 insurer_type만 분기
+    # -------------------------------------------------------------------------
+    active_insurer_type = (request.GET.get("insurer_type") or "life").strip()
+    if active_insurer_type not in {"life", "nonlife"}:
+        active_insurer_type = "life"
+
     examples = RateExampleService.list_all()
     context = {
         "examples":         examples,
         "life_insurers":    RateExample.LIFE_INSURERS,
         "nonlife_insurers": RateExample.NONLIFE_INSURERS,
+        "active_insurer_type": active_insurer_type,
         "upload_url":       reverse("commission:rate_example_upload"),
         "options_url":      reverse("commission:rate_example_options"),
         "calculate_url": reverse("commission:rate_example_calculate"),

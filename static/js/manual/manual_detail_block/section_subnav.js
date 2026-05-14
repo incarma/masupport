@@ -170,7 +170,11 @@ export function createSectionSubnavManager({
         titleTextEl.textContent = "(소제목 없음)";
         titleTextEl.classList.add("empty");
       }
-      rebuildSubnavFromDOM(); // ✅ 소제목 변경 즉시 Subnav 반영
+      if (window.ManualDetailSubnav?.rebuild) {
+        window.ManualDetailSubnav.rebuild();
+      } else {
+        rebuildSubnavFromDOM();
+      } // ✅ 소제목 변경 즉시 Subnav 반영
     };
 
     const save = async () => {
@@ -220,13 +224,21 @@ export function createSectionSubnavManager({
       const data = await api.json(sectionDeleteUrl, { section_id: Number(sectionId) });
 
       sectionEl?.remove();
-      rebuildSubnavFromDOM(); // ✅ 삭제 즉시 Subnav 반영
+      if (window.ManualDetailSubnav?.rebuild) {
+        window.ManualDetailSubnav.rebuild();
+      } else {
+        rebuildSubnavFromDOM();
+      } // ✅ 삭제 즉시 Subnav 반영
 
       // 마지막 섹션 삭제 시 서버가 기본 섹션 생성해서 new_section 반환
       if (data?.new_section?.id && isDigits(data.new_section.id)) {
         const newSec = buildSectionElement(Number(data.new_section.id), data.new_section.title || "");
         sectionsEl.appendChild(newSec);
-        rebuildSubnavFromDOM(); // ✅ 기본 섹션 생성 반영
+        if (window.ManualDetailSubnav?.rebuild) {
+          window.ManualDetailSubnav.rebuild();
+        } else {
+          rebuildSubnavFromDOM();
+        } // ✅ 기본 섹션 생성 반영
         newSec.scrollIntoView({ behavior: "smooth", block: "nearest" });
       }
     } catch (e) {
@@ -266,7 +278,11 @@ export function createSectionSubnavManager({
         const newSectionEl = buildSectionElement(Number(sid), "");
         sectionsEl.appendChild(newSectionEl);
 
-        rebuildSubnavFromDOM(); // ✅ 추가 즉시 Subnav 반영
+        if (window.ManualDetailSubnav?.rebuild) {
+          window.ManualDetailSubnav.rebuild();
+        } else {
+          rebuildSubnavFromDOM();
+        } // ✅ 추가 즉시 Subnav 반영
         newSectionEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
       } catch (err) {
         console.error(err);

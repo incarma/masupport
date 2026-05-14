@@ -11,7 +11,6 @@ from audit.constants import ACTION
 from audit.services import log_action
 
 from ..models import ManualBlock, ManualSection
-from ..utils.sanitize import sanitize_quill_html
 from ..utils.uploads import validate_manual_image
 from ..utils import block_to_dict, fail, is_digits, json_body, ok, ensure_superuser_or_403
 
@@ -26,7 +25,7 @@ def manual_block_add_ajax(request):
 
     manual_id = request.POST.get("manual_id")
     section_id = request.POST.get("section_id")
-    content = sanitize_quill_html(request.POST.get("content", ""))
+    content = request.POST.get("content", "")  # sanitize는 ManualBlock.save()가 처리
     image = request.FILES.get("image")
 
     if image:
@@ -71,7 +70,7 @@ def manual_block_update_ajax(request):
         return denied
 
     block_id = request.POST.get("block_id")
-    content = sanitize_quill_html(request.POST.get("content", ""))
+    content = request.POST.get("content", "")  # sanitize는 ManualBlock.save()가 처리
     remove_image = request.POST.get("remove_image", "0")
     image = request.FILES.get("image")
 

@@ -28,6 +28,16 @@
     document.getElementById("nonlife-insurers-data").textContent
   );
 
+  // ── 현재 보험 구분 페이지 상태 ────────────────────────────────────────
+  // 기본값은 기존 화면과 동일한 생명보험(life)이다.
+  const ACTIVE_INSURER_TYPE = ["life", "nonlife"].includes(root.dataset.activeInsurerType)
+    ? root.dataset.activeInsurerType
+    : "life";
+
+  function getActiveInsurers() {
+    return ACTIVE_INSURER_TYPE === "nonlife" ? NONLIFE_INSURERS : LIFE_INSURERS;
+  }
+
   // =========================================================================
   // 메인 계산 입력 UI
   // =========================================================================
@@ -177,6 +187,8 @@
     Object.entries(params || {}).forEach(function ([key, value]) {
       if (value) url.searchParams.set(key, value);
     });
+    // 생명보험/손해보험 탭 상태를 옵션 API에 전달한다.
+    url.searchParams.set("insurer_type", ACTIVE_INSURER_TYPE);
     const res = await fetch(url.toString(), {
       method: "GET",
       credentials: "same-origin",
@@ -377,7 +389,7 @@
         const menu = row?.querySelector(".re-insurer-menu");
         activeComboInput = insurerInput;
         activeComboMenu = menu;
-        renderComboMenu(insurerInput, menu, LIFE_INSURERS, insurerInput.value);
+        renderComboMenu(insurerInput, menu, getActiveInsurers(), insurerInput.value);
         return;
       }
 
@@ -409,7 +421,7 @@
         const menu = rowEls(row).insurerMenu;
         activeComboInput = insurerInput;
         activeComboMenu = menu;
-        renderComboMenu(insurerInput, menu, LIFE_INSURERS, insurerInput.value);
+        renderComboMenu(insurerInput, menu, getActiveInsurers(), insurerInput.value);
         return;
       }
 
@@ -547,6 +559,7 @@
       pay_period: isIbk ? "" : (els.period?.value || "").trim(),
       premium: parseMoneyInput(premiumInput?.value || ""),
       commission_rate: String(commissionRateInput?.value || "").trim(),
+      insurer_type: ACTIVE_INSURER_TYPE,
     };
   }
 

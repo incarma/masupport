@@ -23,7 +23,9 @@
 /* ==========================================================
  1) Badges & list helpers
 ========================================================== */
-.manual-badge-admin{
+/* 배지: 목록(.manual-list-container)과 상세(#manual-detail) 양쪽에 사용 */
+.manual-list-container .manual-badge-admin,
+#manual-detail .manual-badge-admin{
   background: var(--inka-blue) !important;
   color: #fff !important;
   border-radius: 999px;
@@ -31,7 +33,8 @@
   padding: 4px 10px;
 }
 
-.manual-badge-staff{
+.manual-list-container .manual-badge-staff,
+#manual-detail .manual-badge-staff{
   background: #dc3545 !important;
   color: #fff !important;
   border-radius: 999px;
@@ -39,12 +42,13 @@
   padding: 4px 10px;
 }
 
-/* Sortable helpers */
-.sortable-ghost { opacity: 0.6; }
-.manual-sort-ghost { opacity: 0.5; }
-.manual-sort-chosen { cursor: grabbing !important; }
+/* Sortable helpers — 실제 사용 컨테이너로 스코핑 */
+#manualListGroup .sortable-ghost,
+#manualSections .sortable-ghost { opacity: 0.6; }
+#manualSections .manual-sort-ghost { opacity: 0.5; }
+#manualSections .manual-sort-chosen { cursor: grabbing !important; }
 
-a.manual-item.manual-editing { background: #fbfdff; }
+#manualListGroup a.manual-item.manual-editing { background: #fbfdff; }
 
 
 /* ==========================================================
@@ -140,7 +144,9 @@ a.manual-item.manual-editing { background: #fbfdff; }
 /* ==========================================================
  3) Manual Detail (manual_detail.html)
 ========================================================== */
-/* Navbar dropdown이 subnav에 가려지지 않도록 */
+/* manual 페이지 전용: sticky subnav(z-index:1020)에 가려지지 않도록 z-index 보정.
+   navbar는 base.html에 있어 #manual-detail 하위로 스코핑 불가.
+   manual.css는 app_css 블록 경유로 manual 페이지에서만 로드되므로 실질적 전역 오염 없음. */
 .navbar .dropdown-menu{
   z-index: 1040 !important;
 }

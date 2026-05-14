@@ -5,6 +5,8 @@ from __future__ import annotations
 from django.shortcuts import get_object_or_404, redirect, render
 
 from accounts.decorators import grade_required, not_inactive_required
+from audit.constants import ACTION
+from audit.services import log_action
 
 from ..forms import ManualForm
 from ..models import Manual
@@ -63,6 +65,7 @@ def manual_create(request):
             obj = form.save(commit=False)
             obj.author = request.user
             obj.save()
+            log_action(request, ACTION.MANUAL_CREATE, obj=obj, meta={"title": obj.title})
             return redirect("manual:manual_detail", pk=obj.pk)
     else:
         form = ManualForm()
@@ -79,6 +82,7 @@ def manual_edit(request, pk):
         form = ManualForm(request.POST, instance=obj)
         if form.is_valid():
             form.save()
+            log_action(request, ACTION.MANUAL_UPDATE, obj=obj, meta={"title": obj.title})
             return redirect("manual:manual_detail", pk=obj.pk)
     else:
         form = ManualForm(instance=obj)

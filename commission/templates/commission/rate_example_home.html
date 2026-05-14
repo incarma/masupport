@@ -19,6 +19,7 @@
      data-conversion-reset-url="{{ conversion_reset_url }}"
      data-pay-list-url="{{ pay_list_url }}"
      data-pay-reset-url="{{ pay_reset_url }}"
+     data-active-insurer-type="{{ active_insurer_type|default:'life' }}"
      data-user-grade="{{ request.user.grade }}">
 
   <h3 class="fw-bold text-center mb-4 commission-title">수수료 예시표</h3>
@@ -27,74 +28,99 @@
   {{ life_insurers|json_script:"life-insurers-data" }}
   {{ nonlife_insurers|json_script:"nonlife-insurers-data" }}
 
-  <!-- ── 필터 카드 ──────────────────────────────────────────────────── -->
+  <!-- ── 보험 구분 페이지네이션 ──────────────────────────────────────── -->
+  <ul class="nav nav-pills re-insurer-type-tabs mb-3" aria-label="보험 구분">
+    <li class="nav-item">
+      <a class="nav-link re-insurer-type-link {% if active_insurer_type|default:'life' == 'life' %}active{% endif %}"
+         href="{% url 'commission:rate_example_home' %}?insurer_type=life"
+         {% if active_insurer_type|default:'life' == 'life' %}aria-current="page"{% endif %}
+         data-insurer-type-link="life">
+        생명보험
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link re-insurer-type-link {% if active_insurer_type == 'nonlife' %}active{% endif %}"
+         href="{% url 'commission:rate_example_home' %}?insurer_type=nonlife"
+         {% if active_insurer_type == 'nonlife' %}aria-current="page"{% endif %}
+         data-insurer-type-link="nonlife">
+        손해보험
+      </a>
+    </li>
+  </ul>
+
+  <!-- ── 관리자 도구 카드 ────────────────────────────────────────────── -->
+  {% if is_superuser %}
   <div class="card shadow border-0 rounded-4 p-3 mb-3">
-    <div class="row g-2 align-items-end">
-      <div class="col-6 col-md-2">
-        <label class="form-label mb-1 fw-semibold">수수료율(%)</label>
-        <input type="number" class="form-control form-control-sm"
-               id="re-commission-rate"
-               min="1" max="100" step="1"
-               inputmode="numeric"
-               placeholder="예: 70">
-      </div>
-      <div class="col-6 col-md-3">
-        <label class="form-label mb-1 fw-semibold">보험료</label>
-        <input type="text" class="form-control form-control-sm"
-               id="re-premium"
-               inputmode="numeric"
-               placeholder="예: 100,000">
-      </div>
-      <div class="col-12 col-md-2 d-grid">
-        <button type="button" class="btn btn-primary btn-sm"
-                id="re-btn-calc-search">
-          조회
-        </button>
-      </div>
-      {% if is_superuser %}
-      <div class="col-12 col-md-auto ms-md-auto mt-2 mt-md-0">
-        <div class="d-flex flex-nowrap gap-2 justify-content-end">
-          <button class="btn btn-success btn-sm text-nowrap"
-                  data-bs-toggle="modal"
-                  data-bs-target="#rateExampleUploadModal">
-            환산율 업데이트
-          </button>
-          <button class="btn btn-primary btn-sm text-nowrap"
-                  id="re-btn-open-pay-upload"
-                  data-bs-toggle="modal"
-                  data-bs-target="#rateExamplePayUploadModal">
-            지급률 업데이트
-          </button>
-          <button class="btn btn-outline-secondary btn-sm text-nowrap"
-                  id="re-btn-open-conv"
-                  data-bs-toggle="modal"
-                  data-bs-target="#rateExampleConvModal">
-            환산율 확인
-          </button>
-          <button class="btn btn-outline-secondary btn-sm text-nowrap"
-                  id="re-btn-open-pay"
-                  data-bs-toggle="modal"
-                  data-bs-target="#rateExamplePayModal">
-            지급률 확인
-          </button>
-        </div>
-      </div>
-      {% endif %}
+    <div class="d-flex flex-wrap gap-2 justify-content-end">
+      <button class="btn btn-success btn-sm text-nowrap"
+              data-bs-toggle="modal"
+              data-bs-target="#rateExampleUploadModal">
+        환산율 업데이트
+      </button>
+      <button class="btn btn-primary btn-sm text-nowrap"
+              id="re-btn-open-pay-upload"
+              data-bs-toggle="modal"
+              data-bs-target="#rateExamplePayUploadModal">
+        지급률 업데이트
+      </button>
+      <button class="btn btn-outline-secondary btn-sm text-nowrap"
+              id="re-btn-open-conv"
+              data-bs-toggle="modal"
+              data-bs-target="#rateExampleConvModal">
+        환산율 확인
+      </button>
+      <button class="btn btn-outline-secondary btn-sm text-nowrap"
+              id="re-btn-open-pay"
+              data-bs-toggle="modal"
+              data-bs-target="#rateExamplePayModal">
+        지급률 확인
+      </button>
     </div>
   </div>
+  {% endif %}
 
   <!-- ── 목록 카드 ──────────────────────────────────────────────────── -->
   <div class="card shadow border-0 rounded-4 p-3 mb-3 re-calc-card">
-    <div class="d-flex justify-content-end gap-2 mb-2">
-      <button type="button" class="btn btn-outline-primary btn-sm" id="re-btn-add-row">
-        행 추가
-      </button>
-      <button type="button" class="btn btn-outline-danger btn-sm" id="re-btn-delete-row">
-        행 삭제
-      </button>
-      <button type="button" class="btn btn-outline-secondary btn-sm" id="re-btn-reset-rows">
-        초기화
-      </button>
+    <div class="re-warning-banner mb-3">
+      보험사 또는 본사의 수수료 규정 변경, 수수료 산출 및 정산조건의 변동 등으로 실제 수수료와 일치하지 않을 수 있습니다.
+    </div>
+
+    <div class="re-calc-toolbar mb-2">
+      <div class="re-calc-toolbar-left">
+        <div class="re-calc-control">
+          <label class="form-label mb-1 fw-semibold">수수료율(%)</label>
+          <input type="number" class="form-control form-control-sm"
+                 id="re-commission-rate"
+                 min="1" max="100" step="1"
+                 inputmode="numeric"
+                 placeholder="예: 70">
+        </div>
+        <div class="re-calc-control re-calc-control-premium">
+          <label class="form-label mb-1 fw-semibold">보험료</label>
+          <input type="text" class="form-control form-control-sm"
+                 id="re-premium"
+                 inputmode="numeric"
+                 placeholder="예: 100,000">
+        </div>
+        <div class="re-calc-control re-calc-control-button">
+          <button type="button" class="btn btn-primary btn-sm"
+                  id="re-btn-calc-search">
+            조회
+          </button>
+        </div>
+      </div>
+
+      <div class="re-calc-toolbar-right">
+        <button type="button" class="btn btn-outline-primary btn-sm" id="re-btn-add-row">
+          행 추가
+        </button>
+        <button type="button" class="btn btn-outline-danger btn-sm" id="re-btn-delete-row">
+          행 삭제
+        </button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="re-btn-reset-rows">
+          초기화
+        </button>
+      </div>
     </div>
     <div class="re-calc-table-wrap">
       <table class="table table-sm table-bordered align-middle mb-0" id="re-calc-table">
