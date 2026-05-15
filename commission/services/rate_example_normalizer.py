@@ -79,7 +79,9 @@ from commission.services.rate_example_normalizers.life_heungkuk import (
 from commission.services.rate_example_normalizers.life_hanhwa import (
     build_life_hanhwa_conversion_rows,
 )
-
+from commission.services.rate_example_normalizers.fire_db import (
+    build_fire_db_conversion_rows,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -125,15 +127,22 @@ def normalize_rate_example(
         )
         return normalize_pay_rate_example(example, normalize_mode=normalize_mode)
 
-    if not (
+    is_life_conv_target = (
         example.insurer_type == RateExample.TYPE_LIFE
         and example.category == RateExample.CAT_CONV
         and example.insurer in {
             "ABL", "DB", "IM", "KB", "KDB", "교보", "농협", "동양",
             "라이나", "메트", "미래", "삼성", "신한", "처브", "카디프",
             "푸본현대", "하나", "한화", "흥국",
-        }  # conv 대상 보험사
-    ):
+        }
+    )
+    is_fire_conv_target = (
+        example.insurer_type == RateExample.TYPE_FIRE
+        and example.category == RateExample.CAT_CONV
+        and example.insurer in {"DB"}
+    )
+
+    if not (is_life_conv_target or is_fire_conv_target):
         return 0
 
     if not example.file:
@@ -288,10 +297,20 @@ def normalize_rate_example(
 
     normalized_rows: list[RateExampleConversionRow] = []
 
+    # ── DB 손해보험 수정률 정규화 ────────────────────────────────
+    # DB 손보 규칙:
+    # - 각 시트의 "1. 수정률(GA)" 테이블만 정규화
+    # - A열 "2. 수금수수료율" 행 포함 이하 제외
+    # - 상품명은 시트명
+    # - 수정률은 raw 셀 값을 그대로 저장
+    #   예: Excel 내부값 2.4 → DB Decimal("2.4") 저장
+    if example.insurer_type == RateExample.TYPE_FIRE and example.insurer == "DB":
+        normalized_rows.extend(build_fire_db_conversion_rows(example, wb))
+
     # ── ABL 생명 환산율/수정률 정규화 ─────────────────────────────
     # 보험사별 parser는 rate_example_normalizers/life_*.py에 둔다.
     # 이 파일은 workbook 로드, 보험사 분기, 기존 master 교체만 담당한다.
-    if example.insurer == "ABL":
+    elif example.insurer == "ABL":
         normalized_rows.extend(build_life_abl_conversion_rows(example, wb))
 
     # ── DB 생명 환산율/수정률 정규화 ──────────────────────────────

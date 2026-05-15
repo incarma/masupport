@@ -2,13 +2,7 @@
 
 from django.urls import path
 
-"""
-✅ 주의: manual/views.py(모듈) 제거 후에는
-`manual.views`는 '패키지(manual/views/)' 를 가리키게 된다.
-따라서 여기서는 반드시 'from . import views' (패키지)로 사용.
-"""
-
-from . import views  # manual/views/__init__.py (re-export)
+from . import views
 
 app_name = "manual"
 
@@ -35,7 +29,11 @@ urlpatterns = [
     # Section (AJAX)
     # ---------------------------------------------------------------------
     path("ajax/section-add/", views.manual_section_add_ajax, name="manual_section_add_ajax"),
-    path("ajax/section-title/update/", views.manual_section_title_update_ajax, name="manual_section_title_update_ajax"),
+    path(
+        "ajax/section-title/update/",
+        views.manual_section_title_update_ajax,
+        name="manual_section_title_update_ajax",
+    ),
     path("ajax/section/delete/", views.manual_section_delete_ajax, name="manual_section_delete_ajax"),
     path("ajax/section-reorder/", views.manual_section_reorder_ajax, name="manual_section_reorder_ajax"),
 
@@ -51,8 +49,16 @@ urlpatterns = [
     # ---------------------------------------------------------------------
     # Block Attachments (AJAX)
     # ---------------------------------------------------------------------
-    path("ajax/block-attachment/upload/", views.manual_block_attachment_upload_ajax, name="manual_block_attachment_upload_ajax"),
-    path("ajax/block-attachment/delete/", views.manual_block_attachment_delete_ajax, name="manual_block_attachment_delete_ajax"),
+    path(
+        "ajax/block-attachment/upload/",
+        views.manual_block_attachment_upload_ajax,
+        name="manual_block_attachment_upload_ajax",
+    ),
+    path(
+        "ajax/block-attachment/delete/",
+        views.manual_block_attachment_delete_ajax,
+        name="manual_block_attachment_delete_ajax",
+    ),
 
     # ---------------------------------------------------------------------
     # Protected Files

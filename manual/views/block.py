@@ -12,7 +12,16 @@ from audit.services import log_action
 
 from ..models import ManualBlock, ManualSection
 from ..utils.uploads import validate_manual_image
-from ..utils import block_to_dict, fail, is_digits, json_body, ok, ensure_superuser_or_403
+from ..utils import (
+    block_to_dict,
+    fail,
+    is_digits,
+    json_body,
+    ok,
+    ensure_superuser_or_403,
+    clean_reorder_ids,
+    update_sort_order,
+)
 
 
 @require_POST
@@ -164,12 +173,17 @@ def manual_block_reorder_ajax(request):
 
     section = get_object_or_404(ManualSection, pk=int(section_id))
 
-    if not all(is_digits(bid) for bid in block_ids):
-        return fail("block_ids 형식이 올바르지 않습니다.", 400)
-
-    cleaned = [int(bid) for bid in block_ids]
-    if len(cleaned) != len(set(cleaned)):
-        return fail("중복된 블록 ID가 포함되어 있습니다.", 400)
+    # ✅ block_ids 검증 공통화
+    # 기능 변화 0:
+    # - block_ids 형식 오류 메시지 유지
+    # - 중복 블록 ID 오류 메시지 유지
+    cleaned, err = clean_reorder_ids(
+        block_ids,
+        label="block_ids",
+        duplicate_message="중복된 블록 ID가 포함되어 있습니다.",
+    )
+    if err:
+        return fail(err, 400)
 
     existing = set(
         ManualBlock.objects
@@ -181,8 +195,8 @@ def manual_block_reorder_ajax(request):
         return fail("현재 섹션의 블록 목록과 요청값이 일치하지 않습니다.", 400)
 
     with transaction.atomic():
-        for idx, bid in enumerate(cleaned, start=1):
-            ManualBlock.objects.filter(id=bid).update(sort_order=idx)
+        # ✅ 기존과 동일하게 sort_order 1부터 저장
+        update_sort_order(ManualBlock, cleaned)
 
     log_action(
         request,
@@ -226,13 +240,25 @@ def manual_block_move_ajax(request):
     if from_sec.manual_id != to_sec.manual_id:
         return fail("서로 다른 매뉴얼 간 이동은 허용되지 않습니다.", 400)
 
-    if not all(is_digits(x) for x in from_block_ids):
+    # ✅ 이동 전/후 블록 목록 검증 공통화
+    # 기능 변화 0:
+    # - from_block_ids / to_block_ids 오류 메시지 유지
+    # - 중복 검증은 전체 목록 합산 기준으로 기존처럼 별도 수행
+    cleaned_from, err = clean_reorder_ids(
+        from_block_ids,
+        label="from_block_ids",
+        duplicate_message="중복된 블록 ID가 포함되어 있습니다.",
+    )
+    if err:
         return fail("from_block_ids 형식이 올바르지 않습니다.", 400)
-    if not all(is_digits(x) for x in to_block_ids):
-        return fail("to_block_ids 형식이 올바르지 않습니다.", 400)
 
-    cleaned_from = [int(x) for x in from_block_ids]
-    cleaned_to = [int(x) for x in to_block_ids]
+    cleaned_to, err = clean_reorder_ids(
+        to_block_ids,
+        label="to_block_ids",
+        duplicate_message="중복된 블록 ID가 포함되어 있습니다.",
+    )
+    if err:
+        return fail("to_block_ids 형식이 올바르지 않습니다.", 400)
 
     all_requested = cleaned_from + cleaned_to
     if len(all_requested) != len(set(all_requested)):
@@ -253,11 +279,18 @@ def manual_block_move_ajax(request):
     with transaction.atomic():
         ManualBlock.objects.filter(id__in=cleaned_to).update(section_id=to_sid)
 
-        for idx, bid in enumerate(cleaned_from, start=1):
-            ManualBlock.objects.filter(id=bid, section_id=from_sid).update(sort_order=idx)
-
-        for idx, bid in enumerate(cleaned_to, start=1):
-            ManualBlock.objects.filter(id=bid, section_id=to_sid).update(sort_order=idx)
+        # ✅ 양쪽 섹션 sort_order를 같은 transaction 안에서 저장
+        # manual 가이드의 “블록 이동 트랜잭션 필수” 규약 유지
+        update_sort_order(
+            ManualBlock,
+            cleaned_from,
+            extra_filter={"section_id": from_sid},
+        )
+        update_sort_order(
+            ManualBlock,
+            cleaned_to,
+            extra_filter={"section_id": to_sid},
+        )
 
     log_action(
         request,

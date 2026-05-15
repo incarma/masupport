@@ -55,6 +55,10 @@ def rate_example_options(request):
     - insurer=보험사
     - product_name=상품명
     - plan_type=구분
+    
+    참고:
+    - 프론트 UI 용어는 "상품군"으로 표기하지만
+      내부 필드명은 coverage_type 유지.
 
     Response:
     {

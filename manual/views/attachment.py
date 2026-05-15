@@ -4,10 +4,9 @@ from __future__ import annotations
 
 import logging
 import os
-from urllib.parse import quote
 
 from django.contrib.auth.decorators import login_required
-from django.http import FileResponse, Http404
+from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.utils.cache import patch_cache_control
 from django.views.decorators.http import require_POST
@@ -16,7 +15,7 @@ from audit.constants import ACTION
 from audit.services import log_action
 
 from ..models import ManualBlock, ManualBlockAttachment
-from ..utils import fail, is_digits, json_body, ok, to_str, ensure_superuser_or_403, attachment_to_dict
+from ..utils import fail, is_digits, json_body, ok, to_str, ensure_superuser_or_403, attachment_to_dict, open_manual_fileresponse
 from ..utils.permissions import manual_accessible_or_denied
 from ..utils.uploads import validate_manual_attachment
 
@@ -114,11 +113,17 @@ def manual_attachment_download(request, attachment_id: int):
         raise Http404("파일이 없습니다.")
 
     filename = a.original_name or os.path.basename(a.file.name)
-    quoted = quote(filename)
 
     try:
-        response = FileResponse(a.file.open("rb"), as_attachment=True, filename=filename)
-        response["Content-Disposition"] = f"attachment; filename*=UTF-8''{quoted}"
+        # ✅ 기능 변화 0:
+        # - 권한 검증 후 FileResponse 제공
+        # - RFC5987 한글 파일명 헤더 유지
+        # - 파일 직접 URL 노출 없음
+        response = open_manual_fileresponse(
+            a.file,
+            filename=filename,
+            as_attachment=True,
+        )
 
         log_action(
             request,
@@ -127,7 +132,7 @@ def manual_attachment_download(request, attachment_id: int):
             meta={"block_id": a.block_id, "manual_id": manual.id, "name": filename, "size": a.size},
         )
         return response
-    except FileNotFoundError:
+    except Http404:
         logger.exception("Manual attachment file missing. attachment_id=%s", attachment_id)
         raise Http404("파일을 찾을 수 없습니다.")
 
@@ -149,9 +154,14 @@ def manual_block_image(request, block_id: int):
         raise Http404("이미지가 없습니다.")
 
     try:
-        response = FileResponse(b.image.open("rb"), as_attachment=False)
-        patch_cache_control(response, private=True, max_age=3600)
-        return response
-    except FileNotFoundError:
+        # ✅ 기능 변화 0:
+        # - 기존처럼 inline 이미지 응답
+        # - private cache-control 유지
+        return open_manual_fileresponse(
+            b.image,
+            as_attachment=False,
+            cache_private_seconds=3600,
+        )
+    except Http404:
         logger.exception("Manual block image missing. block_id=%s", block_id)
         raise Http404("이미지를 찾을 수 없습니다.")

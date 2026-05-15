@@ -140,18 +140,23 @@
             <th rowspan="2" class="text-center re-th-plan">구분</th>
             <th rowspan="2" class="text-center re-th-period">납기</th>
             <th colspan="2" class="text-center">초회</th>
-            <th colspan="7" class="text-center">계속분</th>
+            <th colspan="{% if active_insurer_type == 'fire' %}4{% else %}7{% endif %}" class="text-center">계속분</th>
             <th colspan="2" class="text-center">총량</th>
           </tr>
           <tr>
             <th class="text-center">익월</th>
             <th class="text-center">익월 소계</th>
             <th class="text-center">13회</th>
+            {% if active_insurer_type == 'fire' %}
+            <th class="text-center">14회</th>
+            <th class="text-center">15회</th>
+            {% else %}
             <th class="text-center">2차년</th>
             <th class="text-center">3차년</th>
             <th class="text-center">36회</th>
             <th class="text-center">37회</th>
             <th class="text-center">4차년</th>
+            {% endif %}
             <th class="text-center">계속 소계</th>
             <th class="text-center">금액</th>
             <th class="text-center">비율</th>
@@ -198,9 +203,11 @@
             <td class="text-end re-calc-placeholder">-</td>
             <td class="text-end re-calc-placeholder">-</td>
             <td class="text-end re-calc-placeholder">-</td>
+            {% if active_insurer_type != 'fire' %}
             <td class="text-end re-calc-placeholder">-</td>
             <td class="text-end re-calc-placeholder">-</td>
             <td class="text-end re-calc-placeholder">-</td>
+            {% endif %}
           </tr>
         </tbody>
       </table>
@@ -433,12 +440,16 @@
 
         <div class="re-conv-filter-bar mb-2">
           <div class="re-conv-filter-item">
-            <label class="form-label mb-1">보종</label>
-            <select class="form-select form-select-sm re-conv-filter" id="re-conv-filter-coverage" data-filter-key="coverage_type">
+            <label class="form-label mb-1">
+              {% if active_insurer_type == 'fire' %}상품군{% else %}보종{% endif %}
+            </label>
+            <select class="form-select form-select-sm re-conv-filter"
+                    id="re-conv-filter-coverage"
+                    data-filter-key="coverage_type">
               <option value="">전체</option>
             </select>
           </div>
-          <div class="re-conv-filter-item">
+          <div class="re-conv-filter-item {% if active_insurer_type == 'fire' %}d-none{% endif %}">
             <label class="form-label mb-1">전략유무</label>
             <select class="form-select form-select-sm re-conv-filter" id="re-conv-filter-strategy" data-filter-key="strategy_flag">
               <option value="">전체</option>
@@ -473,6 +484,17 @@
 
         <div class="table-responsive re-conv-table-wrap">
           <table class="table table-sm table-bordered align-middle mb-0" id="re-conv-table">
+            {% if active_insurer_type == 'fire' %}
+            <!-- 손해보험 수정률 확인: 실제 표시 컬럼만 colgroup에 둔다. 빈 우측 영역 방지. -->
+            <colgroup>
+              <col class="re-conv-col-check re-conv-edit-only d-none">
+              <col class="re-conv-col-coverage">
+              <col class="re-conv-col-product">
+              <col class="re-conv-col-plan">
+              <col class="re-conv-col-period">
+              <col class="re-conv-col-rate">
+            </colgroup>
+            {% else %}
             <colgroup>
               <col class="re-conv-col-check re-conv-edit-only d-none">
               <col class="re-conv-col-coverage">
@@ -485,13 +507,14 @@
               <col class="re-conv-col-rate">
               <col class="re-conv-col-rate">
             </colgroup>
+            {% endif %}
             <thead class="table-light">
               <tr>
                 <th class="text-center re-conv-edit-only d-none">선택</th>
                 <th class="text-center">
-                  <button type="button" class="re-sort-btn" data-sort-key="coverage_type">보종</button>
+                  <button type="button" class="re-sort-btn" data-sort-key="coverage_type">상품군</button>
                 </th>
-                <th class="text-center">
+                <th class="text-center {% if active_insurer_type == 'fire' %}d-none{% endif %}">
                   <button type="button" class="re-sort-btn" data-sort-key="strategy_flag">전략유무</button>
                 </th>
                 <th>
@@ -503,15 +526,19 @@
                 <th class="text-center">
                   <button type="button" class="re-sort-btn" data-sort-key="pay_period">납기</button>
                 </th>
+                {% if active_insurer_type == 'fire' %}
+                <th class="text-end">수정률</th>
+                {% else %}
                 <th class="text-end">1차년</th>
                 <th class="text-end">2차년</th>
                 <th class="text-end">3차년</th>
                 <th class="text-end">4차년</th>
+                {% endif %}
               </tr>
             </thead>
             <tbody id="re-conv-tbody">
               <tr>
-                <td colspan="10" class="text-center text-muted py-3">
+                <td colspan="{% if active_insurer_type == 'fire' %}6{% else %}10{% endif %}" class="text-center text-muted py-3">
                   보험사를 선택 후 조회해 주세요.
                 </td>
               </tr>

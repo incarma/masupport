@@ -604,6 +604,10 @@
   font-size: 0.78rem;
 }
 
+#rate-example-root[data-active-insurer-type="fire"] #re-calc-table {
+  min-width: 1280px;
+}
+
 #rate-example-root #re-calc-table .re-th-check {
   width: 48px;
 }
@@ -804,6 +808,12 @@
   min-width: 0;
   table-layout: fixed;
   font-size: 0.66rem !important;
+}
+
+/* 손해보험 수정률 확인 모달: 보험사 | 상품군 | 상품명 | 구분 | 납기 | 수정률 */
+#rate-example-root[data-active-insurer-type="fire"] ~ #rateExampleConvModal #re-conv-table,
+#rateExampleConvModal #re-conv-table:has([data-field="mod_rate"]) {
+  min-width: 980px;
 }
 
 #rateExampleConvModal #re-conv-table th,

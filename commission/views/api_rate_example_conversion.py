@@ -80,6 +80,27 @@ def _format_rate_percent(value) -> str:
     return f"{text}%"
 
 
+def _format_fire_mod_rate_percent(value) -> str:
+    """
+    손해보험 수정률 화면 표시용 포맷.
+
+    저장 정책:
+    - DB에는 raw 배율값 그대로 저장한다.
+      예: raw 2.4 → Decimal("2.4")
+
+    표시 정책:
+    - 사용자 화면에서는 2.4를 240%로 표시한다.
+    """
+    if value is None:
+        return ""
+
+    shown = value * 100
+    text = _format_decimal(shown)
+    if not text:
+        return ""
+    return f"{text}%"
+
+
 def _format_percent_decimal(value) -> str:
     """
     백분율 기준으로 저장된 환산율 값을 화면 표시용 문자열로 변환한다.
@@ -153,9 +174,12 @@ def rate_example_conversion_list(request):
     latest_file = latest_row.source_file if latest_row else None
     latest_uploader = getattr(latest_file, "uploaded_by", None) if latest_file else None
 
-    rows = [
-        {
+    rows = []
+    for row in qs:
+        is_fire = row.insurer_type == RateExample.TYPE_FIRE
+        item = {
             "id": row.id,
+            "insurer": row.insurer,
             "coverage_type": row.coverage_type,
             "strategy_flag": row.strategy_flag,
             "product_name": row.product_name,
@@ -165,11 +189,19 @@ def rate_example_conversion_list(request):
             "year2": _format_rate_percent(row.year2),
             "year3": _format_rate_percent(row.year3),
             "year4": _format_rate_percent(row.year4),
+            # 손보 수정률은 DB 저장값 2.4를 화면에서 240%로 보여준다.
+            "mod_rate": (
+                _format_fire_mod_rate_percent(row.year1)
+                if is_fire
+                else _format_rate_percent(row.year1)
+            ),
+            # 수정 모드에서는 DB 저장 단위(raw 배율값)를 그대로 보여줘야 한다.
+            # 예: 표시 240%, 수정 입력값 2.4
+            "mod_rate_raw": _format_decimal(row.year1),
             "source_sheet": row.source_sheet,
             "source_row_no": row.source_row_no,
         }
-        for row in qs
-    ]
+        rows.append(item)
 
     return _json_ok(
         "조회되었습니다.",

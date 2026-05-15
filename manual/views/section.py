@@ -12,7 +12,17 @@ from audit.services import log_action
 
 from ..constants import SECTION_TITLE_MAX_LEN
 from ..models import Manual, ManualSection
-from ..utils import ensure_default_section, fail, is_digits, json_body, ok, to_str, ensure_superuser_or_403
+from ..utils import (
+    ensure_default_section,
+    fail,
+    is_digits,
+    json_body,
+    ok,
+    to_str,
+    ensure_superuser_or_403,
+    clean_reorder_ids,
+    update_sort_order,
+)
 
 
 @require_POST
@@ -140,12 +150,17 @@ def manual_section_reorder_ajax(request):
 
     manual = get_object_or_404(Manual, pk=int(manual_id))
 
-    if not all(is_digits(sid) for sid in section_ids):
-        return fail("section_ids 형식이 올바르지 않습니다.", 400)
-
-    cleaned = [int(sid) for sid in section_ids]
-    if len(cleaned) != len(set(cleaned)):
-        return fail("중복된 섹션 ID가 포함되어 있습니다.", 400)
+    # ✅ section_ids 검증 공통화
+    # 기능 변화 0:
+    # - 숫자 아닌 값 차단
+    # - 중복 섹션 ID 차단
+    cleaned, err = clean_reorder_ids(
+        section_ids,
+        label="section_ids",
+        duplicate_message="중복된 섹션 ID가 포함되어 있습니다.",
+    )
+    if err:
+        return fail(err, 400)
 
     existing = set(
         ManualSection.objects
@@ -157,8 +172,8 @@ def manual_section_reorder_ajax(request):
         return fail("현재 매뉴얼의 섹션 목록과 요청값이 일치하지 않습니다.", 400)
 
     with transaction.atomic():
-        for idx, sid in enumerate(cleaned, start=1):
-            ManualSection.objects.filter(id=sid).update(sort_order=idx)
+        # ✅ 기존과 동일하게 sort_order 1부터 저장
+        update_sort_order(ManualSection, cleaned)
 
     log_action(
         request,
