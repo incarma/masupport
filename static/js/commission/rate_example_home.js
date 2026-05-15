@@ -105,6 +105,11 @@
   const btnResetRows = document.getElementById("re-btn-reset-rows");
   const MAX_CALC_ROWS = 10;
   const IBK_INSURER = "IBK";
+  /*
+   * coverage_type:
+   * 기존 용어 "보종" → 전 화면 공통 "상품군"으로 통일.
+   * DB 필드명은 coverage_type 유지(SSOT/마이그레이션 영향 방지).
+   */
   const CONV_COVERAGE_CHOICES = [
     "종신,CI",
     "연금",
@@ -600,7 +605,16 @@
 
   function renderCalcResult(row, data) {
     const cells = getResultCells(row);
-    const values = [
+    const values = isNonlifePage() ? [
+      formatMoneyValue(data.next_month_first),
+      formatMoneyValue(data.next_month_subtotal),
+      formatMoneyValue(data.month_13),
+      formatMoneyValue(data.month_14),
+      formatMoneyValue(data.month_15),
+      formatMoneyValue(data.renewal_subtotal),
+      formatMoneyValue(data.total_amount),
+      formatRatioValue(data.total_ratio),
+    ] : [
       formatMoneyValue(data.next_month_first),
       formatMoneyValue(data.next_month_subtotal),
       formatMoneyValue(data.month_13),
@@ -618,12 +632,16 @@
       td.textContent = values[idx] || "-";
       td.classList.remove("re-calc-placeholder", "re-calc-amount", "re-calc-na", "re-calc-total", "re-calc-subtotal");
 
-      if (idx === 1 || idx === 8) {
+      const subtotalIndexes = isNonlifePage() ? [1, 5] : [1, 8];
+      const totalStartIndex = isNonlifePage() ? 6 : 9;
+      const renewalAmountIndexes = isNonlifePage() ? [2, 3, 4] : [2, 3, 4, 5, 6, 7];
+
+      if (subtotalIndexes.includes(idx)) {
         td.classList.add("re-calc-subtotal");
-      } else if (idx >= 9) {
+      } else if (idx >= totalStartIndex) {
         // 총합 금액 / 비율: 하늘색 바탕 + 남색 굵은 폰트 유지
         td.classList.add("re-calc-total");
-      } else if ([2, 3, 4, 5, 6, 7].includes(idx)) {
+      } else if (renewalAmountIndexes.includes(idx)) {
         // 13회 / 2차년 / 3차년 / 36회 / 37회	/ 4차년
         // 익월과 동일하게 흰색 바탕 + 굵은 글씨
         td.classList.add("re-calc-amount");
@@ -734,7 +752,7 @@
     if (!rows || rows.length === 0) {
       convTbody.innerHTML = `
         <tr>
-          <td colspan="10" class="text-center text-muted py-3">
+          <td colspan="${isNonlifePage() ? 6 : 10}" class="text-center text-muted py-3">
             조회된 정규화 데이터가 없습니다.
           </td>
         </tr>`;
@@ -743,6 +761,21 @@
 
     convTbody.innerHTML = rows.map(function (row) {
       if (convEditMode) {
+        if (isNonlifePage()) {
+          return `
+            <tr class="re-conv-edit-row" data-row-id="${escapeHtml(row.id || "")}">
+              <td class="text-center">
+                <input type="checkbox" class="form-check-input re-conv-row-check" aria-label="행 선택">
+              </td>
+              <td>${convCoverageInput(row)}</td>
+              <td>${convInputCell(row, "product_name")}</td>
+              <td>${convInputCell(row, "plan_type")}</td>
+              <td>${convInputCell(row, "pay_period")}</td>
+              <td>${convInputCell(Object.assign({}, row, {
+                mod_rate: row.mod_rate_raw || row.mod_rate
+              }), "mod_rate", "text-end")}</td>
+            </tr>`;
+        }
         return `
           <tr class="re-conv-edit-row" data-row-id="${escapeHtml(row.id || "")}">
             <td class="text-center">
@@ -760,10 +793,22 @@
           </tr>`;
       }
 
+      if (isNonlifePage()) {
+        return `
+          <tr>
+            <td class="text-center re-conv-edit-only d-none"></td>
+            <td class="text-center">${ellipsisCell(row.coverage_type, "상품군")}</td>
+            <td>${ellipsisCell(row.product_name, "상품명", "re-product-name")}</td>
+            <td class="text-center">${ellipsisCell(row.plan_type, "구분")}</td>
+            <td class="text-center">${ellipsisCell(row.pay_period, "납기")}</td>
+            <td class="text-end re-rate-num">${escapeHtml(row.mod_rate || row.year1)}</td>
+          </tr>`;
+      }
+
       return `
         <tr>
           <td class="text-center re-conv-edit-only d-none"></td>
-          <td class="text-center">${ellipsisCell(row.coverage_type, "보종")}</td>
+          <td class="text-center">${ellipsisCell(row.coverage_type, "상품군")}</td>
           <td class="text-center">${strategySelect(row.id, row.strategy_flag)}</td>
           <td>${ellipsisCell(row.product_name, "상품명", "re-product-name")}</td>
           <td class="text-center">${ellipsisCell(row.plan_type, "구분")}</td>
@@ -1021,14 +1066,14 @@
 
       return [
         row.coverage_type,
-        row.strategy_flag,
+        isNonlifePage() ? "" : row.strategy_flag,
         row.product_name,
         row.plan_type,
         row.pay_period,
-        row.year1,
-        row.year2,
-        row.year3,
-        row.year4,
+        row.mod_rate || row.year1,
+        isNonlifePage() ? "" : row.year2,
+        isNonlifePage() ? "" : row.year3,
+        isNonlifePage() ? "" : row.year4,
       ].some(function (value) {
         return String(value || "").toLowerCase().includes(keyword);
       });
@@ -1193,7 +1238,7 @@
       if (convTbody) {
         convTbody.innerHTML = `
           <tr>
-            <td colspan="9" class="text-center text-muted py-3">
+            <td colspan="${isNonlifePage() ? 6 : 10}" class="text-center text-muted py-3">
               조회 중입니다...
             </td>
           </tr>`;
@@ -1346,18 +1391,29 @@
   if (convBtnAddRow) {
     convBtnAddRow.addEventListener("click", function () {
       if (!convEditMode) return;
-      convRowsOriginal.push({
-        id: "",
-        coverage_type: "",
-        strategy_flag: "",
-        product_name: "",
-        plan_type: "",
-        pay_period: "",
-        year1: "",
-        year2: "",
-        year3: "",
-        year4: "",
-      });
+      if (isNonlifePage()) {
+        convRowsOriginal.push({
+          id: "",
+          coverage_type: "",
+          product_name: "",
+          plan_type: "",
+          pay_period: "",
+          mod_rate: "",
+        });
+      } else {
+        convRowsOriginal.push({
+          id: "",
+          coverage_type: "",
+          strategy_flag: "",
+          product_name: "",
+          plan_type: "",
+          pay_period: "",
+          year1: "",
+          year2: "",
+          year3: "",
+          year4: "",
+        });
+      }
       applyConvView();
     });
   }
@@ -1466,7 +1522,7 @@
         if (convTbody) {
           convTbody.innerHTML = `
             <tr>
-              <td colspan="9" class="text-center text-muted py-3">
+              <td colspan="${isNonlifePage() ? 6 : 10}" class="text-center text-muted py-3">
                 ${json.message || "데이터가 삭제되었습니다."}
               </td>
             </tr>`;
@@ -1567,7 +1623,7 @@
       if (convTbody) {
         convTbody.innerHTML = `
           <tr>
-            <td colspan="9" class="text-center text-muted py-3">
+            <td colspan="${isNonlifePage() ? 6 : 10}" class="text-center text-muted py-3">
               보험사를 선택 후 조회해 주세요.
             </td>
           </tr>`;
@@ -1835,7 +1891,7 @@
         resetPayFilters();
         if (payTbody) {
           payTbody.innerHTML =
-            `<tr><td colspan="10" class="text-center text-muted py-3">${json.message || "데이터가 삭제되었습니다."}</td></tr>`;
+            `<tr><td colspan="${isNonlifePage() ? 8 : 10}" class="text-center text-muted py-3">${json.message || "데이터가 삭제되었습니다."}</td></tr>`;
         }
         if (payCountLabel) payCountLabel.textContent = "";
       } catch (err) {

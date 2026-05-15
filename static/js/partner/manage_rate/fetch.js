@@ -328,9 +328,11 @@ function ensureMainDT() {
     scrollX: false,
     destroy: false,
 
+    dom: "<'rate-dt-top d-flex align-items-center mb-2'<''l><'ms-auto'f>>rt<'rate-dt-bottom d-flex align-items-center mt-2'<''i><'ms-auto'p>>",
     language: {
       emptyTable: "데이터가 없습니다.",
       search: "검색:",
+      searchPlaceholder: "검색어 입력",
       lengthMenu: "_MENU_개씩 보기",
       info: "_TOTAL_건 중 _START_ ~ _END_",
       infoEmpty: "0건",

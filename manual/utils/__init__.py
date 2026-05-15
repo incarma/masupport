@@ -20,9 +20,20 @@ from .permissions import (
     manual_accessible_or_denied,
     filter_manuals_for_user,
 )
-from .rules import ensure_default_section, access_to_flags
+from .rules import (
+    ensure_default_section,
+    access_to_flags,
+    clean_reorder_ids,
+    update_sort_order,
+)
 from .serializers import attachment_to_dict, block_to_dict
 from .parsing import to_str, is_digits
+from .files import open_manual_fileresponse
+from .reorder import (
+    clean_ordered_ids,
+    require_same_id_set,
+    update_sort_order_rows,
+)
 
 __all__ = [
     "json_body",
@@ -36,8 +47,14 @@ __all__ = [
     "filter_manuals_for_user",
     "ensure_default_section",
     "access_to_flags",
+    "clean_reorder_ids",
+    "update_sort_order",
     "attachment_to_dict",
     "block_to_dict",
     "to_str",
     "is_digits",
+    "open_manual_fileresponse",
+    "clean_ordered_ids",
+    "require_same_id_set",
+    "update_sort_order_rows",
 ]

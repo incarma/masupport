@@ -126,18 +126,33 @@ def _latest_source_file(insurer_type: str, insurer: str) -> RateExample:
 def _row_payload_to_fields(row_data: dict) -> dict:
     """
     프론트 row payload를 모델 필드 dict로 변환한다.
+
+    주의:
+    - UI 용어는 "상품군"으로 통일했지만
+      DB SSOT 필드명은 coverage_type 유지.
     """
+    insurer_type = _clean(row_data.get("_insurer_type"))
+
     fields = {
         "coverage_type": _clean(row_data.get("coverage_type")),
         "strategy_flag": _clean(row_data.get("strategy_flag")),
         "product_name": _clean(row_data.get("product_name")),
         "plan_type": _clean(row_data.get("plan_type")),
         "pay_period": _clean(row_data.get("pay_period")),
-        "year1": _to_decimal_or_none(row_data.get("year1"), field_name="1차년"),
+        "year1": _to_decimal_or_none(
+            row_data.get("mod_rate", row_data.get("year1")),
+            field_name="수정률" if insurer_type == RateExample.TYPE_FIRE else "1차년",
+        ),
         "year2": _to_decimal_or_none(row_data.get("year2"), field_name="2차년"),
         "year3": _to_decimal_or_none(row_data.get("year3"), field_name="3차년"),
         "year4": _to_decimal_or_none(row_data.get("year4"), field_name="4차년"),
     }
+
+    if insurer_type == RateExample.TYPE_FIRE:
+        fields["strategy_flag"] = ""
+        fields["year2"] = None
+        fields["year3"] = None
+        fields["year4"] = None
 
     if fields["strategy_flag"] not in STRATEGY_CHOICES:
         raise RateExampleConversionEditError("전략유무 값이 올바르지 않습니다.")
@@ -215,6 +230,7 @@ def bulk_edit_conversion_rows(*, payload: dict, actor) -> dict:
         if not isinstance(row_data, dict):
             raise RateExampleConversionEditError("row 데이터 형식이 올바르지 않습니다.")
 
+        row_data["_insurer_type"] = insurer_type
         fields = _row_payload_to_fields(row_data)
         row_id = _clean(row_data.get("id"))
 

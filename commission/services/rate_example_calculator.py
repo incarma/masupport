@@ -42,6 +42,7 @@ class RateExampleCalcError(ValueError):
 
 @dataclass(frozen=True)
 class CalcInput:
+    insurer_type: str
     insurer: str
     product_name: str
     plan_type: str
@@ -165,6 +166,12 @@ def _normalize_plan_type(value: Any) -> str:
 
 
 def _parse_input(payload: dict[str, Any]) -> CalcInput:
+    insurer_type = _normalize_text(payload.get("insurer_type") or RateExample.TYPE_LIFE)
+    if insurer_type == "nonlife":
+        insurer_type = RateExample.TYPE_FIRE
+    if insurer_type not in {RateExample.TYPE_LIFE, RateExample.TYPE_FIRE}:
+        insurer_type = RateExample.TYPE_LIFE
+
     insurer = _normalize_text(payload.get("insurer"))
     product_name = _normalize_text(payload.get("product_name"))
     plan_type = _normalize_plan_type(payload.get("plan_type"))
@@ -191,6 +198,7 @@ def _parse_input(payload: dict[str, Any]) -> CalcInput:
         raise RateExampleCalcError("수수료율은 0보다 커야 합니다.")
 
     return CalcInput(
+        insurer_type=insurer_type,
         insurer=insurer,
         product_name=product_name,
         plan_type=plan_type,
@@ -211,7 +219,7 @@ def _get_conversion_row(data: CalcInput) -> RateExampleConversionRow:
     row = (
         RateExampleConversionRow.objects
         .filter(
-            insurer_type=RateExample.TYPE_LIFE,
+            insurer_type=data.insurer_type,
             category=RateExample.CAT_CONV,
             insurer=data.insurer,
             product_name=data.product_name,
@@ -231,7 +239,7 @@ def _get_conversion_row(data: CalcInput) -> RateExampleConversionRow:
         row = (
             RateExampleConversionRow.objects
             .filter(
-                insurer_type=RateExample.TYPE_LIFE,
+                insurer_type=data.insurer_type,
                 category=RateExample.CAT_CONV,
                 insurer=data.insurer,
                 product_name=data.product_name,
@@ -249,7 +257,7 @@ def _get_conversion_row(data: CalcInput) -> RateExampleConversionRow:
     candidates = (
         RateExampleConversionRow.objects
         .filter(
-            insurer_type=RateExample.TYPE_LIFE,
+            insurer_type=data.insurer_type,
             category=RateExample.CAT_CONV,
             insurer=data.insurer,
         )
@@ -283,17 +291,18 @@ def _get_conversion_row(data: CalcInput) -> RateExampleConversionRow:
         target_period,
     )
 
-    raise RateExampleCalcError("계산에 필요한 환산율 정규화 데이터가 없습니다.")
+    label = "수정률" if data.insurer_type == RateExample.TYPE_FIRE else "환산율"
+    raise RateExampleCalcError(f"계산에 필요한 {label} 정규화 데이터가 없습니다.")
 
 
-def _get_pay_row(insurer: str, coverage_type: str) -> RateExamplePayRow:
+def _get_pay_row(insurer: str, coverage_type: str, *, insurer_type: str = RateExample.TYPE_LIFE) -> RateExamplePayRow:
     if not coverage_type:
         raise RateExampleCalcError("지급률 조회에 필요한 상품군 정보가 없습니다.")
 
     row = (
         RateExamplePayRow.objects
         .filter(
-            insurer_type=RateExample.TYPE_LIFE,
+            insurer_type=insurer_type,
             category=RateExample.CAT_PAY,
             insurer=insurer,
             tier=DEFAULT_PAY_TIER,
@@ -337,6 +346,56 @@ def _get_ibk_pay_row(product_name: str) -> RateExamplePayRow:
 
     coverage_type = product if product.startswith(IBK_PREFIX) else f"{IBK_PREFIX}{product}"
     return _get_pay_row("IBK", coverage_type)
+
+
+def _build_fire_result(*, data: CalcInput, conv: RateExampleConversionRow, pay: RateExamplePayRow) -> dict[str, Any]:
+    """
+    손해보험 전용 계산.
+    수정률은 RateExampleConversionRow.year1 단일값을 사용한다.
+    주의:
+    - 손해보험 수정률은 생보 환산율처럼 240을 저장하지 않는다.
+    - DB 손보 raw가 2.4이면 DB에도 Decimal("2.4") 그대로 저장한다.
+    - 따라서 계산 시 /100 하지 않고 2.4를 배율로 직접 사용한다.
+    지급률 매핑:
+    - 초회: col_first
+    - 13회: col_yr2
+    - 14회: col_yr3
+    - 15회: col_m36
+    """
+    mod_multiplier = Decimal(conv.year1) if conv.year1 is not None else None
+
+    def amount(pay_rate):
+        return _amount_or_none_with_conversion_multiplier(
+            premium=data.premium,
+            conversion_multiplier=mod_multiplier,   
+            pay_rate=pay_rate,
+            commission_rate=data.commission_rate,
+        )
+
+    next_month_first = amount(pay.col_first)
+    next_month_subtotal = next_month_first or 0
+    month_13 = amount(pay.col_yr2)
+    month_14 = amount(pay.col_yr3)
+    month_15 = amount(pay.col_m36)
+    renewal_subtotal = _sum_optional(month_13, month_14, month_15)
+    total_amount = next_month_subtotal + renewal_subtotal
+
+    return {
+        "insurer": data.insurer,
+        "product_name": data.product_name,
+        "plan_type": data.plan_type,
+        "pay_period": data.pay_period,
+        "coverage_type": conv.coverage_type,
+        "pay_coverage_type": conv.coverage_type,
+        "next_month_first": next_month_first,
+        "next_month_subtotal": next_month_subtotal,
+        "month_13": month_13,
+        "month_14": month_14,
+        "month_15": month_15,
+        "renewal_subtotal": renewal_subtotal,
+        "total_amount": total_amount,
+        "total_ratio": _ratio_round((Decimal(total_amount) / data.premium) * Decimal("100")),
+    }
 
 
 def _sum_optional(*values: int | None) -> int:
@@ -521,8 +580,13 @@ def calculate_rate_example_commission(payload: dict[str, Any]) -> dict[str, Any]
         )
 
     conv = _get_conversion_row(data)
+
+    if data.insurer_type == RateExample.TYPE_FIRE:
+        pay = _get_pay_row(data.insurer, conv.coverage_type, insurer_type=RateExample.TYPE_FIRE)
+        return _build_fire_result(data=data, conv=conv, pay=pay)
+
     pay_coverage_type = _resolve_pay_coverage_type(conv)
-    pay = _get_pay_row(data.insurer, pay_coverage_type)
+    pay = _get_pay_row(data.insurer, pay_coverage_type, insurer_type=RateExample.TYPE_LIFE)
 
     return _build_result(
         data=data,

@@ -21,6 +21,8 @@ from ..utils import (
     ok,
     to_str,
     ensure_superuser_or_403,
+    clean_reorder_ids,
+    update_sort_order,
 )
 
 
@@ -153,21 +155,26 @@ def manual_reorder_ajax(request):
     payload = json_body(request)
     ordered_ids = payload.get("ordered_ids") or []
 
-    if (not isinstance(ordered_ids, list)) or (not all(is_digits(x) for x in ordered_ids)):
-        return fail("ordered_ids 형식이 올바르지 않습니다.", 400)
-
-    ordered_ids = [int(x) for x in ordered_ids]
-
-    if len(ordered_ids) != len(set(ordered_ids)):
-        return fail("중복된 매뉴얼 ID가 포함되어 있습니다.", 400)
+    # ✅ 정렬 요청 ID 검증 공통화
+    # 기능 변화 0:
+    # - ordered_ids 형식 오류 메시지 유지
+    # - 중복 매뉴얼 ID 오류 메시지 유지
+    ordered_ids, err = clean_reorder_ids(
+        ordered_ids,
+        label="ordered_ids",
+        duplicate_message="중복된 매뉴얼 ID가 포함되어 있습니다.",
+    )
+    if err:
+        return fail(err, 400)
 
     exist_count = Manual.objects.filter(id__in=ordered_ids).count()
     if exist_count != len(ordered_ids):
         return fail("존재하지 않는 매뉴얼이 포함되어 있습니다.", 400)
 
     with transaction.atomic():
-        for idx, mid in enumerate(ordered_ids, start=1):
-            Manual.objects.filter(id=mid).update(sort_order=idx)
+        # ✅ sort_order 저장 공통화
+        # 기존과 동일하게 1부터 순서 저장
+        update_sort_order(Manual, ordered_ids)
 
     log_action(
         request,

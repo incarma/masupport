@@ -71,6 +71,9 @@ from commission.services.rate_example_normalizers.life_hanhwa import (
 from commission.services.rate_example_normalizers.fire_pay import (
     build_fire_pay_rows,
 )
+from commission.services.rate_example_normalizers.fire_db import (
+    build_fire_db_conversion_rows,
+)
 
 __all__ = [
     "build_life_abl_conversion_rows",
@@ -95,4 +98,5 @@ __all__ = [
     "build_life_heungkuk_pdf_conversion_rows",
     "build_life_hanhwa_conversion_rows",
     "build_fire_pay_rows",
+    "build_fire_db_conversion_rows",
 ]

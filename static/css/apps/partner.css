@@ -1556,3 +1556,272 @@
     max-width: 100%;
   }
 }
+
+/* ==========================================================
+  16) STRUCTURE: DataTables 컨트롤 레이아웃 + 정렬 UX
+  - jquery.dataTables.min.css 기반; float 무력화 + Bootstrap 5 스타일 통합
+  - dom 옵션의 .structure-dt-top(flex) 레이아웃을 CSS로 보강
+========================================================== */
+
+/* float 무력화 (jquery.dataTables.min.css 기본 float 제거) */
+#manage-structure #mainTable_wrapper .dataTables_length,
+#manage-structure #mainTable_wrapper .dataTables_filter {
+  float: none !important;
+  white-space: nowrap;
+}
+#manage-structure #mainTable_wrapper .dataTables_info,
+#manage-structure #mainTable_wrapper .dataTables_paginate {
+  float: none !important;
+  clear: none !important;
+  padding-top: 0;
+}
+
+/* 개수선택 label/select — Bootstrap 5 form-select 스타일 */
+#manage-structure #mainTable_wrapper .dataTables_length label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 0;
+  font-size: .875rem;
+  font-weight: 500;
+}
+#manage-structure #mainTable_wrapper .dataTables_length select {
+  display: inline-block;
+  width: auto;
+  padding: .25rem 1.75rem .25rem .5rem;
+  font-size: .875rem;
+  border: 1px solid #dee2e6;
+  border-radius: .375rem;
+  background-color: #fff;
+  appearance: auto;
+}
+
+/* 검색 label/input — Bootstrap 5 form-control 스타일 */
+#manage-structure #mainTable_wrapper .dataTables_filter label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 0;
+  font-size: .875rem;
+  font-weight: 500;
+}
+#manage-structure #mainTable_wrapper .dataTables_filter input[type="search"] {
+  display: inline-block;
+  width: 180px;
+  padding: .25rem .5rem;
+  font-size: .875rem;
+  border: 1px solid #dee2e6;
+  border-radius: .375rem;
+  background-color: #fff;
+  outline: none;
+  margin-left: 0;
+}
+#manage-structure #mainTable_wrapper .dataTables_filter input[type="search"]:focus {
+  border-color: #86b7fe;
+  box-shadow: 0 0 0 .2rem rgba(13,110,253,.25);
+}
+
+/* 정보 텍스트 */
+#manage-structure #mainTable_wrapper .dataTables_info {
+  font-size: .8125rem;
+  color: #6c757d;
+}
+
+/* 페이지네이션 */
+#manage-structure #mainTable_wrapper .dataTables_paginate {
+  text-align: right;
+}
+#manage-structure #mainTable_wrapper .dataTables_paginate .paginate_button {
+  display: inline-block;
+  padding: .25rem .5rem;
+  font-size: .8125rem;
+  border: 1px solid #dee2e6;
+  border-radius: .25rem;
+  margin: 0 1px;
+  cursor: pointer;
+  background: #fff;
+  color: #005BAC !important;
+}
+#manage-structure #mainTable_wrapper .dataTables_paginate .paginate_button:hover {
+  background: #e9ecef;
+}
+#manage-structure #mainTable_wrapper .dataTables_paginate .paginate_button.current {
+  background: #005BAC;
+  border-color: #005BAC;
+  color: #fff !important;
+  font-weight: 600;
+}
+#manage-structure #mainTable_wrapper .dataTables_paginate .paginate_button.disabled {
+  color: #adb5bd !important;
+  cursor: default;
+  pointer-events: none;
+}
+
+/* -------------------------------------------------------
+   정렬 화살표: partner.css의 overflow:hidden 충돌 보정
+   - position:relative(DataTables 추가) + overflow:visible 필요
+   - padding-right:26px(DataTables) 보장
+------------------------------------------------------- */
+#manage-structure #mainTable thead th.sorting,
+#manage-structure #mainTable thead th.sorting_asc,
+#manage-structure #mainTable thead th.sorting_desc {
+  cursor: pointer !important;
+  overflow: visible !important;          /* 화살표 ::before/::after 클리핑 방지 */
+  padding-right: 26px !important;        /* 화살표 공간 확보 */
+  user-select: none;
+}
+
+/* 정렬 중인 컬럼 헤더 강조 */
+#manage-structure #mainTable thead th.sorting_asc,
+#manage-structure #mainTable thead th.sorting_desc {
+  color: #005BAC;
+}
+
+/* 정렬 불가 헤더: 커서 기본값 유지 */
+#manage-structure #mainTable thead th:not(.sorting):not(.sorting_asc):not(.sorting_desc) {
+  cursor: default;
+}
+
+/* ==========================================================
+  17) RATE: DataTables 컨트롤 레이아웃 + 정렬 UX
+  - Section 16(Structure)의 #manage-rate 버전
+========================================================== */
+
+/* 컨트롤바 flex 레이아웃 명시 (Bootstrap d-flex 보강) */
+#manage-rate #mainTable_wrapper .rate-dt-top {
+  display: flex !important;
+  align-items: center;
+  flex-wrap: nowrap;
+  width: 100%;
+  gap: 8px;
+}
+
+#manage-rate #mainTable_wrapper .rate-dt-bottom {
+  display: flex !important;
+  align-items: center;
+  flex-wrap: nowrap;
+  width: 100%;
+}
+
+/* 검색창 오른쪽 정렬 */
+#manage-rate #mainTable_wrapper .rate-dt-top .ms-auto {
+  margin-left: auto !important;
+}
+#manage-rate #mainTable_wrapper .rate-dt-bottom .ms-auto {
+  margin-left: auto !important;
+}
+
+/* float 무력화 */
+#manage-rate #mainTable_wrapper .dataTables_length,
+#manage-rate #mainTable_wrapper .dataTables_filter {
+  float: none !important;
+  white-space: nowrap;
+}
+#manage-rate #mainTable_wrapper .dataTables_info,
+#manage-rate #mainTable_wrapper .dataTables_paginate {
+  float: none !important;
+  clear: none !important;
+  padding-top: 0;
+}
+
+/* 개수선택 label/select */
+#manage-rate #mainTable_wrapper .dataTables_length label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 0;
+  font-size: .875rem;
+  font-weight: 500;
+}
+#manage-rate #mainTable_wrapper .dataTables_length select {
+  display: inline-block;
+  width: auto;
+  padding: .25rem 1.75rem .25rem .5rem;
+  font-size: .875rem;
+  border: 1px solid #dee2e6;
+  border-radius: .375rem;
+  background-color: #fff;
+  appearance: auto;
+}
+
+/* 검색 label/input */
+#manage-rate #mainTable_wrapper .dataTables_filter label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 0;
+  font-size: .875rem;
+  font-weight: 500;
+}
+#manage-rate #mainTable_wrapper .dataTables_filter input[type="search"] {
+  display: inline-block;
+  width: 180px;
+  padding: .25rem .5rem;
+  font-size: .875rem;
+  border: 1px solid #dee2e6;
+  border-radius: .375rem;
+  background-color: #fff;
+  outline: none;
+  margin-left: 0;
+}
+#manage-rate #mainTable_wrapper .dataTables_filter input[type="search"]:focus {
+  border-color: #86b7fe;
+  box-shadow: 0 0 0 .2rem rgba(13,110,253,.25);
+}
+
+/* 정보 텍스트 */
+#manage-rate #mainTable_wrapper .dataTables_info {
+  font-size: .8125rem;
+  color: #6c757d;
+}
+
+/* 페이지네이션 */
+#manage-rate #mainTable_wrapper .dataTables_paginate {
+  text-align: right;
+}
+#manage-rate #mainTable_wrapper .dataTables_paginate .paginate_button {
+  display: inline-block;
+  padding: .25rem .5rem;
+  font-size: .8125rem;
+  border: 1px solid #dee2e6;
+  border-radius: .25rem;
+  margin: 0 1px;
+  cursor: pointer;
+  background: #fff;
+  color: #005BAC !important;
+}
+#manage-rate #mainTable_wrapper .dataTables_paginate .paginate_button:hover {
+  background: #e9ecef;
+}
+#manage-rate #mainTable_wrapper .dataTables_paginate .paginate_button.current {
+  background: #005BAC;
+  border-color: #005BAC;
+  color: #fff !important;
+  font-weight: 600;
+}
+#manage-rate #mainTable_wrapper .dataTables_paginate .paginate_button.disabled {
+  color: #adb5bd !important;
+  cursor: default;
+  pointer-events: none;
+}
+
+/* 정렬 화살표: overflow:hidden 충돌 보정 */
+#manage-rate #mainTable thead th.sorting,
+#manage-rate #mainTable thead th.sorting_asc,
+#manage-rate #mainTable thead th.sorting_desc {
+  cursor: pointer !important;
+  overflow: visible !important;
+  padding-right: 26px !important;
+  user-select: none;
+}
+
+/* 정렬 중인 컬럼 헤더 강조 */
+#manage-rate #mainTable thead th.sorting_asc,
+#manage-rate #mainTable thead th.sorting_desc {
+  color: #005BAC;
+}
+
+/* 정렬 불가 헤더: 커서 기본값 유지 */
+#manage-rate #mainTable thead th:not(.sorting):not(.sorting_asc):not(.sorting_desc) {
+  cursor: default;
+}
