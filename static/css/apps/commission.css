@@ -798,6 +798,57 @@
   max-width: 1560px;
 }
 
+/* 생명보험 환산율 확인/수정 모달 전용 폭 축소
+   - 기존 상품명 컬럼 39% → 31%: 약 20% 축소
+   - 축소분만큼 모달 최대폭도 함께 축소
+   - 손해보험 수정률 모달은 fire 전용 규칙을 별도 유지
+*/
+#rate-example-root[data-active-insurer-type="life"] ~ #rateExampleConvModal .modal-xl {
+  width: 82vw;
+  max-width: 1280px;
+}
+
+/* 생명보험 환산율 모달 컬럼폭 SSOT: colgroup 기준
+   - 최초 진입/조회/수정모드 모두 동일 폭 유지
+   - 상품명 컬럼은 기존 39% 대비 약 20% 축소한 31%
+*/
+#rate-example-root[data-active-insurer-type="life"] ~ #rateExampleConvModal #re-conv-table col.re-conv-col-check {
+  width: 0 !important;
+}
+
+#rate-example-root[data-active-insurer-type="life"] ~ #rateExampleConvModal #re-conv-table col.re-conv-col-coverage {
+  width: 8% !important;
+}
+
+#rate-example-root[data-active-insurer-type="life"] ~ #rateExampleConvModal #re-conv-table col.re-conv-col-strategy {
+  width: 9% !important;
+}
+
+#rate-example-root[data-active-insurer-type="life"] ~ #rateExampleConvModal #re-conv-table col.re-conv-col-product {
+  width: 31% !important;
+}
+
+#rate-example-root[data-active-insurer-type="life"] ~ #rateExampleConvModal #re-conv-table col.re-conv-col-plan {
+  width: 8% !important;
+}
+
+#rate-example-root[data-active-insurer-type="life"] ~ #rateExampleConvModal #re-conv-table col.re-conv-col-period {
+  width: 8% !important;
+}
+
+#rate-example-root[data-active-insurer-type="life"] ~ #rateExampleConvModal #re-conv-table col.re-conv-col-rate {
+  width: 6% !important;
+}
+
+/* 수정모드 진입 시 선택 컬럼만 표시 */
+#rate-example-root[data-active-insurer-type="life"] ~ #rateExampleConvModal #re-conv-table:has(.re-conv-edit-row) col.re-conv-col-check {
+  width: 4% !important;
+}
+
+#rate-example-root[data-active-insurer-type="life"] ~ #rateExampleConvModal #re-conv-table:has(.re-conv-edit-row) col.re-conv-col-product {
+  width: 27% !important;
+}
+
 #rateExampleConvModal .re-conv-table-wrap {
   max-height: 62vh;
   overflow: auto;
@@ -813,7 +864,59 @@
 /* 손해보험 수정률 확인 모달: 보험사 | 상품군 | 상품명 | 구분 | 납기 | 수정률 */
 #rate-example-root[data-active-insurer-type="fire"] ~ #rateExampleConvModal #re-conv-table,
 #rateExampleConvModal #re-conv-table:has([data-field="mod_rate"]) {
-  min-width: 980px;
+  min-width: 0;
+}
+
+/* 손해보험 수정률 확인 모달 전용: 모달/테이블 전체 폭 축소 */
+#rate-example-root[data-active-insurer-type="fire"] ~ #rateExampleConvModal .modal-xl {
+  width: 82vw;
+  max-width: 900px;
+}
+
+#rate-example-root[data-active-insurer-type="fire"] ~ #rateExampleConvModal .re-conv-table-wrap {
+  overflow-x: hidden;
+}
+
+#rate-example-root[data-active-insurer-type="fire"] ~ #rateExampleConvModal #re-conv-table {
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
+}
+
+/* 손보 수정률 모달 컬럼폭 SSOT: colgroup 기준
+   조회: 상품군 7% / 상품명 56% / 구분 15% / 납기 15% / 수정률 7%
+   수정: 선택 4% / 상품군 7% / 상품명 52% / 구분 15% / 납기 15% / 수정률 7%
+*/
+#rate-example-root[data-active-insurer-type="fire"] ~ #rateExampleConvModal #re-conv-table col.re-conv-col-check {
+  width: 0 !important;
+}
+
+#rate-example-root[data-active-insurer-type="fire"] ~ #rateExampleConvModal #re-conv-table col.re-conv-col-coverage {
+  width: 15% !important;
+}
+
+#rate-example-root[data-active-insurer-type="fire"] ~ #rateExampleConvModal #re-conv-table col.re-conv-col-product {
+  width: 40% !important;
+}
+
+#rate-example-root[data-active-insurer-type="fire"] ~ #rateExampleConvModal #re-conv-table col.re-conv-col-plan {
+  width: 20% !important;
+}
+
+#rate-example-root[data-active-insurer-type="fire"] ~ #rateExampleConvModal #re-conv-table col.re-conv-col-period {
+  width: 20% !important;
+}
+
+#rate-example-root[data-active-insurer-type="fire"] ~ #rateExampleConvModal #re-conv-table col.re-conv-col-rate {
+  width: 15% !important;
+}
+
+#rate-example-root[data-active-insurer-type="fire"] ~ #rateExampleConvModal #re-conv-table:has(.re-conv-edit-row) col.re-conv-col-check {
+  width: 4% !important;
+}
+
+#rate-example-root[data-active-insurer-type="fire"] ~ #rateExampleConvModal #re-conv-table:has(.re-conv-edit-row) col.re-conv-col-product {
+  width: 52% !important;
 }
 
 #rateExampleConvModal #re-conv-table th,
@@ -833,69 +936,6 @@
   word-break: keep-all !important;
   overflow-wrap: normal !important;
   padding: 0.22rem 0.32rem;
-}
-
-/* 10컬럼 공통 기준: 첫 번째 선택 컬럼은 숨김/수정모드 전용
-   - 보기 모드에서도 DOM상 1번째 컬럼이 존재하므로 nth-child는 10컬럼 기준으로 계산한다.
-   - 보종/전략유무는 축소하고 상품명 폭을 우선 확보한다.
-*/
-#rateExampleConvModal #re-conv-table th:nth-child(1),
-#rateExampleConvModal #re-conv-table td:nth-child(1) { width: 4%; }
-
-#rateExampleConvModal #re-conv-table th:nth-child(2),
-#rateExampleConvModal #re-conv-table td:nth-child(2) { width: 8%; }
-
-#rateExampleConvModal #re-conv-table th:nth-child(3),
-#rateExampleConvModal #re-conv-table td:nth-child(3) { width: 9%; }
-
-#rateExampleConvModal #re-conv-table th:nth-child(4),
-#rateExampleConvModal #re-conv-table td:nth-child(4) { width: 39%; }
-
-#rateExampleConvModal #re-conv-table th:nth-child(5),
-#rateExampleConvModal #re-conv-table td:nth-child(5) { width: 8%; }
-
-#rateExampleConvModal #re-conv-table th:nth-child(6),
-#rateExampleConvModal #re-conv-table td:nth-child(6) { width: 8%; }
-
-#rateExampleConvModal #re-conv-table th:nth-child(7),
-#rateExampleConvModal #re-conv-table td:nth-child(7),
-#rateExampleConvModal #re-conv-table th:nth-child(8),
-#rateExampleConvModal #re-conv-table td:nth-child(8),
-#rateExampleConvModal #re-conv-table th:nth-child(9),
-#rateExampleConvModal #re-conv-table td:nth-child(9),
-#rateExampleConvModal #re-conv-table th:nth-child(10),
-#rateExampleConvModal #re-conv-table td:nth-child(10) {
-  width: 6%;
-}
-
-/* 10컬럼 수정 모드 기준: 선택 컬럼 추가 시에도 상품명 폭 우선 확보 */
-#rateExampleConvModal #re-conv-table:has(.re-conv-edit-row) th:nth-child(1),
-#rateExampleConvModal #re-conv-table:has(.re-conv-edit-row) td:nth-child(1) { width: 4%; }
-
-#rateExampleConvModal #re-conv-table:has(.re-conv-edit-row) th:nth-child(2),
-#rateExampleConvModal #re-conv-table:has(.re-conv-edit-row) td:nth-child(2) { width: 8%; }
-
-#rateExampleConvModal #re-conv-table:has(.re-conv-edit-row) th:nth-child(3),
-#rateExampleConvModal #re-conv-table:has(.re-conv-edit-row) td:nth-child(3) { width: 9%; }
-
-#rateExampleConvModal #re-conv-table:has(.re-conv-edit-row) th:nth-child(4),
-#rateExampleConvModal #re-conv-table:has(.re-conv-edit-row) td:nth-child(4) { width: 39%; }
-
-#rateExampleConvModal #re-conv-table:has(.re-conv-edit-row) th:nth-child(5),
-#rateExampleConvModal #re-conv-table:has(.re-conv-edit-row) td:nth-child(5) { width: 8%; }
-
-#rateExampleConvModal #re-conv-table:has(.re-conv-edit-row) th:nth-child(6),
-#rateExampleConvModal #re-conv-table:has(.re-conv-edit-row) td:nth-child(6) { width: 8%; }
-
-#rateExampleConvModal #re-conv-table:has(.re-conv-edit-row) th:nth-child(7),
-#rateExampleConvModal #re-conv-table:has(.re-conv-edit-row) td:nth-child(7),
-#rateExampleConvModal #re-conv-table:has(.re-conv-edit-row) th:nth-child(8),
-#rateExampleConvModal #re-conv-table:has(.re-conv-edit-row) td:nth-child(8),
-#rateExampleConvModal #re-conv-table:has(.re-conv-edit-row) th:nth-child(9),
-#rateExampleConvModal #re-conv-table:has(.re-conv-edit-row) td:nth-child(9),
-#rateExampleConvModal #re-conv-table:has(.re-conv-edit-row) th:nth-child(10),
-#rateExampleConvModal #re-conv-table:has(.re-conv-edit-row) td:nth-child(10) {
-  width: 6%;
 }
 
 /* 수정 모드 input/select: 컬럼폭을 밀어내지 않도록 강제 */

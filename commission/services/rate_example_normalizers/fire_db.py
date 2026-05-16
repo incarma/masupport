@@ -53,9 +53,15 @@ def _to_decimal_raw(value: Any, *, number_format: str = "") -> Decimal | None:
     수정률 raw 값을 Decimal로 변환한다.
 
     중요:
-    - 손해보험 수정률은 raw 입력값 그대로 저장한다.
-    - Excel 내부값이 2.4이면 Decimal("2.4") 저장.
-    - 생보 환산율처럼 2.4 → 240 변환 금지.
+    - DB 손보 수정률은 Excel 내부값(raw)을 그대로 저장한다.
+    - 표시용 % 변환은 조회 API/UI에서만 처리한다.
+
+    예:
+    - Excel 내부값 2.4  + %서식 → DB 2.4 저장 → 화면 240%
+    - Excel 내부값 0.55 + %서식 → DB 0.55 저장 → 화면 55%
+
+    즉:
+    - 저장 단계에서는 절대 ×100 보정하지 않는다.
     """
     if value is None:
         return None
@@ -64,20 +70,25 @@ def _to_decimal_raw(value: Any, *, number_format: str = "") -> Decimal | None:
         return value
 
     if isinstance(value, int | float):
-        dec = Decimal(str(value))
-        # Excel % 서식 셀은 openpyxl에서 2.2% → 0.022로 읽힐 수 있다.
-        # DB 손보 수정률은 raw 입력 의미 그대로 저장해야 하므로
-        # 1 미만의 % 서식 값만 ×100 보정한다.
-        if "%" in str(number_format or "") and abs(dec) < Decimal("1"):
-            return dec * Decimal("100")
-        return dec
+        # Excel 내부 raw 값을 그대로 저장한다.
+        # 절대 ×100 보정하지 않는다.
+        return Decimal(str(value))
 
     raw = _text(value)
     if not raw:
         return None
 
-    # 텍스트 셀에 "240%"처럼 들어온 경우에는 표시 숫자 240 자체를 저장한다.
-    # openpyxl이 percent-formatted numeric cell을 읽는 경우에는 이미 2.4로 들어온다.
+    # 텍스트 셀:
+    # - "240%" → 240 저장
+    # - "55%"  → 55 저장
+    #
+    # numeric 셀은 위에서 raw 그대로 처리된다.
+    # 즉:
+    # - numeric 0.55 → DB 0.55
+    # - text "55%"   → DB 55
+    #
+    # 현재 DB손보 원본은 대부분 numeric percent format이므로
+    # 실제 핵심 수정은 위 numeric branch의 ×100 제거이다.
     raw = raw.replace(",", "").replace("%", "").strip()
 
     try:
@@ -163,7 +174,8 @@ def _find_header_row(
 
     필수 성격:
     - '수정률' 컬럼 존재
-    - 납기 컬럼 존재
+    - 일반 상품: 납기 컬럼 존재
+    - 실손 상품: 납기 컬럼 없이 최초/갱신 컬럼 허용
     - 만기 또는 갱신주기 컬럼 존재
     """
     search_to = min(stop_row, start_row + 15)
@@ -174,9 +186,10 @@ def _find_header_row(
 
         has_rate = "수정률" in compact
         has_pay = "납기" in compact
+        has_first_renewal = "최초/갱신" in compact or "최초갱신" in compact
         has_maturity = "만기" in compact or "갱신주기" in compact
 
-        if has_rate and has_pay and has_maturity:
+        if has_rate and has_maturity and (has_pay or has_first_renewal):
             return row
 
     return None
@@ -468,8 +481,9 @@ def build_fire_db_conversion_rows(
         rate_col = _find_rate_col(headers)
 
         # 필수 컬럼이 없으면 해당 시트는 안전하게 제외한다.
-        # 단, 구분 컬럼은 상품에 따라 없을 수 있으므로 필수로 보지 않는다.
-        if not pay_col or not rate_col:
+        # 단, DB 실손 상품은 '납기' 컬럼 없이 '만기 / 최초·갱신 / 수정률' 구조이므로
+        # pay_col은 선택값으로 허용한다.
+        if not rate_col:
             continue
 
         maturity_or_renewal_col = renewal_col or maturity_col
@@ -489,7 +503,7 @@ def build_fire_db_conversion_rows(
             pay_period = _build_pay_period(
                 product_name=product_name,
                 maturity_value=_cell(ws, merged, row_no, maturity_or_renewal_col),
-                pay_value=_cell(ws, merged, row_no, pay_col),
+                pay_value=_cell(ws, merged, row_no, pay_col) if pay_col else "",
             )
             rate_cell = ws.cell(row=row_no, column=rate_col)
             mod_rate = _to_decimal_raw(
