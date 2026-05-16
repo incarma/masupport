@@ -107,10 +107,13 @@
   const IBK_INSURER = "IBK";
   /*
    * coverage_type:
-   * 기존 용어 "보종" → 전 화면 공통 "상품군"으로 통일.
-   * DB 필드명은 coverage_type 유지(SSOT/마이그레이션 영향 방지).
+   * 기존 용어 "보종" → 화면 표시명은 "상품군" 통일.
+   * DB 필드명 coverage_type 은 유지(SSOT).
+   *
+   * 생명보험 / 손해보험 상품군은 서로 다르므로
+   * 수정모드 드랍다운도 insurer_type 기준으로 분리한다.
    */
-  const CONV_COVERAGE_CHOICES = [
+  const LIFE_CONV_COVERAGE_CHOICES = [
     "종신,CI",
     "연금",
     "변액연금",
@@ -120,6 +123,24 @@
     "기타(보장성)",
     "CEO정기",
   ];
+
+  /*
+   * 손해보험 수정률 상품군 SSOT
+   */
+  const FIRE_CONV_COVERAGE_CHOICES = [
+    "보장",
+    "보장(태아)",
+    "연금",
+    "저축",
+    "단독실손(초회)",
+    "단독실손(갱신)",
+  ];
+
+  function getCoverageChoices() {
+    return isNonlifePage()
+      ? FIRE_CONV_COVERAGE_CHOICES
+      : LIFE_CONV_COVERAGE_CHOICES;
+  }
 
   let activeComboInput = null;
   let activeComboMenu = null;
@@ -821,6 +842,29 @@
     }).join("");
   }
 
+  function renderConvEmptyMessage(message) {
+    if (!convTbody) return;
+
+    if (isNonlifePage()) {
+      convTbody.innerHTML = `
+        <tr>
+          <td class="text-center re-conv-edit-only d-none"></td>
+          <td colspan="5" class="text-center text-muted py-3">
+            ${escapeHtml(message)}
+          </td>
+        </tr>`;
+      return;
+    }
+
+    convTbody.innerHTML = `
+      <tr>
+        <td class="text-center re-conv-edit-only d-none"></td>
+        <td colspan="9" class="text-center text-muted py-3">
+          ${escapeHtml(message)}
+        </td>
+      </tr>`;
+  }
+
   async function readJsonOrThrow(res) {
     const contentType = res.headers.get("content-type") || "";
     if (!contentType.includes("application/json")) {
@@ -954,11 +998,13 @@
 
   function convCoverageInput(row) {
     const selected = String(row.coverage_type || "");
+    const choices = getCoverageChoices();
+
     return `
       <select class="form-select form-select-sm re-conv-edit-input"
               data-field="coverage_type">
         <option value="">선택</option>
-        ${CONV_COVERAGE_CHOICES.map(function (choice) {
+        ${choices.map(function (choice) {
           const isSelected = choice === selected ? " selected" : "";
           return `<option value="${escapeHtml(choice)}"${isSelected}>${escapeHtml(choice)}</option>`;
         }).join("")}
@@ -1236,12 +1282,7 @@
 
       convBtnApply.disabled = true;
       if (convTbody) {
-        convTbody.innerHTML = `
-          <tr>
-            <td colspan="${isNonlifePage() ? 6 : 10}" class="text-center text-muted py-3">
-              조회 중입니다...
-            </td>
-          </tr>`;
+        renderConvEmptyMessage("조회 중입니다...");
       }
 
       try {
@@ -1520,12 +1561,7 @@
         if (convKeyword) convKeyword.value = "";
         updateSortButtons();
         if (convTbody) {
-          convTbody.innerHTML = `
-            <tr>
-              <td colspan="${isNonlifePage() ? 6 : 10}" class="text-center text-muted py-3">
-                ${json.message || "데이터가 삭제되었습니다."}
-              </td>
-            </tr>`;
+          renderConvEmptyMessage(json.message || "데이터가 삭제되었습니다.");
         }
       } catch (err) {
         showConvError(err.message || "초기화 중 오류가 발생했습니다.");
@@ -1621,12 +1657,7 @@
       if (convKeyword) convKeyword.value = "";
       updateSortButtons();
       if (convTbody) {
-        convTbody.innerHTML = `
-          <tr>
-            <td colspan="${isNonlifePage() ? 6 : 10}" class="text-center text-muted py-3">
-              보험사를 선택 후 조회해 주세요.
-            </td>
-          </tr>`;
+        renderConvEmptyMessage("보험사를 선택 후 조회해 주세요.");
       }
     });
   }
