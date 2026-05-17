@@ -74,39 +74,7 @@
   }
 
   /* =========================================================================
-   * 3) Subnav sync
-   * ========================================================================= */
-  function refreshSubnavOrder() {
-    const subnavLinksEl = document.querySelector("#manualSubnav .subnav-links");
-    if (!subnavLinksEl) return;
-
-    const links = Array.from(subnavLinksEl.querySelectorAll("a.jsSubnavLink"));
-    if (!links.length) return;
-
-    const linkByTarget = new Map(
-      links.map((a) => [toStr(a.dataset.target), a]).filter(([k]) => !!k)
-    );
-
-    const frag = document.createDocumentFragment();
-
-    // 카드 순서대로 목차 링크 재배치
-    sectionsEl.querySelectorAll(".manual-section").forEach((secEl) => {
-      const sid = toStr(secEl.dataset.sectionId);
-      const key = `sec-${sid}`;
-      const a = linkByTarget.get(key);
-      if (a) frag.appendChild(a);
-    });
-
-    // 혹시 누락된 링크가 있으면 뒤에 붙임(방어)
-    linkByTarget.forEach((a) => {
-      if (!frag.contains(a)) frag.appendChild(a);
-    });
-
-    subnavLinksEl.appendChild(frag);
-  }
-
-  /* =========================================================================
-   * 4) Save
+   * 3) Save
    * ========================================================================= */
   async function saveOrder(sectionIds, prevOrderAsStrings) {
     try {
@@ -115,18 +83,20 @@
         { manual_id: Number(manualId), section_ids: sectionIds },
         csrfToken
       );
-      refreshSubnavOrder();
+      
+      // ✅ Subnav 재정렬은 manual_detail_subnav.js의 DOM 기준 rebuild API로 단일화
+      window.ManualDetailSubnav?.rebuild?.();
     } catch (e) {
       console.error(e);
       alert(e?.message || "카드 순서 저장 중 오류가 발생했습니다.");
 
       restoreOrder(prevOrderAsStrings);
-      refreshSubnavOrder();
+      window.ManualDetailSubnav?.rebuild?.();
     }
   }
 
   /* =========================================================================
-   * 5) Sortable init
+   * 4) Sortable init
    * ========================================================================= */
   let prevOrderAsStrings = getSectionIdListAsStrings();
 

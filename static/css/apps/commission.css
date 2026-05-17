@@ -479,6 +479,30 @@
   margin-left: calc(-43vw + 50%);
 }
 
+/* 손해보험 수수료예시표 제작중 워터마크 */
+#rate-example-root[data-active-insurer-type="fire"] .re-fire-dev-watermark {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  user-select: none;
+}
+
+#rate-example-root[data-active-insurer-type="fire"] .re-fire-dev-watermark-text {
+  width: 100vw;
+  text-align: center;
+  color: rgba(255, 0, 0, 0.9);
+  font-size: clamp(96px, 15vw, 280px);
+  line-height: 1;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  white-space: nowrap;
+  transform: rotate(-10deg);
+}
+
 /* 생명보험/손해보험 페이지네이션 */
 #rate-example-root .re-insurer-type-tabs {
   justify-content: center;
@@ -1063,4 +1087,33 @@
   #rateExampleConvModal .re-conv-filter-bar {
     flex-wrap: nowrap !important;
   }
+}
+
+/* ==========================================================
+ * 손해보험 제작중 워터마크
+ * - 기존 개인정보 워터마크(.privacy-watermark)와 완전 분리
+ * - "사용금지 제작중" 전용 스타일
+ * ========================================================== */
+
+#rate-example-root .re-fire-dev-watermark {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2147482500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#rate-example-root .re-fire-dev-watermark-text.wm-dev-only {
+  font-size: clamp(72px, 9vw, 140px);
+  font-weight: 900;
+  line-height: 1.2;
+  text-align: center;
+  white-space: normal;
+
+  color: rgba(220, 53, 69, 0.1);
+
+  transform: rotate(-18deg);
+  user-select: none;
 }

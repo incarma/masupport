@@ -28,16 +28,24 @@ def rate_example_upload(request):
     product_kind = request.POST.get("product_kind", "").strip()
 
     # ── 상품 구분 검증 ─────────────────────────────────────────────
-    # KB: 일반상품/건강보험
-    # 한화: 종신보험/연금보험/일반보장
-    # 그 외 보험사는 보험사 선택만으로 normalizer가 동작한다.
-    if product_kind and insurer not in {"KB", "한화"}:
+    # KB/한화 상품 구분은 생명보험 환산율/수정률 전용이다.
+    # 손해보험 KB는 단일 파일 정규화이므로 product_kind를 요구하지 않는다.
+    is_life_conv = (
+        insurer_type == RateExample.TYPE_LIFE
+        and category == RateExample.CAT_CONV
+    )
+
+    if product_kind and not (is_life_conv and insurer in {"KB", "한화"}):
         return _json_error("선택한 보험사는 상품 구분을 사용할 수 없습니다.")
 
-    if insurer == "KB" and product_kind not in {"general", "health"}:
+    if is_life_conv and insurer == "KB" and product_kind not in {"general", "health"}:
         return _json_error("KB 상품 구분을 선택해 주세요.")
     
-    if insurer == "한화" and product_kind not in {"hanhwa_whole", "hanhwa_annuity", "hanhwa_general"}:
+    if (
+        is_life_conv
+        and insurer == "한화"
+        and product_kind not in {"hanhwa_whole", "hanhwa_annuity", "hanhwa_general"}
+    ):
         return _json_error("한화 상품 구분을 선택해 주세요.")
 
     result = RateExampleService.create(

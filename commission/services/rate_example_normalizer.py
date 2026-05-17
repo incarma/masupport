@@ -16,6 +16,9 @@ RateExample 정규화 서비스.
 """
 
 import logging
+import os
+import tempfile
+import zipfile
 
 from openpyxl import load_workbook
 
@@ -82,8 +85,64 @@ from commission.services.rate_example_normalizers.life_hanhwa import (
 from commission.services.rate_example_normalizers.fire_db import (
     build_fire_db_conversion_rows,
 )
+from commission.services.rate_example_normalizers.fire_kb import (
+    build_fire_kb_conversion_rows,
+)
+from commission.services.rate_example_normalizers.fire_nh import (
+    build_fire_nh_conversion_rows,
+)
+from commission.services.rate_example_normalizers.fire_samsung import (
+    build_fire_samsung_conversion_rows,
+)
+
 
 logger = logging.getLogger(__name__)
+
+
+def _load_workbook_safely(path: str):
+    """
+    openpyxl workbook 로드 SSOT.
+
+    일부 보험사 raw xlsx는 docProps/custom.xml 안의 custom property name이
+    비어 있어 openpyxl이 TypeError로 실패한다.
+
+    이 경우 실제 시트 데이터와 무관한 custom properties만 제거한 임시 xlsx를
+    만들어 재시도한다. 원본 업로드 파일은 변경하지 않는다.
+    """
+    try:
+        return load_workbook(path, data_only=True, read_only=False)
+    except TypeError as exc:
+        message = str(exc)
+        if "openpyxl.packaging.custom" not in message and "CustomProperty" not in message:
+            raise
+
+        logger.warning(
+            "openpyxl custom properties load failed. retry without docProps/custom.xml: %s",
+            path,
+            exc_info=True,
+        )
+
+        tmp_path = ""
+        try:
+            fd, tmp_path = tempfile.mkstemp(suffix=".xlsx")
+            os.close(fd)
+
+            with zipfile.ZipFile(path, "r") as zin, zipfile.ZipFile(tmp_path, "w", zipfile.ZIP_DEFLATED) as zout:
+                for item in zin.infolist():
+                    # 시트 데이터와 무관한 custom properties만 제거
+                    if item.filename == "docProps/custom.xml":
+                        continue
+                    if item.filename == "docProps/_rels/custom.xml.rels":
+                        continue
+                    zout.writestr(item, zin.read(item.filename))
+
+            return load_workbook(tmp_path, data_only=True, read_only=False)
+        finally:
+            if tmp_path:
+                try:
+                    os.remove(tmp_path)
+                except OSError:
+                    logger.warning("temporary sanitized xlsx cleanup failed: %s", tmp_path, exc_info=True)
 
 
 def normalize_rate_example(
@@ -139,7 +198,7 @@ def normalize_rate_example(
     is_fire_conv_target = (
         example.insurer_type == RateExample.TYPE_FIRE
         and example.category == RateExample.CAT_CONV
-        and example.insurer in {"DB"}
+        and example.insurer in {"DB", "KB", "농협", "삼성"}
     )
 
     if not (is_life_conv_target or is_fire_conv_target):
@@ -289,11 +348,7 @@ def normalize_rate_example(
     # 현재 예시표 파일 크기(수 MB 수준)에서는
     # 메모리 부담보다 정규화 정확성이 우선이다.
     # ─────────────────────────────────────────────────────
-    wb = load_workbook(
-        example.file.path,
-        data_only=True,
-        read_only=False,
-    )
+    wb = _load_workbook_safely(example.file.path)
 
     normalized_rows: list[RateExampleConversionRow] = []
 
@@ -306,6 +361,40 @@ def normalize_rate_example(
     #   예: Excel 내부값 2.4 → DB Decimal("2.4") 저장
     if example.insurer_type == RateExample.TYPE_FIRE and example.insurer == "DB":
         normalized_rows.extend(build_fire_db_conversion_rows(example, wb))
+
+    # ── KB 손해보험 수정률 정규화 ────────────────────────────────
+    # KB 손보 규칙:
+    # - "GA채널_수정률" 시트만 정규화
+    # - 병합 셀 값을 점유 범위 전체에 전파
+    # - 재물 상품 제외
+    # - 실손 갱신 상품은 초회/갱신 2행 생성
+    # - 납입기간(F) + 보험기간(E)을 pay_period로 결합
+    # - 수정률은 raw 숫자 × 100 기준으로 year1에 저장
+    elif example.insurer_type == RateExample.TYPE_FIRE and example.insurer == "KB":
+        normalized_rows.extend(build_fire_kb_conversion_rows(example, wb))
+    
+    # ── 농협 손해보험 수정률 정규화 ────────────────────────────────
+    # 농협 손보 규칙:
+    # - A열 "◈" 상품 블록 기준으로 상품명을 전파
+    # - 병합 셀은 점유 범위 전체에 원본 값을 전개
+    # - 파란색(#BDD7EE)/회색(#F2F2F2) 테이블 영역만 정규화
+    # - 회색 공란 셀은 같은 테이블 내 직전 회색 텍스트를 carry-down
+    # - 구분은 "【...】" 행을 기준으로 하며, 2줄 구분은 "상위 (하위)"로 결합
+    # - 납기 = 납입기간(B) + " (" + 보험기간(C, 줄바꿈은 /) + ")"
+    # - 수정률 = 모집(ㄱ)(E) raw 백분율 그대로 year1에 저장
+    elif example.insurer_type == RateExample.TYPE_FIRE and example.insurer == "농협":
+        normalized_rows.extend(build_fire_nh_conversion_rows(example, wb))
+
+    # ── 삼성화재 손해보험 수정률 정규화 ────────────────────────────────
+    # 삼성 손보 규칙:
+    # - 시트 내 복수 테이블을 제목행 + 헤더행 기준으로 각각 인식
+    # - 상품명은 테이블 제목의 ":" 오른쪽 텍스트 우선 사용
+    # - 납기 컬럼이 있으면 해당 값을 사용하고, 숫자만 있으면 "년"을 붙임
+    # - 납기 컬럼이 없으면 "년/만기/최초/갱신" 헤더를 납기로 사용
+    # - 수정률은 raw 수치 그대로 year1에 저장한다.
+    #   예: raw 160 → DB 160 → 화면 표시 160%
+    elif example.insurer_type == RateExample.TYPE_FIRE and example.insurer == "삼성":
+        normalized_rows.extend(build_fire_samsung_conversion_rows(example, wb))
 
     # ── ABL 생명 환산율/수정률 정규화 ─────────────────────────────
     # 보험사별 parser는 rate_example_normalizers/life_*.py에 둔다.

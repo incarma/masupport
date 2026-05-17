@@ -16,6 +16,20 @@ export function createSectionSubnavManager({
 }) {
   const { toStr, isDigits } = S;
 
+  function requestSubnavRebuild() {
+    /*
+     * ✅ Subnav 동기화 단일 진입점
+     * 기능 변화 0:
+     * - manual_detail_subnav.js가 제공하는 rebuild API 우선 사용
+     * - API가 아직 없거나 실패하면 기존 fallback rebuildSubnavFromDOM 사용
+     */
+    if (window.ManualDetailSubnav?.rebuild) {
+      window.ManualDetailSubnav.rebuild();
+      return;
+    }
+    rebuildSubnavFromDOM();
+  }
+
   function getSubnavEl() {
     return document.querySelector("#manualSubnav .subnav-links");
   }
@@ -46,11 +60,6 @@ export function createSectionSubnavManager({
     subnav.innerHTML = "";
     subnav.appendChild(frag);
 
-    // 기존 manual_detail_subnav.js는 초기 로드시만 이벤트를 붙임.
-    // 따라서 rebuild 이후에는 클릭/active 동작이 끊길 수 있음.
-    // 해결: subnav.js쪽에 "재바인딩 가능한 전역 훅"을 하나 제공하거나,
-    //       가장 간단하게는 이벤트를 위임으로 붙이는 방식으로 바꾸는 게 최선.
-    //       (현재는 기존 파일을 유지해야 하므로, 여기서는 커스텀 이벤트를 발행)
     document.dispatchEvent(new CustomEvent("manual:subnavRebuilt"));
   }
 
@@ -170,11 +179,7 @@ export function createSectionSubnavManager({
         titleTextEl.textContent = "(소제목 없음)";
         titleTextEl.classList.add("empty");
       }
-      if (window.ManualDetailSubnav?.rebuild) {
-        window.ManualDetailSubnav.rebuild();
-      } else {
-        rebuildSubnavFromDOM();
-      } // ✅ 소제목 변경 즉시 Subnav 반영
+      requestSubnavRebuild();
     };
 
     const save = async () => {
@@ -224,21 +229,13 @@ export function createSectionSubnavManager({
       const data = await api.json(sectionDeleteUrl, { section_id: Number(sectionId) });
 
       sectionEl?.remove();
-      if (window.ManualDetailSubnav?.rebuild) {
-        window.ManualDetailSubnav.rebuild();
-      } else {
-        rebuildSubnavFromDOM();
-      } // ✅ 삭제 즉시 Subnav 반영
+      requestSubnavRebuild();
 
       // 마지막 섹션 삭제 시 서버가 기본 섹션 생성해서 new_section 반환
       if (data?.new_section?.id && isDigits(data.new_section.id)) {
         const newSec = buildSectionElement(Number(data.new_section.id), data.new_section.title || "");
         sectionsEl.appendChild(newSec);
-        if (window.ManualDetailSubnav?.rebuild) {
-          window.ManualDetailSubnav.rebuild();
-        } else {
-          rebuildSubnavFromDOM();
-        } // ✅ 기본 섹션 생성 반영
+        requestSubnavRebuild();
         newSec.scrollIntoView({ behavior: "smooth", block: "nearest" });
       }
     } catch (e) {
@@ -277,12 +274,7 @@ export function createSectionSubnavManager({
 
         const newSectionEl = buildSectionElement(Number(sid), "");
         sectionsEl.appendChild(newSectionEl);
-
-        if (window.ManualDetailSubnav?.rebuild) {
-          window.ManualDetailSubnav.rebuild();
-        } else {
-          rebuildSubnavFromDOM();
-        } // ✅ 추가 즉시 Subnav 반영
+        requestSubnavRebuild();
         newSectionEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
       } catch (err) {
         console.error(err);

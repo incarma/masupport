@@ -23,8 +23,19 @@
     }
   }
 
-  function getCSRFTokenFromForm(_formEl) {
-    return window.csrfToken || "";
+  function getCSRFTokenFromForm(formEl) {
+    /*
+     * ✅ CSRF 조회 SSOT 보강
+     * 기능 변화 0:
+     * - 기존 window.csrfToken 우선 정책 유지
+     * - 호출부에서 넘기는 csrf form hidden input fallback 추가
+     * - 마지막으로 document 전체 hidden input fallback
+     */
+    const fromWindow = toStr(window.csrfToken);
+    if (fromWindow) return fromWindow;
+
+    const fromForm = toStr(formEl?.querySelector?.("[name=csrfmiddlewaretoken]")?.value);
+    return fromForm || toStr(document.querySelector("[name=csrfmiddlewaretoken]")?.value);
   }
 
   function setBtnLoading(btn, isLoading, loadingText, defaultText) {
