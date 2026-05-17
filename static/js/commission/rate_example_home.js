@@ -1205,6 +1205,8 @@
       const category = "conv";
       const insurer = modalInsurer?.value || "";
       const productKind = modalProductKind?.value || "";
+      const shouldSendProductKind =
+        !isNonlifePage() && ["KB", "한화"].includes(insurer);
       const normalizeMode = document.querySelector(
         'input[name="normalize_mode"]:checked'
       )?.value || "replace";
@@ -1227,7 +1229,9 @@
       fd.append("insurer_type", insurerType);
       fd.append("category", category);
       fd.append("insurer", insurer);
-      fd.append("product_kind", productKind);
+      // 상품구분은 생명보험 KB/한화 전용이다.
+      // KB 손해보험은 단일 파일 정규화이므로 빈 값으로 고정한다.
+      fd.append("product_kind", shouldSendProductKind ? productKind : "");
       fd.append("normalize_mode", normalizeMode);
       fd.append("file", file);
 

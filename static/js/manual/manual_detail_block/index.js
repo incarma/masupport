@@ -47,7 +47,6 @@ import { initBlockSortable } from "./sort_blocks.js";
   const csrfForm = document.getElementById("manualBlockCsrfForm");
 
   const btnAddSection = document.getElementById("btnAddManualSection");
-  const btnGoTop = document.getElementById("btnManualGoTop");
 
   const imgInput = document.getElementById("manualBlockImageInput");
   const imgPreviewWrap = document.getElementById("manualBlockImagePreviewWrap");
@@ -268,11 +267,6 @@ import { initBlockSortable } from "./sort_blocks.js";
     return wrapper;
   }
 
-  function buildSectionElement(sectionId, titleText = "") {
-    // section_subnav.js 쪽에서도 사용해야 해서 secMgr로 위임
-    return secMgr.buildSectionElement(sectionId, titleText);
-  }
-
   /* =========================================================================
    * 7) Modal open helpers
    * ========================================================================= */
@@ -390,9 +384,6 @@ import { initBlockSortable } from "./sort_blocks.js";
     }
   });
 
-  // TOP
-  btnGoTop?.addEventListener("click", () => window.scrollTo({ top: 0, behavior: "smooth" }));
-
   /* =========================================================================
    * 10) Save (add/edit) - FormData
    * ========================================================================= */
@@ -495,7 +486,10 @@ import { initBlockSortable } from "./sort_blocks.js";
   /* =========================================================================
    * 12) Section add (버튼은 secMgr가 책임)
    * ========================================================================= */
-  secMgr.bindAddSectionButton({ buildSectionElement });
+  secMgr.bindAddSectionButton({
+    // ✅ 기능 변화 0: 기존 buildSectionElement 위임 wrapper 제거
+    buildSectionElement: secMgr.buildSectionElement,
+  });
 
   /* =========================================================================
    * 13) Block Sortable (reorder / move)

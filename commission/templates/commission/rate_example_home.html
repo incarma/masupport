@@ -21,6 +21,16 @@
      data-pay-reset-url="{{ pay_reset_url }}"
      data-active-insurer-type="{{ active_insurer_type|default:'life' }}"
      data-user-grade="{{ request.user.grade }}">
+  
+  {% if active_insurer_type == 'fire' %}
+  <!-- 손해보험 페이지 제작중 워터마크 -->
+  <div class="re-fire-dev-watermark" aria-hidden="true">
+    <div class="re-fire-dev-watermark-text wm-dev-only">
+      사용금지<br>
+      제작중
+    </div>
+  </div>
+  {% endif %}
 
   <h3 class="fw-bold text-center mb-4 commission-title">수수료 예시표</h3>
 
