@@ -6,7 +6,7 @@
 # - legacy alias 유지 (기존 URL/호출부 영향 없음)
 # ------------------------------------------------------------
 
-import traceback
+import logging
 
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
@@ -21,12 +21,20 @@ from partner.models import PartnerChangeLog, StructureChange
 from .responses import json_err, json_ok, parse_json_body
 from .utils import (
     build_affiliation_display,
-    get_level_team_filter_user_ids,
+    can_use_target_in_branch,
+    date_to_yyyy_mm_dd,
+    leader_requester_scope_q,
     normalize_month,
     resolve_branch_for_query,
     resolve_branch_for_write,
     resolve_part_for_write,
+    to_str,
 )
+
+
+logger = logging.getLogger(__name__)
+
+
 
 # ------------------------------------------------------------
 # Constants
@@ -39,17 +47,13 @@ DELETE_PRIVILEGED_GRADES = ("superuser", "head")
 # Helpers
 # ------------------------------------------------------------
 def _safe_str(v) -> str:
-    return str(v or "").strip()
+    # ✅ 기능 변화 0: 기존 _safe_str 호출부 유지, 내부만 공통화
+    return to_str(v)
 
 
 def _to_date_str(dt) -> str:
     """datetime/date → 'YYYY-MM-DD' (없으면 '')"""
-    if not dt:
-        return ""
-    try:
-        return dt.strftime("%Y-%m-%d")
-    except Exception:
-        return ""
+    return date_to_yyyy_mm_dd(dt)
 
 
 def _serialize_structure_change(sc: StructureChange) -> dict:
@@ -91,32 +95,12 @@ def _build_leader_scope_q(user) -> Q:
     ✅ leader 권한 스코프(기존 유지)
     - 본인 요청 + 팀 스코프(requester_id in allowed_ids)
     """
-    allowed_ids = get_level_team_filter_user_ids(user)
-    team_q = Q(requester_id__in=allowed_ids) if allowed_ids else Q()
-    return Q(requester_id=user.id) | team_q
+    return leader_requester_scope_q(user)
 
 
 def _can_use_target(user, target: CustomUser, branch: str) -> bool:
-    grade = getattr(user, "grade", "")
-    target_branch = _safe_str(getattr(target, "branch", ""))
-    scope_branch = _safe_str(branch)
-
-    if grade == "superuser":
-        return True
-
-    if not scope_branch:
-        scope_branch = _safe_str(getattr(user, "branch", ""))
-
-    if target_branch != scope_branch:
-        return False
-
-    if grade == "head":
-        return target_branch == _safe_str(getattr(user, "branch", ""))
-
-    if grade == "leader":
-        return target_branch == _safe_str(getattr(user, "branch", ""))
-    
-    return False
+    # ✅ 기능 변화 0: 편제변경 저장 대상자 branch 검증을 공통 SSOT로 위임
+    return can_use_target_in_branch(user, target, branch)
 
 
 # ------------------------------------------------------------
@@ -176,7 +160,7 @@ def ajax_save(request):
 
         return json_ok({"saved_count": created_count})
     except Exception as e:
-        traceback.print_exc()
+        logger.exception("[partner.structure] save failed")
         return json_err(str(e), status=400)
 
 
@@ -209,7 +193,7 @@ def ajax_delete(request):
         )
         return json_ok({"message": f"#{deleted_id} 삭제 완료"})
     except Exception as e:
-        traceback.print_exc()
+        logger.exception("[partner.structure] delete failed")
         return json_err(str(e), status=500)
 
 
@@ -246,7 +230,7 @@ def ajax_fetch(request):
 
         return json_ok({"kind": "structure", "rows": rows})
     except Exception as e:
-        traceback.print_exc()
+        logger.exception("[partner.structure] fetch failed")
         return json_err(str(e), status=500, extra={"rows": []})
 
 

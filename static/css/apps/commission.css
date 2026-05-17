@@ -489,18 +489,28 @@
   justify-content: center;
   pointer-events: none;
   user-select: none;
+  overflow: hidden;
 }
 
 #rate-example-root[data-active-insurer-type="fire"] .re-fire-dev-watermark-text {
-  width: 100vw;
+  width: 120vw;
   text-align: center;
-  color: rgba(255, 0, 0, 0.9);
-  font-size: clamp(96px, 15vw, 280px);
-  line-height: 1;
+  color: rgba(255, 0, 0, 0.5);
+  font-size: clamp(180px, 24vw, 520px);
+  line-height: 0.95;
   font-weight: 900;
-  letter-spacing: -0.04em;
-  white-space: nowrap;
-  transform: rotate(-10deg);
+  letter-spacing: -0.08em;
+  white-space: normal;
+  transform: rotate(-12deg) scale(1.18);
+}
+
+@media (max-width: 768px) {
+  #rate-example-root[data-active-insurer-type="fire"] .re-fire-dev-watermark-text {
+    width: 135vw;
+    font-size: clamp(120px, 31vw, 280px);
+    line-height: 0.95;
+    transform: rotate(-12deg) scale(1.12);
+  }
 }
 
 /* 생명보험/손해보험 페이지네이션 */
@@ -1112,7 +1122,7 @@
   text-align: center;
   white-space: normal;
 
-  color: rgba(220, 53, 69, 0.1);
+  color: rgba(220, 53, 69, 0.5);
 
   transform: rotate(-18deg);
   user-select: none;

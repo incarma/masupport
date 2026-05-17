@@ -25,17 +25,13 @@
 
   function getCSRFTokenFromForm(formEl) {
     /*
-     * ✅ CSRF 조회 SSOT 보강
-     * 기능 변화 0:
-     * - 기존 window.csrfToken 우선 정책 유지
-     * - 호출부에서 넘기는 csrf form hidden input fallback 추가
-     * - 마지막으로 document 전체 hidden input fallback
+     * ✅ CSRF 조회 SSOT
+     * - IIFE 파일이므로 ESM import 금지
+     * - base.html에서 먼저 로드되는 common/csrf_window.js의 window.csrfToken 사용
+     * - formEl 인자는 기존 호출부 호환을 위해 유지
      */
-    const fromWindow = toStr(window.csrfToken);
-    if (fromWindow) return fromWindow;
-
-    const fromForm = toStr(formEl?.querySelector?.("[name=csrfmiddlewaretoken]")?.value);
-    return fromForm || toStr(document.querySelector("[name=csrfmiddlewaretoken]")?.value);
+    void formEl;
+    return toStr(window.csrfToken);
   }
 
   function setBtnLoading(btn, isLoading, loadingText, defaultText) {

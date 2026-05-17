@@ -6,14 +6,112 @@
 from __future__ import annotations
 
 from datetime import datetime
+import os
 from typing import Any, Dict, List, Optional, Tuple
 
 from django.db.models import Q
+from django.http import HttpResponse
 from django.utils import timezone
+from urllib.parse import quote
 
 from accounts.models import CustomUser
 from partner.models import SubAdminTemp, TableSetting
 from .constants import BRANCH_PARTS
+
+
+# ------------------------------------------------------------
+# 문자열/공통 포맷 유틸
+# ------------------------------------------------------------
+def to_str(value: Any) -> str:
+    """
+    ✅ 문자열 정규화 SSOT
+    - None → ""
+    - 그 외 값은 str(value).strip()
+    - 기존 각 view의 _to_str/_safe_str 동작과 동일하게 유지
+    """
+    return ("" if value is None else str(value)).strip()
+
+
+def clean_dash(value: Any) -> str:
+    """
+    ✅ "-" 또는 빈 문자열을 표시값 조합에서 제외할 때 사용.
+    - 기존 _clean_dash 동작 유지
+    """
+    v = to_str(value)
+    return "" if v == "-" else v
+
+
+def date_to_yyyy_mm_dd(value: Any) -> str:
+    """
+    ✅ date/datetime → YYYY-MM-DD
+    - 기존 structure._to_date_str 동작 유지
+    - 포맷 불가 값은 빈 문자열
+    """
+    if not value:
+        return ""
+    try:
+        return value.strftime("%Y-%m-%d")
+    except Exception:
+        return ""
+
+
+def normalize_emp_id(value: Any) -> str:
+    """
+    ✅ 사번 정규화 SSOT
+    - 숫자/문자 혼합값은 숫자만 추출
+    - 숫자가 없으면 원문 유지
+    - 기존 ratetable._to_emp_id 동작 유지
+    """
+    s = to_str(value)
+    digits = "".join(ch for ch in s if ch.isdigit())
+    return digits or s
+
+
+def team_affiliation(team_a: Any, team_b: Any, team_c: Any) -> str:
+    """
+    ✅ 팀A/B/C 표시 문자열 조합 SSOT
+    - "-", 빈값 제외
+    - 모두 비면 "-"
+    """
+    parts = [to_str(team_a), to_str(team_b), to_str(team_c)]
+    parts = [p for p in parts if p and p != "-"]
+    return " ".join(parts) if parts else "-"
+
+
+def same_branch(a: Any, b: Any) -> bool:
+    """
+    ✅ 지점 동일성 검사 SSOT
+    - 양쪽 모두 값이 있을 때만 True
+    - 기존 subadmin._same_branch 동작 유지
+    """
+    return bool(to_str(a) and to_str(b) and to_str(a) == to_str(b))
+
+
+def safe_tmp_name(name: Any, *, fallback: str = "upload.xlsx", max_len: int = 120) -> str:
+    """
+    ✅ 업로드 임시 파일명 정규화 SSOT
+    - 경로 주입 방지: basename 사용
+    - Windows/Linux 경로 구분자 제거
+    - 기존 ratetable._safe_tmp_name 동작 유지
+    """
+    base = os.path.basename(str(name or fallback)).replace("\\", "_").replace("/", "_")
+    return base[:max_len] or fallback
+
+
+def excel_response(content: bytes, filename: str) -> HttpResponse:
+    """
+    ✅ xlsx 다운로드 응답 SSOT
+    - RFC5987 한글 파일명 호환
+    - 기존 ratetable._excel_response 동작 유지
+    """
+    response = HttpResponse(
+        content,
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    response["Content-Disposition"] = (
+        f"attachment; filename=download.xlsx; filename*=UTF-8''{quote(filename)}"
+    )
+    return response
 
 
 # ------------------------------------------------------------
@@ -71,6 +169,52 @@ def resolve_branch_for_query(user: CustomUser, branch_param: str) -> str:
     return (getattr(user, "branch", "") or "").strip()
 
 
+def can_access_branch(user: CustomUser, branch: str) -> bool:
+    """
+    ✅ branch 접근 권한 SSOT
+    - superuser: 전체 허용
+    - head/leader: 본인 branch만 허용
+    - 기존 ratetable._can_access_branch 동작 유지
+    """
+    branch = to_str(branch)
+    user_branch = to_str(getattr(user, "branch", ""))
+    if getattr(user, "grade", "") == "superuser":
+        return True
+    return bool(branch) and branch == user_branch
+
+
+def can_use_target_in_branch(user: CustomUser, target: CustomUser, branch: str) -> bool:
+    """
+    ✅ 저장 대상자 권한 검사 SSOT
+    - superuser: 허용
+    - head/leader: 대상자 branch가 요청 branch이면서 본인 branch와 같아야 함
+    - 기존 structure/rate._can_use_target 동작 유지
+    """
+    grade = getattr(user, "grade", "")
+    target_branch = to_str(getattr(target, "branch", ""))
+    scope_branch = to_str(branch) or to_str(getattr(user, "branch", ""))
+    user_branch = to_str(getattr(user, "branch", ""))
+
+    if grade == "superuser":
+        return True
+    if target_branch != scope_branch:
+        return False
+    if grade in ("head", "leader"):
+        return target_branch == user_branch
+    return False
+
+
+def leader_requester_scope_q(user: CustomUser) -> Q:
+    """
+    ✅ leader 조회 스코프 SSOT
+    - 본인 요청 + 레벨별 팀 스코프
+    - 기존 structure/rate의 Q(requester_id=user.id) | team_q 동작 유지
+    """
+    allowed_ids = get_level_team_filter_user_ids(user)
+    team_q = Q(requester_id__in=allowed_ids) if allowed_ids else Q()
+    return Q(requester_id=user.id) | team_q
+
+
 def resolve_branch_for_write(user: CustomUser, branch_payload: str) -> str:
     """쓰기 스코프: superuser는 payload branch 사용, 그 외는 자기 지점 우선"""
     branch_payload = (branch_payload or "").strip()
@@ -88,8 +232,7 @@ def resolve_part_for_write(user: CustomUser, part_payload: str) -> str:
 # 소속 표기
 # ------------------------------------------------------------
 def _clean_dash(v: str) -> str:
-    v = (v or "").strip()
-    return "" if v == "-" else v
+    return clean_dash(v)
 
 
 def build_affiliation_display(user: CustomUser) -> str:
