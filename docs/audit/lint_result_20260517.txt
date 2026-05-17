@@ -1,6 +1,6 @@
 ========================================
  django_ma Harness Lint 결과
- 실행일시: 2026-05-17 17:26:03
+ 실행일시: 2026-05-17 21:16:42
  기준 커밋: 415a217
 ========================================
 
@@ -20,13 +20,6 @@
 ========================================
  코드 품질 위반 탐지 (QUALITY_RULES.md)
 ========================================
-
-❌ [Q-01] CSRF 토큰 재구현 — common/manage/csrf.js getCSRFToken() 사용 필요
-     static/js/manual/_shared.js:37:    const fromForm = toStr(formEl?.querySelector?.("[name=csrfmiddlewaretoken]")?.value);
-     static/js/manual/_shared.js:38:    return fromForm || toStr(document.querySelector("[name=csrfmiddlewaretoken]")?.value);
-
-❌ [Q-02b] commission.css 전역 클래스 — 페이지 루트 ID 하위로 스코핑 필요
-     1098:.re-fire-dev-watermark {
 
 ⚠️  [BF-01] BFCache 가드(dataset.inited) 누락 파일 (경고만, 커밋 차단 안 함)
      static/js/accounts/login_recaptcha.js
@@ -58,7 +51,7 @@
      static/js/utils/file_upload_utils.js
 
 ========================================
-❌ 품질 위반 2건 발견 — docs/harness/QUALITY_RULES.md 확인 필요
+✅ 품질 점검 통과
 
 ────────────────────────────────────────
 [3/4] Celery task 이름 정합성
@@ -111,7 +104,5 @@ beat_schedule 등록 task (9건):
 [OK] CSS 스코프 점검 통과
 
 ========================================
-❌ 점검 실패 — docs/harness/NEVER_DO.md 를 확인하세요
-
-  결과 저장 위치: docs/audit/lint_result_20260517.txt
+✅ 전체 점검 통과 — 커밋 진행 가능
 ========================================

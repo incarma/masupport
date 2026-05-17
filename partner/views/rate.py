@@ -22,12 +22,15 @@ from audit.constants import ACTION
 
 from .responses import json_err, json_ok, parse_json_body
 from .utils import (
+    can_use_target_in_branch,
     find_table_rate,
     get_level_team_filter_user_ids,
+    team_affiliation,
     normalize_month,
     resolve_branch_for_query,
     resolve_branch_for_write,
     resolve_part_for_write,
+    to_str,
 )
 
 
@@ -35,36 +38,18 @@ logger = logging.getLogger(__name__)
 
 
 def _to_str(v) -> str:
-    return ("" if v is None else str(v)).strip()
+    # ✅ 기능 변화 0: 기존 로컬 함수명은 유지하고 공통 SSOT로 위임
+    return to_str(v)
 
 
 def _team_affiliation(a: str, b: str, c: str) -> str:
-    parts = [_to_str(a), _to_str(b), _to_str(c)]
-    parts = [p for p in parts if p and p != "-"]
-    return " ".join(parts) if parts else "-"
+    # ✅ 기능 변화 0: 기존 표시 규칙("-", 빈값 제외)을 공통화
+    return team_affiliation(a, b, c)
 
 
 def _can_use_target(user, target: CustomUser, branch: str) -> bool:
-    grade = getattr(user, "grade", "")
-    target_branch = _to_str(getattr(target, "branch", ""))
-    user_branch = _to_str(getattr(user, "branch", ""))
-    branch = _to_str(branch)
-
-    if grade == "superuser":
-        return True
-
-    if target_branch != branch:
-        return False
-
-    if grade == "head":
-        return target_branch == user_branch
-
-    if grade == "leader":
-        # manage-rate 검색 모달은 scope=branch 기준으로 대상자를 노출한다.
-        # 저장 권한도 동일하게 본인 지점 범위로 맞춘다.
-        return target_branch == user_branch
-
-    return False
+    # ✅ 기능 변화 0: manage-rate 저장 대상자 branch 검증을 공통 SSOT로 위임
+    return can_use_target_in_branch(user, target, branch)
 
 
 @require_GET

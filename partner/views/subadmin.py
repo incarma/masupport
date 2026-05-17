@@ -19,16 +19,19 @@ from accounts.models import CustomUser
 from audit.constants import ACTION
 from audit.services import log_action
 from partner.models import SubAdminTemp
+from .utils import same_branch, to_str
 
 logger = logging.getLogger(__name__)
 
 
 def _to_str(v) -> str:
-    return ("" if v is None else str(v)).strip()
+    # ✅ 기능 변화 0: 기존 로컬 함수명 유지, 내부만 공통 SSOT로 위임
+    return to_str(v)
 
 
 def _same_branch(a: str, b: str) -> bool:
-    return _to_str(a) and _to_str(b) and _to_str(a) == _to_str(b)
+    # ✅ 기능 변화 0: head 지점 제한 정책 동일
+    return same_branch(a, b)
 
 
 @require_POST

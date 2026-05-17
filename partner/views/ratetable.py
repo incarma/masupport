@@ -12,18 +12,16 @@ from __future__ import annotations
 
 import io
 import logging
-import os
 import traceback
 from datetime import datetime
 from typing import Optional, Tuple
-from urllib.parse import quote
 
 import pandas as pd
 from django.core.files.storage import default_storage
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.db.models import Q
-from django.http import HttpResponse, JsonResponse
+from django.http import JsonResponse
 from django.views.decorators.http import require_GET, require_POST
 
 from accounts.decorators import grade_required
@@ -33,7 +31,14 @@ from audit.services import log_action
 from partner.models import RateTable, SubAdminTemp
 
 from .responses import json_err, json_ok
-from .utils import find_table_rate
+from .utils import (
+    can_access_branch,
+    excel_response,
+    find_table_rate,
+    normalize_emp_id,
+    safe_tmp_name,
+    to_str,
+)
 
 
 # =============================================================================
@@ -57,34 +62,22 @@ def _user_branch(user) -> str:
 
 
 def _can_access_branch(user, branch: str) -> bool:
-    grade = getattr(user, "grade", "")
-    if grade == "superuser":
-        return True
-    if grade == "leader":
-        # leader는 본인 지점 소속 대상자에 한해 허용
-        return bool(branch) and branch == _user_branch(user)
-    return bool(branch) and branch == _user_branch(user)
+    # ✅ 기능 변화 0: 기존 함수명 유지, branch 접근 정책은 공통 SSOT로 위임
+    return can_access_branch(user, branch)
 
 
 def _excel_response(content: bytes, filename: str) -> HttpResponse:
-    response = HttpResponse(
-        content,
-        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    )
-    fallback = "download.xlsx"
-    response["Content-Disposition"] = (
-        f"attachment; filename={fallback}; filename*=UTF-8''{quote(filename)}"
-    )
-    return response
+    # ✅ 기능 변화 0: xlsx 응답 헤더/RFC5987 정책 공통화
+    return excel_response(content, filename)
 
 
 def _safe_tmp_name(name: str) -> str:
-    base = os.path.basename(str(name or "upload.xlsx")).replace("\\", "_").replace("/", "_")
-    return base[:120] or "upload.xlsx"
+    # ✅ 기능 변화 0: 기존 tmp 파일명 정규화 정책 유지
+    return safe_tmp_name(name)
 
 
 def _to_str(v) -> str:
-    return ("" if v is None else str(v)).strip()
+    return to_str(v)
 
 
 def _to_emp_id(v) -> str:
@@ -93,9 +86,7 @@ def _to_emp_id(v) -> str:
     - 숫자/문자 혼합 케이스 대비
     - 기본은 숫자만 추출하되, 숫자가 없으면 원문 유지
     """
-    s = _to_str(v)
-    digits = "".join(ch for ch in s if ch.isdigit())
-    return digits or s
+    return normalize_emp_id(v)
 
 
 def _pick_sheet_name(xls: pd.ExcelFile) -> str:
@@ -136,11 +127,6 @@ def _resolve_emp_col(df: pd.DataFrame) -> Optional[str]:
     if len(df.columns) >= EMP_COL_C_INDEX + 1:
         return df.columns[EMP_COL_C_INDEX]
     return None
-
-
-def _safe_json(res: HttpResponse) -> JsonResponse:
-    # (placeholder) - server side에서 쓰지 않음. 남겨두지 않음.
-    raise NotImplementedError
 
 
 # =============================================================================
