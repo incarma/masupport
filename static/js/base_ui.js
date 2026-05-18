@@ -1,1 +1,0 @@
-// django_ma/static/js/base_ui.js
