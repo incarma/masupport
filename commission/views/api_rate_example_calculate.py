@@ -55,6 +55,74 @@ def _premium_range(value: str | int | None) -> str:
     return "1000만원이상"
 
 
+def _normalize_insurer_type(value: str | None) -> str:
+    """
+    감사로그용 insurer_type 정규화.
+    - 프론트/레거시에서 nonlife가 넘어와도 현재 SSOT인 fire로 기록한다.
+    - 허용 외 값은 life로 방어한다.
+    """
+    raw = str(value or "life").strip()
+    if raw == "nonlife":
+        return "fire"
+    if raw in {"life", "fire"}:
+        return raw
+    return "life"
+
+
+def _audit_meta_base(payload: dict, *, data: dict | None = None) -> dict:
+    """
+    수수료 예시표 조회/계산 감사로그 meta 공통 생성.
+
+    보안/개인정보 원칙:
+    - 보험료 원문은 저장하지 않고 구간값만 저장한다.
+    - 상품명/구분/납기는 업무상 감사 추적에 필요한 최소 식별정보로 유지한다.
+    - 생보/손보 구분은 insurer_type으로 명확히 기록한다.
+    """
+    insurer_type = _normalize_insurer_type(payload.get("insurer_type"))
+
+    meta = {
+        "event": "rate_example_calculate",
+        "insurer_type": insurer_type,
+        "insurer_type_label": "손해보험" if insurer_type == "fire" else "생명보험",
+        "insurer": payload.get("insurer"),
+        "product_name": payload.get("product_name"),
+        "plan_type": payload.get("plan_type"),
+        "pay_period": payload.get("pay_period"),
+        "premium_range": _premium_range(payload.get("premium")),
+        "commission_rate": payload.get("commission_rate"),
+    }
+
+    if data:
+        meta.update(
+            {
+                "coverage_type": data.get("coverage_type"),
+                "pay_coverage_type": data.get("pay_coverage_type"),
+                "total_amount": data.get("total_amount"),
+                "total_ratio": data.get("total_ratio"),
+            }
+        )
+
+    return meta
+
+
+def _log_rate_example_calculate(request, payload: dict, *, data: dict | None = None, success: bool = True, reason: str = "") -> None:
+    """
+    감사로그 실패가 사용자 계산 기능을 막지 않도록 방어한다.
+    """
+    try:
+        log_action(
+            request,
+            ACTION.COMMISSION_RATE_EXAMPLE_CALCULATE,
+            object_type="RateExampleCalculate",
+            object_id=_normalize_insurer_type(payload.get("insurer_type")),
+            meta=_audit_meta_base(payload, data=data),
+            success=success,
+            reason=reason,
+        )
+    except Exception:
+        logger.exception("[rate_example_calculate] audit log failed")
+
+
 @require_POST
 @login_required
 @grade_required("superuser", forbidden_template=None)
@@ -66,54 +134,14 @@ def rate_example_calculate(request):
 
     try:
         data = calculate_rate_example_commission(payload)
-
-        log_action(
-            request,
-            ACTION.COMMISSION_RATE_EXAMPLE_CALCULATE,
-            meta={
-                "insurer": payload.get("insurer"),
-                "product_name": payload.get("product_name"),
-                "plan_type": payload.get("plan_type"),
-                "pay_period": payload.get("pay_period"),
-                "premium_range": _premium_range(payload.get("premium")),
-                "commission_rate": payload.get("commission_rate"),
-                "total_amount": data.get("total_amount"),
-                "total_ratio": data.get("total_ratio"),
-            },
-            success=True,
-        )
-
+        _log_rate_example_calculate(request, payload, data=data, success=True)
         return _json_ok(data=data)
 
     except RateExampleCalcError as exc:
-        log_action(
-            request,
-            ACTION.COMMISSION_RATE_EXAMPLE_CALCULATE,
-            meta={
-                "insurer": payload.get("insurer"),
-                "product_name": payload.get("product_name"),
-                "plan_type": payload.get("plan_type"),
-                "pay_period": payload.get("pay_period"),
-                "premium_range": _premium_range(payload.get("premium")),
-            },
-            success=False,
-            reason=str(exc),
-        )
+        _log_rate_example_calculate(request, payload, success=False, reason=str(exc))
         return _json_error(str(exc), status=400)
 
     except Exception as exc:
         logger.exception("[rate_example_calculate] unexpected error")
-        log_action(
-            request,
-            ACTION.COMMISSION_RATE_EXAMPLE_CALCULATE,
-            meta={
-                "insurer": payload.get("insurer"),
-                "product_name": payload.get("product_name"),
-                "plan_type": payload.get("plan_type"),
-                "pay_period": payload.get("pay_period"),
-                "premium_range": _premium_range(payload.get("premium")),
-            },
-            success=False,
-            reason=exc.__class__.__name__,
-        )
+        _log_rate_example_calculate(request, payload, success=False, reason=exc.__class__.__name__)
         return _json_error("계산 중 오류가 발생했습니다.", status=500)

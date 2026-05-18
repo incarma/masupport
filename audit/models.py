@@ -100,6 +100,8 @@ _RATE_EXAMPLE_ACTIONS = (
     "commission.rate_example.delete",
     "commission.rate_example.normalize",
     "commission.rate_example.strategy_update",
+    "commission.rate_example.conversion.bulk_edit",
+    "commission.rate_example.calculate",
 )
 
 

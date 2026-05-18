@@ -83,6 +83,12 @@ from commission.services.rate_example_normalizers.fire_nh import (
 from commission.services.rate_example_normalizers.fire_samsung import (
     build_fire_samsung_conversion_rows,
 )
+from commission.services.rate_example_normalizers.fire_lotte import (
+    build_fire_lotte_conversion_rows,
+)
+from commission.services.rate_example_normalizers.fire_hanhwa import (
+    build_fire_hanhwa_conversion_rows,
+)
 
 
 __all__ = [
@@ -112,4 +118,6 @@ __all__ = [
     "build_fire_kb_conversion_rows",
     "build_fire_nh_conversion_rows",
     "build_fire_samsung_conversion_rows",
+    "build_fire_lotte_conversion_rows",
+    "build_fire_hanhwa_conversion_rows",
 ]
