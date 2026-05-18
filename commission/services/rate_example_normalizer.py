@@ -100,6 +100,9 @@ from commission.services.rate_example_normalizers.fire_lotte import (
 from commission.services.rate_example_normalizers.fire_hanhwa import (
     build_fire_hanhwa_conversion_rows,
 )
+from commission.services.rate_example_normalizers.fire_hyundai import (
+    build_fire_hyundai_conversion_rows,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -204,7 +207,7 @@ def normalize_rate_example(
     is_fire_conv_target = (
         example.insurer_type == RateExample.TYPE_FIRE
         and example.category == RateExample.CAT_CONV
-        and example.insurer in {"DB", "KB", "농협", "롯데", "삼성", "한화"}
+        and example.insurer in {"DB", "KB", "농협", "롯데", "삼성", "한화", "현대"}
     )
 
     if not (is_life_conv_target or is_fire_conv_target):
@@ -425,6 +428,15 @@ def normalize_rate_example(
     # - 수정률은 raw 백분율 표시값 그대로 year1에 저장
     elif example.insurer_type == RateExample.TYPE_FIRE and example.insurer == "한화":
         normalized_rows.extend(build_fire_hanhwa_conversion_rows(example, wb))
+
+    # ── 현대해상 손해보험 수정률 정규화 ────────────────────────────────
+    # 현대 손보 규칙:
+    # - [G A], [태아보험], [실손의료비] 시트만 정규화
+    # - [G A] 상품명은 연속 텍스트 행을 먼저 결합한 뒤 carry-down
+    # - 태아/실손 시트는 병합 셀 값을 점유 범위 전체에 전파
+    # - 수정률은 raw 백분율 표시값 그대로 year1에 저장
+    elif example.insurer_type == RateExample.TYPE_FIRE and example.insurer == "현대":
+        normalized_rows.extend(build_fire_hyundai_conversion_rows(example, wb))
 
     # ── ABL 생명 환산율/수정률 정규화 ─────────────────────────────
     # 보험사별 parser는 rate_example_normalizers/life_*.py에 둔다.
