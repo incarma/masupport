@@ -103,6 +103,12 @@ from commission.services.rate_example_normalizers.fire_hanhwa import (
 from commission.services.rate_example_normalizers.fire_hyundai import (
     build_fire_hyundai_conversion_rows,
 )
+from commission.services.rate_example_normalizers.fire_aig import (
+    build_fire_aig_pdf_conversion_rows,
+)
+from commission.services.rate_example_normalizers.fire_hana import (
+    build_fire_hana_pdf_conversion_rows,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -207,7 +213,7 @@ def normalize_rate_example(
     is_fire_conv_target = (
         example.insurer_type == RateExample.TYPE_FIRE
         and example.category == RateExample.CAT_CONV
-        and example.insurer in {"DB", "KB", "농협", "롯데", "삼성", "한화", "현대"}
+        and example.insurer in {"AIG", "DB", "KB", "농협", "롯데", "삼성", "하나", "한화", "현대"}
     )
 
     if not (is_life_conv_target or is_fire_conv_target):
@@ -225,6 +231,56 @@ def normalize_rate_example(
     # - PDF는 병합 셀 정보가 없으므로 텍스트 흐름 기반으로 행을 복원
     # ─────────────────────────────────────────────────────
     if original_name.endswith(".pdf"):
+        # ── 하나손해보험 PDF 수정률 정규화 ───────────────────────────────
+        # - 보험사: 하나 고정
+        # - 상품군: 보장 고정
+        # - PDF 테이블의 상품명 병합 영역은 좌측 상품명 블록 기준으로 행 범위 전파
+        # - 상품분류 하위 왼쪽 열 → 납기, 오른쪽 열 → 구분
+        # - 수정율 raw 값은 year1에 그대로 저장하고 화면에서 %만 붙인다.
+        if (
+            example.insurer_type == RateExample.TYPE_FIRE
+            and example.category == RateExample.CAT_CONV
+            and example.insurer == "하나"
+        ):
+            normalized_rows = build_fire_hana_pdf_conversion_rows(example)
+
+            if normalize_mode == "replace":
+                RateExampleConversionRow.objects.filter(
+                    insurer_type=example.insurer_type,
+                    category=example.category,
+                    insurer=example.insurer,
+                ).delete()
+
+            if normalized_rows:
+                RateExampleConversionRow.objects.bulk_create(normalized_rows, batch_size=500)
+
+            return len(normalized_rows)
+
+        # ── AIG손해보험 PDF 수정률 정규화 ───────────────────────────────
+        # - 보험사: AIG 고정
+        # - 상품군: 보장 고정
+        # - 시행시기(종기)가 "판매 종료"인 행 제외
+        # - 구분은 사용하지 않으므로 공란 저장
+        # - 납입 주기 → pay_period, 수정율 → year1
+        if (
+            example.insurer_type == RateExample.TYPE_FIRE
+            and example.category == RateExample.CAT_CONV
+            and example.insurer == "AIG"
+        ):
+            normalized_rows = build_fire_aig_pdf_conversion_rows(example)
+
+            if normalize_mode == "replace":
+                RateExampleConversionRow.objects.filter(
+                    insurer_type=example.insurer_type,
+                    category=example.category,
+                    insurer=example.insurer,
+                ).delete()
+
+            if normalized_rows:
+                RateExampleConversionRow.objects.bulk_create(normalized_rows, batch_size=500)
+
+            return len(normalized_rows)
+
         # ── 처브 PDF 전용 정규화 ─────────────────────────────────────────
         # - 주계약 페이지만 정규화
         # - "특약" 섹션 감지 시 해당 페이지와 이후 페이지 제외

@@ -29,7 +29,7 @@ from __future__ import annotations
 """
 
 import logging
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from openpyxl import load_workbook
 from commission.models import RateExample
@@ -40,13 +40,13 @@ logger = logging.getLogger(__name__)
 
 # ── 지급률 저장 정책 ─────────────────────────────────────────────────────────
 #
-# 생명보험 지급률 파일은 raw 셀 수치가 이미 최종 지급률 기준이다.
-# 따라서 DB에는 raw 지급률을 그대로 Decimal(소수점 4자리)로 저장한다.
+# 생명보험 지급률 파일은 raw 지급률을 100% 기준 지급률로 역산 저장한다.
 #
 # 주의:
 # - 환산율/수정률(conv) 저장 정책과 혼동 금지
-# - 지급률(pay)에는 /0.97 역산을 적용하지 않는다
+# - 지급률(pay) 저장값 = raw 지급률 / 0.97
 #
+PAY_NORMALIZE_DIVISOR = Decimal("0.97")
 PAY_QUANT = Decimal("0.0001")
 
 # ── 대상 시트명 ───────────────────────────────────────────────────────────────
@@ -167,17 +167,19 @@ _GROUPS: list[tuple] = [
 
 def _to_decimal(value) -> "Decimal | None":
     """
-    raw 지급률 셀 값 → Decimal(소수점 4자리).
+    raw 지급률 셀 값 → 100% 기준 지급률 Decimal(소수점 4자리).
 
     정책:
-        생명보험 지급률은 raw 수치 그대로 저장한다.
+        최종 저장값 = raw 지급률 / 0.97
     """
     if value is None:
         return None
     
     try:
-        return Decimal(str(value).replace(",", "").strip()).quantize(
+        raw = Decimal(str(value).replace(",", "").strip())
+        return (raw / PAY_NORMALIZE_DIVISOR).quantize(      
             PAY_QUANT,
+            rounding=ROUND_HALF_UP, 
         )
 
     except (InvalidOperation, TypeError, ValueError):
