@@ -92,6 +92,12 @@ from commission.services.rate_example_normalizers.fire_hanhwa import (
 from commission.services.rate_example_normalizers.fire_hyundai import (
     build_fire_hyundai_conversion_rows,
 )
+from commission.services.rate_example_normalizers.fire_aig import (
+    build_fire_aig_pdf_conversion_rows,
+)
+from commission.services.rate_example_normalizers.fire_hana import (
+    build_fire_hana_pdf_conversion_rows,
+)
 
 
 __all__ = [
@@ -124,4 +130,6 @@ __all__ = [
     "build_fire_lotte_conversion_rows",
     "build_fire_hanhwa_conversion_rows",
     "build_fire_hyundai_conversion_rows",
+    "build_fire_aig_pdf_conversion_rows",
+    "build_fire_hana_pdf_conversion_rows",
 ]

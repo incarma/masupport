@@ -90,6 +90,16 @@ INSURER_CANONICAL_MAP = {
     "하나손보": "하나",
     "하나손해보험": "하나",
     "하나": "하나",
+    "라이나손보": "라이나",
+    "라이나손해보험": "라이나",
+    "라이나": "라이나",
+}
+
+INVALID_INSURER_NAMES = {
+    "",
+    "구분",
+    "구 분",
+    "구  분",
 }
 
 
@@ -109,6 +119,8 @@ def _header_key(value: Any) -> str:
 def _canonical_insurer(value: Any) -> str:
     """RAW 보험사명을 화면/계산 canonical 보험사명으로 정규화한다."""
     text = _clean_text(value)
+    if text in INVALID_INSURER_NAMES:
+        return ""
     return INSURER_CANONICAL_MAP.get(text, text)
 
 
@@ -150,7 +162,7 @@ def _to_decimal(value: Any) -> Decimal:
         return Decimal("0")
 
 
-def _iter_table_blocks(ws: Worksheet) -> list[tuple[int, int, list[int]]]:
+def _iter_table_blocks(ws: Worksheet) -> list[tuple[int, int, dict[str, int]]]:
     """
     보험사 테이블 블록을 탐지한다.
 
@@ -158,8 +170,23 @@ def _iter_table_blocks(ws: Worksheet) -> list[tuple[int, int, list[int]]]:
     - 보험사 행: '구 분'이 있는 행과 같은 행에 보험사명이 배치
     - 회차 헤더 행: 보험사 행 + 2행
     - 지급률 컬럼: 초회, 2~6회, 7~12회, 13회, 14회, 15회
+
+    예외:
+    - 메리츠처럼 15회 컬럼이 없고 14회 다음에 '계', '유지보수' 등이
+      오는 보험사도 존재한다.
+    - 따라서 6개 헤더 완전 일치 방식이 아니라, 헤더명 기반 동적 매핑으로
+      필수 컬럼 5개(초회~14회)가 있으면 블록으로 인정한다.
+    - 15회가 없으면 col_m36은 None으로 저장한다.
     """
-    blocks: list[tuple[int, int, list[int]]] = []
+    blocks: list[tuple[int, int, dict[str, int]]] = []
+
+    required_fields = {
+        "col_first",  # 초회
+        "col_yr1",    # 2~6회
+        "col_m13",    # 7~12회
+        "col_yr2",    # 13회
+        "col_yr3",    # 14회
+    }
 
     for row_no in range(1, ws.max_row + 1):
         first_value = _clean_text(ws.cell(row_no, 1).value)
@@ -173,15 +200,23 @@ def _iter_table_blocks(ws: Worksheet) -> list[tuple[int, int, list[int]]]:
             if not insurer:
                 continue
 
-            header_cells = [
-                _header_key(ws.cell(header_row, col_no + offset).value)
-                for offset in range(0, 6)
-            ]
+            # ── 지급률 헤더명 기반 동적 매핑 ───────────────────────────
+            # 기존 6칸 완전 일치 방식은 메리츠처럼 15회가 없는 블록을
+            # 정규화하지 못한다. 현재 보험사 블록 시작열 기준 우측 8칸만
+            # 탐색하여 '계', '유지보수' 같은 비정규화 컬럼은 무시한다.
+            header_map: dict[str, int] = {}
+            for offset in range(0, 8):
+                scan_col = col_no + offset
+                header = _header_key(ws.cell(header_row, scan_col).value)
+                field_name = PAY_HEADER_MAP.get(header)
+                if not field_name:
+                    continue
+                header_map[field_name] = scan_col
 
-            if header_cells != ["초회", "2~6회", "7~12회", "13회", "14회", "15회"]:
+            if not required_fields.issubset(set(header_map)):
                 continue
 
-            blocks.append((row_no, col_no, [col_no + offset for offset in range(0, 6)]))
+            blocks.append((row_no, col_no, header_map))
 
     return blocks
 
@@ -243,7 +278,7 @@ def build_fire_pay_rows(example: RateExample) -> list[RateExamplePayRow]:
         ws = wb[TARGET_SHEET_NAME]
         rows: list[RateExamplePayRow] = []
 
-        for insurer_row, insurer_col, header_cols in _iter_table_blocks(ws):
+        for insurer_row, insurer_col, header_map in _iter_table_blocks(ws):
             insurer = _canonical_insurer(ws.cell(insurer_row, insurer_col).value)
             if not insurer:
                 continue
@@ -264,11 +299,7 @@ def build_fire_pay_rows(example: RateExample) -> list[RateExamplePayRow]:
                     "col_yr4": None,
                 }
 
-                for col_no in header_cols:
-                    header = _header_key(ws.cell(insurer_row + 2, col_no).value)
-                    field_name = PAY_HEADER_MAP.get(header)
-                    if not field_name:
-                        continue
+                for field_name, col_no in header_map.items():
                     values[field_name] = _to_decimal(ws.cell(row_no, col_no).value)
 
                 rows.append(

@@ -1,4 +1,4 @@
-# Rate Example Development Guide — Final Edition (DB/KB/농협/삼성/롯데/한화 손보 정규화 포함)
+# Rate Example Development Guide — Final Edition (DB/KB/농협/삼성/롯데/한화/현대/AIG 손보 정규화 포함)
 
 > 기준 프로젝트: django_ma  
 > 대상 앱: commission  
@@ -3115,6 +3115,959 @@ B열 "구분/구  분" 테이블 기준 처리
 B/C열 구분이 다르면 "B (C)"로 결합
 보장(태아) 구분의 "주)" 제거
 납기 "수금" 컬럼 제외
+수정률은 raw 백분율 그대로 year1 저장
+```
+
+
+
+
+
+---
+
+# 현대해상(FIRE) 수정률 정규화 — Final SSOT (2026-05-18 추가)
+
+## 개요
+
+현대해상 수정률 RAW 파일을 `RateExampleConversionRow` 기준으로 정규화한다.
+
+대상:
+
+```text
+insurer_type = fire
+category = conv
+insurer = 현대
+```
+
+정규화 파일:
+
+```python
+commission/services/rate_example_normalizers/fire_hyundai.py
+```
+
+핵심 목적:
+
+- 현대해상 `[G A]`, `[태아보험]`, `[실손의료비]` 시트 정규화
+- 손해보험 수정률 단일 컬럼 구조(`year1`) 유지
+- 상품명 multi-line continuation 구조 정상 병합
+- `보장(태아)`, `단독실손(초회)`, `단독실손(갱신)` 정상 생성
+- 태아보험 상품명 불필요 문구 제거
+- 실손 상품군 자동 분기
+
+---
+
+# 저장 구조
+
+모델:
+
+```python
+RateExampleConversionRow
+```
+
+| 정규화 컬럼 | DB 필드 | 정책 |
+|---|---|---|
+| 보험사 | insurer | `현대` 고정 |
+| 상품군 | coverage_type | 보장 / 보장(태아) / 연금 / 저축 / 단독실손(초회) / 단독실손(갱신) |
+| 상품명 | product_name | 시트별 규칙 적용 |
+| 구분 | plan_type | 만기/종형 조합 |
+| 납기 | pay_period | 납기 + 만기 조합 |
+| 수정률 | year1 | raw 백분율 표시값 그대로 저장 |
+| 미사용 | year2~year4 | `None` 저장 |
+
+---
+
+# 대상 시트 정책
+
+## 1. `[G A]`
+
+핵심 상품 테이블 시트.
+
+헤더 기준:
+
+```text
+C14~M14
+```
+
+실제 데이터 시작:
+
+```text
+15행
+```
+
+---
+
+## 2. `[태아보험]`
+
+태아보험 전용 수정률 시트.
+
+헤더 기준:
+
+```text
+B13~G13
+```
+
+실제 데이터 시작:
+
+```text
+14행
+```
+
+---
+
+## 3. `[실손의료비]`
+
+단독실손 전용 수정률 시트.
+
+헤더 기준:
+
+```text
+B10~G10
+```
+
+실제 데이터 시작:
+
+```text
+11행
+```
+
+---
+
+# 병합 셀 처리 정책
+
+현대 raw 파일은 병합 셀이 존재하므로 parser 내부 matrix에서만 병합 값을 전파한다.
+
+```text
+병합 범위 전체 = 좌상단 셀 값
+```
+
+금지:
+
+```python
+ws.unmerge_cells(...)
+```
+
+주의:
+
+- 실제 workbook 수정 금지
+- parser 내부 `values[(row, col)]` matrix에서만 전파
+
+---
+
+# [G A] 상품명(product_name) 정규화 정책
+
+## 핵심 규칙
+
+기준 컬럼:
+
+```text
+E열 상품명
+```
+
+규칙:
+
+1. 현재 행 E열과 다음 행 E열 모두 텍스트가 있으면:
+   - 다음 행 텍스트를 현재 상품명 뒤에 이어붙인다.
+   - 다음 행 상품명은 공란 처리한다.
+
+예:
+
+```text
+48행:
+(무)퍼펙트플러스종합보험
+
+49행:
+(일반심사/건강고지형)
+
+↓
+
+최종:
+(무)퍼펙트플러스종합보험 (일반심사/건강고지형)
+```
+
+2. 공란 상품명은 위쪽 마지막 상품명으로 carry-down 한다.
+
+3. 최종 상품명은 줄바꿈 제거 후 단일 문자열로 저장한다.
+
+---
+
+# [G A] 구분(plan_type) 정책
+
+기준 컬럼:
+
+| 컬럼 | 의미 |
+|---|---|
+| G열 | 만기구분 |
+| H열 | 종형 |
+
+최종 조합:
+
+```text
+만기구분 + " (" + 종형 + ")"
+```
+
+예:
+
+```text
+세만기 (표준형)
+세만기(무해지)
+```
+
+주의:
+
+- `무해지`는 공백 없이 붙인다.
+
+---
+
+# [G A] 납기(pay_period) 정책
+
+기준 컬럼:
+
+| 컬럼 | 의미 |
+|---|---|
+| I열 | 만기/기타구분 |
+| J열 | 납기 |
+
+최종 조합:
+
+```text
+납기 + " (" + 만기/기타구분 + ")"
+```
+
+예:
+
+```text
+1~10년 (전기납)
+11~19년 (전기납)
+20~30년 (전기납)
+```
+
+---
+
+# [G A] 상품군(coverage_type) 정책
+
+| 조건 | 상품군 |
+|---|---|
+| 상품명에 "연금" 포함 | 연금 |
+| 상품명에 "저축" 포함 | 저축 |
+| 그 외 | 보장 |
+
+---
+
+# [태아보험] 상품명 정책
+
+기준:
+
+```text
+A2 셀
+```
+
+정리 규칙:
+
+- `□` 제거
+- `수정률 및 수수료` 제거
+- 다중 공백 제거
+
+예:
+
+```text
+□ 무배당굿앤굿어린이종합보험Q 수정률 및 수수료
+
+↓
+
+무배당굿앤굿어린이종합보험Q
+```
+
+---
+
+# [태아보험] 구분(plan_type) 정책
+
+기준 컬럼:
+
+| 컬럼 | 의미 |
+|---|---|
+| B열 | 구분 |
+| C열 | 종형 |
+
+최종 조합:
+
+```text
+구분 + " (" + 종형 + ")"
+```
+
+단:
+
+```text
+구분 == 종형
+```
+
+이면 하나만 저장.
+
+예:
+
+```text
+출생후보장 (표준형)
+태아보장
+```
+
+---
+
+# [태아보험] 납기(pay_period) 정책
+
+기준 컬럼:
+
+| 컬럼 | 의미 |
+|---|---|
+| D열 | 만기 |
+| E열 | 납기 |
+
+줄바꿈 처리:
+
+```text
+줄바꿈 → /
+```
+
+최종 조합:
+
+```text
+납기 + " (" + 만기 + ")"
+```
+
+예:
+
+```text
+1-10개월납/전기납 (1년)
+```
+
+---
+
+# [태아보험] 상품군 정책
+
+| 조건 | 상품군 |
+|---|---|
+| 구분에 "태아" 포함 | 보장(태아) |
+| 그 외 | 보장 |
+
+---
+
+# [태아보험] 수정률 정책
+
+기준 컬럼:
+
+| 컬럼 | 의미 |
+|---|---|
+| F열 | 수정률 |
+| G열 | fallback 수정률 |
+
+정책:
+
+- 기본은 F열 사용
+- 단, 태아보장 row에서 F열이 `-`이면 G열 fallback 사용
+
+---
+
+# [실손의료비] 구분(plan_type) 정책
+
+기준 컬럼:
+
+| 컬럼 | 의미 |
+|---|---|
+| B열 | 가입유형 1 |
+| C열 | 가입유형 2 |
+
+최종 조합:
+
+```text
+B열 + " (" + C열 + ")"
+```
+
+예:
+
+```text
+최초가입 (태아가입)
+```
+
+주의:
+
+- 기존 A/B열 참조 금지
+- 실제 raw는 B/C열 구조
+
+---
+
+# [실손의료비] 납기(pay_period) 정책
+
+기준 컬럼:
+
+| 컬럼 | 의미 |
+|---|---|
+| E열 | 경과년수 |
+
+줄바꿈 제거 후 저장.
+
+---
+
+# [실손의료비] 상품군 정책
+
+| 조건 | 상품군 |
+|---|---|
+| 납기에 "갱신" 포함 | 단독실손(갱신) |
+| 그 외 | 단독실손(초회) |
+
+---
+
+# 수정률(year1) 저장 정책
+
+수정률은 raw 백분율 표시값 그대로 저장한다.
+
+| raw | 저장값 | 화면 표시 |
+|---|---:|---:|
+| 160 | 160 | 160% |
+| 2.4 | 2.4 | 2.4% |
+| 230 | 230 | 230% |
+
+주의:
+
+- `×100` 금지
+- `/100` 금지
+- `/0.97` 보정 금지
+- `year2~year4`는 `None`
+
+---
+
+# Orchestrator 연동
+
+## __init__.py
+
+```python
+from commission.services.rate_example_normalizers.fire_hyundai import (
+    build_fire_hyundai_conversion_rows,
+)
+```
+
+`__all__` 추가:
+
+```python
+"build_fire_hyundai_conversion_rows",
+```
+
+---
+
+## rate_example_normalizer.py
+
+보험사 허용 목록:
+
+```python
+and example.insurer in {
+    "DB",
+    "KB",
+    "농협",
+    "롯데",
+    "삼성",
+    "한화",
+    "현대",
+}
+```
+
+실행 분기:
+
+```python
+elif (
+    example.insurer_type == RateExample.TYPE_FIRE
+    and example.insurer == "현대"
+):
+    normalized_rows.extend(
+        build_fire_hyundai_conversion_rows(example, wb)
+    )
+```
+
+---
+
+# 필수 검증 항목
+
+```text
+[ ] 현대 업로드 정상 완료
+[ ] 상품명 continuation 정상 결합
+[ ] "(일반심사/건강고지형)" 단독 상품명 생성 안됨
+[ ] 보장(태아) 생성 정상
+[ ] 단독실손(초회) 생성 정상
+[ ] 단독실손(갱신) 생성 정상
+[ ] 태아보험 상품명에서 "수정률 및 수수료" 제거
+[ ] 실손 구분 B/C열 정상 조합
+[ ] 수정률 160 → 160% 표시
+[ ] 생명보험 영향 없음
+[ ] 기존 DB/KB/농협/삼성/롯데/한화 영향 없음
+```
+
+---
+
+# 운영 주의사항
+
+- migration 불필요
+- model 변경 없음
+- URL 변경 없음
+- static rebuild 불필요
+- replace 모드 재업로드 권장
+- 기존 현대 row 삭제 후 재업로드 권장
+
+---
+
+# 최종 SSOT
+
+현대해상 수정률 정책:
+
+```text
+E열 연속 상품명 continuation 결합
+공란 상품명 carry-down
+태아보험 상품명 불필요 문구 제거
+실손 B/C열 가입유형 기반 구분 생성
+보장(태아) / 단독실손(초회) / 단독실손(갱신) 지원
+수정률은 raw 백분율 그대로 year1 저장
+```
+
+---
+
+# AIG손해보험(FIRE) 수정률 정규화 — Final SSOT (2026-05-18 추가)
+
+## 개요
+
+AIG손해보험 수정률 PDF 원본 파일을 `RateExampleConversionRow` 기준으로 정규화한다.
+
+대상:
+
+```text
+insurer_type = fire
+category = conv
+insurer = AIG
+```
+
+정규화 파일:
+
+```python
+commission/services/rate_example_normalizers/fire_aig.py
+```
+
+핵심 목적:
+
+- PDF 기반 AIG 수정률 표를 손해보험 수정률 단일 컬럼 구조로 저장한다.
+- 보험사 컬럼은 `AIG`로 고정한다.
+- 상품군은 전건 `보장`으로 고정한다.
+- `시행시기(종기)`가 `판매 종료`인 상품은 정규화에서 제외한다.
+- `구분` 컬럼은 사용하지 않고 공란으로 저장한다.
+- `납입 주기`는 `pay_period`에 저장한다.
+- `수정율`은 `year1`에 저장한다.
+
+---
+
+## 저장 구조
+
+모델:
+
+```python
+RateExampleConversionRow
+```
+
+| 정규화 컬럼 | DB 필드 | 정책 |
+|---|---|---|
+| 보험사 | `insurer` | `AIG` 고정 |
+| 상품군 | `coverage_type` | `보장` 고정 |
+| 상품명 | `product_name` | PDF `상 품 명` |
+| 구분 | `plan_type` | 사용 안 함, `""` 저장 |
+| 납기 | `pay_period` | PDF `납입 주기` |
+| 수정률 | `year1` | PDF `수정율` raw 백분율 저장 |
+| 미사용 | `year2~year4` | `None` 저장 |
+
+---
+
+## 원본 PDF 구조 기준
+
+AIG 원본 PDF는 다음 컬럼 구조를 가진다.
+
+```text
+상 품 명 | 시행시기(종기) | 납입 주기 | 수정율
+```
+
+예시:
+
+```text
+(무) AIG 내심바라던 간편암보험 | 2024년 8월 | 10년 자동갱신 | 180%
+```
+
+정상 판매 상품은 정규화하고, `시행시기(종기)`가 `판매 종료`인 상품은 제외한다.
+
+---
+
+## PDF 텍스트 추출 정책
+
+AIG PDF는 `pypdf` 또는 `PyPDF2`의 `extract_text()` 결과가 표 행 단위로 안정적으로 분리되지 않을 수 있다.
+
+실제 발생 가능한 형태:
+
+```text
+180%
+10년 자동갱신
+(무) AIG 내심바라던 간편암보험 2024년 8월
+```
+
+또는:
+
+```text
+180%2024년 8월(무) AIG 내심바라던 간편암보험 180%2024년 7월...
+```
+
+따라서 parser는 단순 `splitlines()` 기반 row 매칭에만 의존하지 않는다.
+
+최종 정책:
+
+```text
+PDF 전체 텍스트를 하나의 compact text로 정규화한 뒤,
+수정율 → 시행시기(종기) → 상품명 패턴을 직접 추출한다.
+```
+
+핵심 정규식:
+
+```python
+_ROW_RE = re.compile(
+    r"(?P<rate>[\d,]+(?:\.\d+)?)\s*%"
+    r"(?P<status>판매\s*종료|\d{4}\s*년\s*\d{1,2}\s*월)"
+    r"(?P<product>\(무\).*?)"
+    r"(?=(?:[\d,]+(?:\.\d+)?\s*%(?:판매\s*종료|\d{4}\s*년\s*\d{1,2}\s*월))|$)"
+)
+```
+
+주의:
+
+- line 단위 parser만 사용하면 0건 생성 가능성이 높다.
+- AIG PDF는 PDF 전체 텍스트 기반 parser를 사용해야 한다.
+
+---
+
+## 상품군(coverage_type) 정책
+
+AIG 수정률 정규화 결과의 상품군은 모두 다음 값으로 저장한다.
+
+```text
+보장
+```
+
+예외 없음.
+
+---
+
+## 상품명(product_name) 정책
+
+기준:
+
+```text
+상 품 명
+```
+
+정규화:
+
+- 줄바꿈 제거
+- 다중 공백 제거
+- trim 처리
+- PDF 전체 텍스트 매칭 결과의 `product` 그룹 사용
+
+예:
+
+```text
+(무) AIG 내심바라던 간편암보험
+```
+
+---
+
+## 구분(plan_type) 정책
+
+AIG 수정률 정규화에서는 구분 컬럼을 사용하지 않는다.
+
+저장값:
+
+```python
+plan_type = ""
+```
+
+---
+
+## 납기(pay_period) 정책
+
+기준:
+
+```text
+납입 주기
+```
+
+AIG 원본 PDF 기준 납입 주기는 다음 값이다.
+
+```text
+10년 자동갱신
+```
+
+저장값:
+
+```python
+pay_period = "10년 자동갱신"
+```
+
+---
+
+## 수정률(year1) 저장 정책
+
+기준:
+
+```text
+수정율
+```
+
+저장 정책:
+
+```text
+raw 백분율 표시값 그대로 저장
+```
+
+예:
+
+| raw | 저장값 | 화면 표시 |
+|---|---:|---:|
+| `180%` | `180` | `180%` |
+| `220%` | `220` | 제외 대상이면 저장 안 함 |
+
+주의:
+
+- `×100` 금지
+- `/100` 금지
+- `/0.97` 보정 금지
+- `year2`, `year3`, `year4`는 `None` 저장
+
+---
+
+## 판매 종료 제외 정책
+
+다음 조건이면 정규화에서 제외한다.
+
+```text
+시행시기(종기) == 판매 종료
+```
+
+구현 조건:
+
+```python
+if status == "판매종료":
+    continue
+```
+
+AIG PDF 기준 `판매 종료` 행은 저장하지 않는다.
+
+---
+
+## 중복 방어 정책
+
+동일 key는 최초 row만 유지한다.
+
+중복 판단 기준:
+
+| 기준 |
+|---|
+| 상품명 |
+| 납기 |
+| 수정률 |
+
+구현 예:
+
+```python
+dedupe_key = (product_name, pay_period, rate)
+```
+
+---
+
+## Orchestrator 연동
+
+### `commission/services/rate_example_normalizers/__init__.py`
+
+import 추가:
+
+```python
+from commission.services.rate_example_normalizers.fire_aig import (
+    build_fire_aig_pdf_conversion_rows,
+)
+```
+
+`__all__` 추가:
+
+```python
+"build_fire_aig_pdf_conversion_rows",
+```
+
+---
+
+### `commission/services/rate_example_normalizer.py`
+
+보험사 허용 목록에 `AIG` 추가:
+
+```python
+is_fire_conv_target = (
+    example.insurer_type == RateExample.TYPE_FIRE
+    and example.category == RateExample.CAT_CONV
+    and example.insurer in {
+        "AIG",
+        "DB",
+        "KB",
+        "농협",
+        "롯데",
+        "삼성",
+        "한화",
+        "현대",
+    }
+)
+```
+
+PDF 분기에서 AIG를 가장 먼저 처리한다.
+
+```python
+if original_name.endswith(".pdf"):
+    if (
+        example.insurer_type == RateExample.TYPE_FIRE
+        and example.category == RateExample.CAT_CONV
+        and example.insurer == "AIG"
+    ):
+        normalized_rows = build_fire_aig_pdf_conversion_rows(example)
+
+        if normalize_mode == "replace":
+            RateExampleConversionRow.objects.filter(
+                insurer_type=example.insurer_type,
+                category=example.category,
+                insurer=example.insurer,
+            ).delete()
+
+        if normalized_rows:
+            RateExampleConversionRow.objects.bulk_create(normalized_rows, batch_size=500)
+
+        return len(normalized_rows)
+```
+
+주의:
+
+- AIG는 PDF 정규화 대상이다.
+- xlsx workbook 로드 분기까지 내려가면 안 된다.
+- PDF 분기 내 기존 생명보험 PDF parser보다 먼저 AIG를 처리해야 한다.
+
+---
+
+## 조회 API 정책
+
+조회 API는 기존 `RateExampleConversionRow` 조회를 그대로 사용한다.
+
+조건:
+
+```python
+RateExampleConversionRow.objects.filter(
+    insurer_type="fire",
+    category="conv",
+    insurer="AIG",
+)
+```
+
+손보 수정률 화면에서는 `year1`을 `mod_rate`로 렌더링한다.
+
+DB손보만 legacy 표시 정책을 유지한다.
+
+```python
+shown = value * 100 if row.insurer == "DB" else value
+```
+
+따라서 AIG는 저장값에 `%`만 붙여 표시한다.
+
+예:
+
+```text
+180 → 180%
+```
+
+---
+
+## 초기화/재업로드 절차
+
+기존 AIG 데이터 초기화:
+
+```powershell
+python manage.py shell -c "from commission.models import RateExampleConversionRow as R; print(R.objects.filter(insurer_type='fire', category='conv', insurer='AIG').delete())"
+```
+
+재업로드:
+
+```text
+손해보험 / 수정률 / AIG / replace
+```
+
+기존 업로드 파일을 수동 재정규화할 경우:
+
+```powershell
+python manage.py shell -c "from commission.models import RateExample as E; from commission.services.rate_example_normalizer import normalize_rate_example; e=E.objects.filter(insurer_type='fire', category='conv', insurer='AIG').latest('id'); print(e.id, e.original_name); print(normalize_rate_example(e, normalize_mode='replace'))"
+```
+
+검증:
+
+```powershell
+python manage.py shell -c "from commission.models import RateExampleConversionRow as R; qs=R.objects.filter(insurer_type='fire', category='conv', insurer='AIG'); print(qs.count()); print(list(qs.values('coverage_type','product_name','plan_type','pay_period','year1')[:20]))"
+```
+
+정상 기대값:
+
+```text
+count = 9
+coverage_type = 보장
+plan_type = ""
+pay_period = 10년 자동갱신
+year1 = 180
+```
+
+---
+
+## 필수 검증 항목
+
+```text
+[ ] AIG 업로드 시 normalized_count > 0
+[ ] 저장 결과 count = 9
+[ ] 수정률 조회 모달에서 보험사=AIG 조회 가능
+[ ] 상품군이 모두 보장인지 확인
+[ ] 구분이 모두 공란인지 확인
+[ ] 납기가 모두 10년 자동갱신인지 확인
+[ ] 수정률 180 → 180% 표시
+[ ] 시행시기(종기)=판매 종료 상품 제외
+[ ] 판매 종료 상품명 저장 0건
+[ ] DB/KB/농협/삼성/롯데/한화/현대 손보 영향 없음
+[ ] 생명보험 환산율/지급률 영향 없음
+```
+
+판매 종료 상품 저장 여부 점검:
+
+```powershell
+python manage.py shell -c "from commission.models import RateExampleConversionRow as R; qs=R.objects.filter(insurer_type='fire', category='conv', insurer='AIG', product_name__icontains='판매 종료'); print(qs.count())"
+```
+
+---
+
+## 운영 주의사항
+
+- migration 불필요
+- model 변경 없음
+- URL 변경 없음
+- static rebuild 불필요
+- 권한 변경 없음
+- superuser 업로드 정책 유지
+- replace 모드 재업로드 권장
+- 기존 AIG row가 0건으로 생성된 이력이 있으면 코드 교체 후 반드시 재정규화한다.
+- `base_ui.js 404`는 AIG 정규화 0건 문제의 직접 원인이 아니다.
+
+---
+
+## 최종 SSOT
+
+AIG손해보험 수정률 정책:
+
+```text
+PDF 전체 텍스트 기반으로 수정율 → 시행시기 → 상품명 패턴 추출
+상품군은 전건 보장
+구분은 사용하지 않음
+납기는 10년 자동갱신
+판매 종료 상품 제외
 수정률은 raw 백분율 그대로 year1 저장
 ```
 
