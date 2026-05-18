@@ -14,30 +14,14 @@ import { resetInputSection } from "./input_rows.js";
 
 import { getCSRFToken } from "../../common/manage/csrf.js";
 import { readJsonOrThrow, isSuccessJson } from "../../common/manage/http.js";
+import { getDatasetUrl } from "../../common/manage/dataset.js";
 
 /* ======================================================
    URL helpers (legacy keys supported)
 ====================================================== */
-function toDashed(camel) {
-  return String(camel || "").replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
-}
-
 function pickUrl(root, keys = [], fallback = "") {
-  if (!root) return fallback;
-
-  const ds = root.dataset || {};
-  for (const k of keys) {
-    const v = ds?.[k];
-    if (v && String(v).trim()) return String(v).trim();
-  }
-
-  for (const k of keys) {
-    const attr = `data-${toDashed(k)}`;
-    const v = root.getAttribute?.(attr);
-    if (v && String(v).trim()) return String(v).trim();
-  }
-
-  return fallback;
+  // ✅ saveUrl/dataSaveUrl/data-data-save-url 후보 탐색 공통화
+  return getDatasetUrl(root, keys, fallback);
 }
 
 function getRoot() {

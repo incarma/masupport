@@ -14,12 +14,13 @@ import { showLoading, hideLoading, alertBox, getCSRFToken, selectedYM } from "./
 import { fetchData } from "./fetch.js";
 import { resetInputSection } from "./input_rows.js";
 import { readJsonOrThrow, isSuccessJson } from "../../common/manage/http.js";
+import { toStr, digitsOnly as commonDigitsOnly } from "../../common/manage/text.js";
 
 function str(v) {
-  return String(v ?? "").trim();
+  return toStr(v);
 }
 function digitsOnly(v) {
-  return str(v).replace(/[^\d]/g, "");
+  return commonDigitsOnly(v);
 }
 function normalizeAmount(raw) {
   const digits = digitsOnly(raw);

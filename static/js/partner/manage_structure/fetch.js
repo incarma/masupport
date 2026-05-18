@@ -11,6 +11,18 @@
 import { els } from "./dom_refs.js";
 import { showLoading, hideLoading, alertBox, getCSRFToken, pad2 } from "./utils.js";
 import { readJsonOrThrow, isSuccessJson } from "../../common/manage/http.js";
+import { getDatasetUrl } from "../../common/manage/dataset.js";
+import {
+  toStr as commonToStr,
+  escapeHtml as commonEscapeHtml,
+  escapeAttr as commonEscapeAttr,
+  formatNameId,
+} from "../../common/manage/text.js";
+import {
+  renderEllipsisCell as commonRenderEllipsisCell,
+  renderAfterEllipsisCell,
+  initBootstrapTooltips,
+} from "../../common/manage/table_ui.js";
 
 /* =========================================================
    State
@@ -23,20 +35,15 @@ let resizeBound = false;
    Small helpers
 ========================================================= */
 function toStr(v) {
-  return String(v ?? "").trim();
+  return commonToStr(v);
 }
 
 /* =========================================================
    Dataset URL helpers
 ========================================================= */
 function dsUrl(keys = []) {
-  const ds = els.root?.dataset;
-  if (!ds) return "";
-  for (const k of keys) {
-    const v = ds[k];
-    if (v && toStr(v)) return toStr(v);
-  }
-  return "";
+  // ✅ dataset URL 후보 탐색 공통화
+  return getDatasetUrl(els.root, keys, "");
 }
 
 function getFetchUrl() {
@@ -77,79 +84,34 @@ function revealSections() {
    XSS escape
 ========================================================= */
 function escapeHtml(v) {
-  const s = String(v ?? "");
-  return s
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
+  return commonEscapeHtml(v);
 }
 function escapeAttr(v) {
-  return escapeHtml(v);
+  return commonEscapeAttr(v);
 }
 
 /* =========================================================
    Tooltip (Bootstrap 5) - DT redraw 대응
 ========================================================= */
 function initTooltipsInMainTable() {
-  if (!window.bootstrap?.Tooltip) return;
-
-  const scope = els.mainTable?.closest?.("#mainSheet") || els.root || document;
-  const nodes = scope.querySelectorAll('[data-bs-toggle="tooltip"]');
-
-  nodes.forEach((el) => {
-    const inst = window.bootstrap.Tooltip.getInstance(el);
-    if (inst) inst.dispose();
-
-    new window.bootstrap.Tooltip(el, {
-      trigger: "hover focus",
-      container: "body",
-      boundary: "viewport",
-    });
-  });
+  // ✅ Bootstrap Tooltip 재초기화 공통화
+  initBootstrapTooltips(scope);
 }
 
 /* =========================================================
    Render helpers
 ========================================================= */
 function fmtPerson(name, id) {
-  const n = toStr(name);
-  const i = toStr(id);
-  if (n && i) return `${n}(${i})`;
-  return n || i || "";
+  // ✅ 기존 표시 규칙 유지
+  return formatNameId(name, id).replace(/^\((.*)\)$/, "$1");
 }
 
 function renderEllipsisCell(val) {
-  const raw = toStr(val);
-  if (!raw) return "";
-  const esc = escapeAttr(raw);
-
-  return `
-    <span class="dt-ellipsis"
-          data-bs-toggle="tooltip"
-          data-bs-placement="top"
-          data-bs-title="${esc}"
-          tabindex="0">
-      ${escapeHtml(raw)}
-    </span>
-  `;
+  return commonRenderEllipsisCell(val);
 }
 
 function renderAfterEllipsis(val) {
-  const raw = toStr(val);
-  if (!raw) return "";
-  const esc = escapeAttr(raw);
-
-  return `
-    <span class="cell-after dt-ellipsis"
-          data-bs-toggle="tooltip"
-          data-bs-placement="top"
-          data-bs-title="${esc}"
-          tabindex="0">
-      ${escapeHtml(raw)}
-    </span>
-  `;
+  return renderAfterEllipsisCell(val);
 }
 
 function renderOrFlag(val) {

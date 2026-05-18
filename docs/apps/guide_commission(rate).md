@@ -1,8 +1,8 @@
-# Rate Example Development Guide — Final Edition (DB/KB/농협 손보 정규화 포함)
+# Rate Example Development Guide — Final Edition (DB/KB/농협/삼성/롯데/한화 손보 정규화 포함)
 
 > 기준 프로젝트: django_ma  
 > 대상 앱: commission  
-> 최종 반영일: 2026-05-17  
+> 최종 반영일: 2026-05-18  
 > 목적: 수수료 예시표(환산율/수정률/지급률) 업로드·정규화·옵션조회·계산·예시표 출력 기능의 최종 SSOT 가이드
 
 ---
@@ -2551,3 +2551,570 @@ python manage.py shell -c "from commission.models import RateExampleConversionRo
 수정률은 raw 백분율 그대로 저장
 DB손보만 legacy ×100 표시 유지
 ```
+
+---
+
+# 한화손해보험(FIRE) 수정률 정규화 — Final SSOT (2026-05-18 추가)
+
+## 개요
+
+한화손해보험 수정률 RAW 파일을 `RateExampleConversionRow` 기준으로 정규화한다.
+
+대상:
+
+```text
+insurer_type = fire
+category = conv
+insurer = 한화
+```
+
+정규화 파일:
+
+```python
+commission/services/rate_example_normalizers/fire_hanhwa.py
+```
+
+핵심 목적:
+
+- 한화손해보험 raw xlsx 내 반복 테이블을 상품 단위로 인식한다.
+- 손해보험 수정률 단일 컬럼 구조에 맞춰 `year1`에 수정률을 저장한다.
+- `보장(태아)` 상품군의 구분 값에서 `주)` 텍스트를 제거한다.
+- 납기 값이 `수금`인 컬럼은 정규화 대상에서 제외한다.
+
+---
+
+## 저장 구조
+
+모델:
+
+```python
+RateExampleConversionRow
+```
+
+| 정규화 컬럼 | DB 필드 | 정책 |
+|---|---|---|
+| 보험사 | `insurer` | `한화` 고정 |
+| 상품군 | `coverage_type` | 보장 / 보장(태아) / 연금 / 저축 / 단독실손(초회) / 단독실손(갱신) |
+| 상품명 | `product_name` | 최초 `구분` 셀 2행 상단의 `○` 포함 텍스트 |
+| 구분 | `plan_type` | B/C열 조합 |
+| 납기 | `pay_period` | 신계약환산율 하위 헤더 또는 환산율 포함 헤더 |
+| 수정률 | `year1` | raw 백분율 표시값 그대로 저장 |
+| 미사용 | `year2~year4` | `None` 저장 |
+
+---
+
+## 원본 파일 구조 기준
+
+### 테이블 시작 기준
+
+B열 값이 다음과 같은 행을 상품 테이블 헤더로 판단한다.
+
+```text
+구분
+구  분
+구    분
+```
+
+raw 파일에는 `구  분`처럼 중간 공백이 포함될 수 있으므로, 헤더 비교 시 공백 제거 정규화가 필수다.
+
+구현 helper:
+
+```python
+def _norm_key(value):
+    return re.sub(r"\s+", "", _flat_text(value))
+```
+
+테이블 헤더 판정:
+
+```python
+if _norm_key(values[r][2]) != "구분":
+    continue
+```
+
+---
+
+## 병합 셀 처리 정책
+
+한화 raw 파일은 병합 셀이 존재하므로 parser 내부 matrix에서만 병합 값을 전개한다.
+
+```text
+병합 범위 전체 = 좌상단 셀 값
+```
+
+금지:
+
+```python
+ws.unmerge_cells(...)
+```
+
+주의:
+
+- 실제 workbook을 수정하지 않는다.
+- 정규화 전용 `values`, `formats` matrix에서만 병합 값을 전파한다.
+- openpyxl workbook은 `read_only=False`로 로드되어야 한다.
+
+---
+
+## 상품명(product_name) 정규화 정책
+
+상품명은 각 테이블의 최초 `구분` 셀 기준으로 2행 상단에서 찾는다.
+
+기준:
+
+```text
+최초 "구분" 셀 2행 상단의 "○" 기호 포함 텍스트
+```
+
+정규화:
+
+- `○`, `●`, `◯`, `◎`, `ㆍ`, `-` 등 선행 기호 제거
+- 줄바꿈 제거
+- 다중 공백 제거
+- trim 처리
+
+예:
+
+```text
+○ 한화 더건강한 한아름종합보험 무배당2604
+→ 한화 더건강한 한아름종합보험 무배당2604
+```
+
+보조 탐색:
+
+```text
+header_row - 2
+header_row - 3
+header_row - 4
+header_row - 1
+```
+
+raw 병합/공백 변동에 대비하여 위 범위에서 `○` 포함 텍스트를 찾는다.
+
+---
+
+## 구분(plan_type) 정규화 정책
+
+기준 컬럼:
+
+| 컬럼 | 의미 |
+|---|---|
+| B열 | 구분 1 |
+| C열 | 구분 2 |
+
+조합 규칙:
+
+| 조건 | 저장값 |
+|---|---|
+| B열 값만 존재 | B열 값 |
+| B열 값과 C열 값이 동일 | B열 값 |
+| B열 값과 C열 값이 다름 | `B열 값 (C열 값)` |
+
+예:
+
+```text
+B열: 보장/적립
+C열: 1종, 2종
+→ 보장/적립 (1종, 2종)
+```
+
+```text
+B열: 보장/적립
+C열: 3종, 4종
+→ 보장/적립 (3종, 4종)
+```
+
+---
+
+## 보장(태아) 구분 후처리 정책
+
+추가 요구사항:
+
+```text
+보장(태아) 상품의 구분 컬럼 데이터에서 "주)" 텍스트 삭제
+```
+
+적용 조건:
+
+```python
+coverage_type == "보장(태아)"
+```
+
+처리:
+
+```python
+text = text.replace("주)", "")
+```
+
+예:
+
+| 기존 | 최종 |
+|---|---|
+| `주)기본형` | `기본형` |
+| `주) 실속형` | `실속형` |
+| `주)표준형 (1종)` | `표준형 (1종)` |
+
+주의:
+
+- 전체 상품군에 일괄 적용하지 않는다.
+- `보장`, `연금`, `저축`, `단독실손(초회)`, `단독실손(갱신)`은 기존 구분 값을 유지한다.
+
+---
+
+## 납기(pay_period) 정규화 정책
+
+### Case 1. `신계약환산율` 헤더가 있는 경우
+
+`신계약환산율` 하위 세부 헤더를 납기로 사용한다.
+
+예:
+
+```text
+신계약환산율
+ ├─ 10년납
+ ├─ 15년납
+ └─ 20년납
+```
+
+저장:
+
+```text
+10년납
+15년납
+20년납
+```
+
+---
+
+### Case 2. `신계약환산율` 헤더가 없는 경우
+
+`구분` 컬럼 우측의 `환산율` 포함 헤더에서 `환산율` 단어를 제거한 값을 납기로 사용한다.
+
+예:
+
+```text
+만기후재가입시 및 갱신시 환산율
+→ 만기후재가입시 및 갱신시
+```
+
+---
+
+## 납기 `수금` 제외 정책
+
+한화 raw 일부 테이블에는 납기 후보로 다음 값들이 함께 존재한다.
+
+```text
+갱신시
+최초계약시
+수금
+```
+
+이 중 `수금`은 실제 납기 개념이 아니라 내부 수금 기준값 컬럼이므로 정규화에서 제외한다.
+
+구현 조건:
+
+```python
+if _norm_key(pay_period) == "수금":
+    continue
+```
+
+필수 검증:
+
+```powershell
+python manage.py shell -c "from commission.models import RateExampleConversionRow as R; print(R.objects.filter(insurer='한화', pay_period='수금').count())"
+```
+
+기대 결과:
+
+```text
+0
+```
+
+---
+
+## 상품군(coverage_type) 정규화 정책
+
+허용 상품군:
+
+```python
+PRODUCT_GROUPS = {
+    "보장",
+    "보장(태아)",
+    "연금",
+    "저축",
+    "단독실손(초회)",
+    "단독실손(갱신)",
+}
+```
+
+### 단독실손
+
+조건:
+
+```text
+상품명에 "실손" 포함
+```
+
+분기:
+
+| 납기 조건 | 상품군 |
+|---|---|
+| 납기에 `최초` 포함 | 단독실손(초회) |
+| 납기에 `갱신` 포함 | 단독실손(갱신) |
+| 그 외 | 단독실손(갱신) |
+
+### 연금
+
+조건:
+
+```text
+상품명에 "연금" 포함
+```
+
+저장:
+
+```text
+연금
+```
+
+### 저축
+
+조건:
+
+```text
+상품명에 "저축" 포함
+```
+
+저장:
+
+```text
+저축
+```
+
+### 태아
+
+조건:
+
+```text
+구분에 "태아관련" 포함
+```
+
+저장:
+
+```text
+보장(태아)
+```
+
+### 일반 상품
+
+그 외:
+
+```text
+보장
+```
+
+---
+
+## 수정률(year1) 저장 정책
+
+수정률은 raw 백분율 표시값을 그대로 저장한다.
+
+| raw | 저장값 | 화면 표시 |
+|---|---:|---:|
+| `2%` | `2` | `2%` |
+| `160%` | `160` | `160%` |
+| `220` | `220` | `220%` |
+
+주의:
+
+- `×100` 금지
+- `/100` 금지
+- `/0.97` 보정 금지
+- `year2`, `year3`, `year4`는 `None` 저장
+
+문자열에 숫자와 `%` 외 문자가 섞여 있으면 숫자만 추출해 저장한다.
+
+예:
+
+```text
+160% 주)
+→ 160
+```
+
+---
+
+## 데이터 행 제외 정책
+
+다음 행은 정규화하지 않는다.
+
+```text
+B열 공란
+B열이 구분/구  분 헤더
+B열이 ※로 시작
+B열이 주)로 시작
+수정률 값이 비어 있는 행
+납기가 수금인 컬럼
+```
+
+---
+
+## 최종 중복 방어 정책
+
+저장 전 dedupe를 수행한다.
+
+중복 판단 기준:
+
+| 기준 |
+|---|
+| 상품군 |
+| 상품명 |
+| 구분 |
+| 납기 |
+| 수정률 |
+
+동일 key는 최초 row만 유지한다.
+
+---
+
+## Orchestrator 연동
+
+### `commission/services/rate_example_normalizers/__init__.py`
+
+import 추가:
+
+```python
+from commission.services.rate_example_normalizers.fire_hanhwa import (
+    build_fire_hanhwa_conversion_rows,
+)
+```
+
+`__all__` 추가:
+
+```python
+"build_fire_hanhwa_conversion_rows",
+```
+
+---
+
+### `commission/services/rate_example_normalizer.py`
+
+대상 보험사 추가:
+
+```python
+is_fire_conv_target = (
+    example.insurer_type == RateExample.TYPE_FIRE
+    and example.category == RateExample.CAT_CONV
+    and example.insurer in {"DB", "KB", "농협", "롯데", "삼성", "한화"}
+)
+```
+
+실행 분기 추가:
+
+```python
+elif example.insurer_type == RateExample.TYPE_FIRE and example.insurer == "한화":
+    normalized_rows.extend(build_fire_hanhwa_conversion_rows(example, wb))
+```
+
+주의:
+
+- 한화생명(`life_hanhwa.py`) 분기와 혼동하지 않는다.
+- 손해보험 한화는 반드시 `example.insurer_type == RateExample.TYPE_FIRE` 조건 안에서 먼저 처리한다.
+
+---
+
+## 조회 API 정책
+
+조회 API는 기존 `RateExampleConversionRow` 조회를 그대로 사용한다.
+
+조건:
+
+```python
+RateExampleConversionRow.objects.filter(
+    insurer_type="fire",
+    category="conv",
+    insurer="한화",
+)
+```
+
+손보 수정률 화면에서는 `year1`을 `mod_rate`로 렌더링한다.
+
+DB손보만 legacy 표시 정책을 유지한다.
+
+```python
+shown = value * 100 if row.insurer == "DB" else value
+```
+
+따라서 한화는 저장값에 `%`만 붙여 표시한다.
+
+---
+
+## 초기화/재업로드 절차
+
+기존 한화 데이터 초기화:
+
+```powershell
+python manage.py shell -c "from commission.models import RateExampleConversionRow as R; print(R.objects.filter(insurer_type='fire', category='conv', insurer='한화').delete())"
+```
+
+재업로드:
+
+```text
+손해보험 / 수정률 / 한화 / replace
+```
+
+검증:
+
+```powershell
+python manage.py shell -c "from commission.models import RateExampleConversionRow as R; qs=R.objects.filter(insurer_type='fire', category='conv', insurer='한화'); print(qs.count()); print(qs.values('coverage_type','product_name','plan_type','pay_period','year1')[:10])"
+```
+
+---
+
+## 필수 검증 항목
+
+```text
+[ ] 한화 업로드 시 normalized_count > 0
+[ ] 수정률 조회 모달에서 보험사=한화 조회 가능
+[ ] B열 "구  분" 헤더를 정상 인식
+[ ] 상품명에서 "○" 기호 제거
+[ ] B/C열 구분 조합이 "B (C)" 형태로 저장
+[ ] 보장(태아) 상품 구분에서 "주)" 제거
+[ ] pay_period="수금" row 0건
+[ ] 실손 최초 → 단독실손(초회)
+[ ] 실손 갱신 → 단독실손(갱신)
+[ ] 연금 상품 → 연금
+[ ] 저축 상품 → 저축
+[ ] 일반 상품 → 보장
+[ ] 수정률 160 → 160% 표시
+[ ] DB/KB/농협/삼성/롯데 손보 영향 없음
+[ ] 생명보험 한화 정규화 영향 없음
+[ ] 생명보험 환산율/지급률 영향 없음
+```
+
+---
+
+## 운영 주의사항
+
+- migration 불필요
+- model 변경 없음
+- URL 변경 없음
+- static rebuild 불필요
+- 권한 변경 없음
+- superuser 업로드 정책 유지
+- replace 모드 재업로드 권장
+- 기존 한화 row가 잘못 생성된 이력이 있으면 반드시 삭제 후 재업로드한다.
+
+---
+
+## 최종 SSOT
+
+한화손해보험 수정률 정책:
+
+```text
+B열 "구분/구  분" 테이블 기준 처리
+상품명은 "○" 포함 제목에서 기호 제거
+B/C열 구분이 다르면 "B (C)"로 결합
+보장(태아) 구분의 "주)" 제거
+납기 "수금" 컬럼 제외
+수정률은 raw 백분율 그대로 year1 저장
+```
+

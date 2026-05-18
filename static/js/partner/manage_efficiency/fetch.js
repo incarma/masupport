@@ -11,6 +11,13 @@
 import { els } from "./dom_refs.js";
 import { showLoading, hideLoading, alertBox, getCSRFToken } from "./utils.js";
 import { readJsonOrThrow, isSuccessJson } from "../../common/manage/http.js";
+import { getDatasetValue } from "../../common/manage/dataset.js";
+import {
+  toStr,
+  escapeHtml as commonEscapeHtml,
+  escapeAttr as commonEscapeAttr,
+  formatCommaNumber,
+} from "../../common/manage/text.js";
 
 const DEBUG = false;
 const log = (...a) => DEBUG && console.log("[efficiency/fetch]", ...a);
@@ -19,28 +26,20 @@ const log = (...a) => DEBUG && console.log("[efficiency/fetch]", ...a);
    Small helpers
 -------------------------- */
 function str(v) {
-  return String(v ?? "").trim();
+  return toStr(v);
 }
 function numOrNull(v) {
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 }
 function fmtNumber(n) {
-  const x = Number(n || 0);
-  if (!Number.isFinite(x)) return "0";
-  return x.toLocaleString("ko-KR");
+  return formatCommaNumber(n, "0");
 }
 function escapeHtml(s) {
-  const t = str(s);
-  return t
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
+  return commonEscapeHtml(s);
 }
 function escapeAttr(s) {
-  return escapeHtml(s);
+  return commonEscapeAttr(s);
 }
 
 /* -------------------------
@@ -81,11 +80,8 @@ function isSubAdmin() {
  * dataset key들은 여러 후보를 OR로 흡수
  */
 function dsPick(root, keys) {
-  for (const k of keys) {
-    const v = str(root?.dataset?.[k]);
-    if (v) return v;
-  }
-  return "";
+  // ✅ dataset key 후보 탐색 공통화
+  return getDatasetValue(root, keys, "");
 }
 
 function getFetchUrl() {

@@ -15,9 +15,11 @@ import { showLoading, hideLoading, alertBox, getCSRFToken } from "./utils.js";
 import { fetchData } from "./fetch.js";
 import { els } from "./dom_refs.js";
 import { readJsonOrThrow, isSuccessJson } from "../../common/manage/http.js";
+import { getDatasetValue } from "../../common/manage/dataset.js";
+import { toStr } from "../../common/manage/text.js";
 
 function str(v) {
-  return String(v ?? "").trim();
+  return toStr(v);
 }
 
 function getRoot() {
@@ -31,11 +33,8 @@ function getRoot() {
 }
 
 function dsPick(ds, keys) {
-  for (const k of keys) {
-    const v = str(ds?.[k]);
-    if (v) return v;
-  }
-  return "";
+  // ✅ 기존 호출부 호환: dataset 객체만 들어오므로 임시 root 객체로 감싸서 공통 resolver 사용
+  return getDatasetValue({ dataset: ds }, keys, "");
 }
 
 function getDeleteRowUrl() {
