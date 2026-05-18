@@ -29,7 +29,7 @@ from __future__ import annotations
 """
 
 import logging
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from decimal import Decimal, InvalidOperation
 
 from openpyxl import load_workbook
 from commission.models import RateExample
@@ -38,21 +38,15 @@ from commission.services.rate_example_normalizers.fire_pay import build_fire_pay
 logger = logging.getLogger(__name__)
 
 
-# ── 지급률 정규화 정책 ────────────────────────────────────────────────────────
+# ── 지급률 저장 정책 ─────────────────────────────────────────────────────────
 #
-# 운영 기준:
-#   raw 지급률은 현재 97% 기준표이므로
-#   DB 저장 시 100% 기준 지급률로 역산 저장한다.
+# 생명보험 지급률 파일은 raw 셀 수치가 이미 최종 지급률 기준이다.
+# 따라서 DB에는 raw 지급률을 그대로 Decimal(소수점 4자리)로 저장한다.
 #
-# 공식:
-#   최종 저장 지급률 = raw 지급률 / 0.97
+# 주의:
+# - 환산율/수정률(conv) 저장 정책과 혼동 금지
+# - 지급률(pay)에는 /0.97 역산을 적용하지 않는다
 #
-# 예:
-#   97.00  -> 100.0000
-#   48.50  ->  50.0000
-#   77.60  ->  80.0000
-#
-PAY_NORMALIZE_DIVISOR = Decimal("0.97")
 PAY_QUANT = Decimal("0.0001")
 
 # ── 대상 시트명 ───────────────────────────────────────────────────────────────
@@ -104,19 +98,19 @@ _GROUP1: dict[str, tuple] = {
 }
 
 # 그룹2 (헤더행 30, 데이터 5천만↑ 행 32~43)
-# DB   : first=5, yr1=6, m13=7, yr2=8(13~24회), yr3=9(25~36회), m37=10
-# IM   : first=12, yr1=13, m13=14, yr2=15(14~24회/19~24회), yr3=16(25~35회), m36=17
-# KB   : first=19, yr1=20, m13=21, yr2=22(14~24회), yr3=23(25~36회), m37=24
-# 농협 : first=26, yr1=27, m13=28, yr2=29(19~24회), yr3=30(25~36회)
-# 라이나: first=32, yr1=33, m13=34, yr2=35(14~24회/14~18회), yr3=36(25~36회)
+# DB   : first=5,  yr1=6,  m13=7,  yr2=8(13~24회), yr3=9(25~36회), m36=10, m37=11
+# IM   : first=13, yr1=14, m13=15, yr2=16(14~24회/19~24회), yr3=17(25~35회), m36=18
+# KB   : first=20, yr1=21, m13=22, yr2=23(14~24회), yr3=24(25~36회), m37=25
+# 농협 : first=27, yr1=28, m13=29, yr2=30(19~24회), yr3=31(25~36회)
+# 라이나: first=33, yr1=34, m13=35, yr2=36(14~24회/14~18회), yr3=37(25~36회)
 _GROUP2_ROWS = (32, 43)
 _GROUP2: dict[str, tuple] = {
     #          first  yr1   m13   yr2   yr3   m36   m37   yr4
-    "DB":    ( 5,    6,    7,    8,    9,   None,   10,  None),
-    "IM":    (12,   13,   14,   15,   16,    17,  None,  None),
-    "KB":    (19,   20,   21,   22,   23,  None,   24,  None),
-    "농협":   (26,   27,   28,   29,   30,  None, None,  None),
-    "라이나":  (32,   33,   34,   35,   36,  None, None,  None),
+    "DB":    ( 5,    6,    7,    8,    9,    10,   11,  None),
+    "IM":    (13,   14,   15,   16,   17,    18,  None,  None),
+    "KB":    (20,   21,   22,   23,   24,  None,   25,  None),
+    "NH":    (27,   28,   29,   30,   31,  None, None,  None),
+    "라이나":  (33,   34,   35,   36,   37,  None, None,  None),
 }
 
 # 그룹3 (헤더행 57, 데이터 5천만↑ 행 59~70)
@@ -138,8 +132,8 @@ _GROUP3: dict[str, tuple] = {
 # 그룹4 (헤더행 84, 데이터 5천만↑ 행 86~97)
 # 동양   : first=5, yr1=6, m13=7, yr2=8(19~24회), yr3=9(25~36회)
 # 메트   : first=11, yr1=12, m13=13, yr2=14(14~24회), yr3=15(25~36회), m37=16
-# 흥국   : first=18, yr1=19, m13=20, yr2=21(14~15회), yr3=22(25회), m36=23
-#           ※ 흥국 특이: 2차(14~15회), 3차(25회) 구간이 타 보험사와 상이
+# 흥국   : first=18, yr1=19, m13=20, yr2=21(14~15회), yr3=22(25~36회), yr4=23(4차년)
+#           ※ 흥국 특이: 2차년/3차년 구간과 4차년 컬럼명이 타 보험사와 상이
 # 푸본현대: first=25, yr1=26, m13=27, yr2=28(14~24회), yr3=29(25~36회)
 # 교보   : first=31, yr1=32, m13=33, yr2=34(14~24회), yr3=35(25~36회), yr4=36(37-39회)
 _GROUP4_ROWS = (86, 97)
@@ -147,7 +141,7 @@ _GROUP4: dict[str, tuple] = {
     #             first  yr1   m13   yr2   yr3   m36   m37   yr4
     "동양":     ( 5,    6,    7,    8,    9,   None, None,  None),
     "메트":     (11,   12,   13,   14,   15,  None,   16,  None),
-    "흥국":     (18,   19,   20,   21,   22,    23, None,  None),
+    "흥국":     (18,   19,   20,   21,   22,  None, None,   23),
     "푸본현대":  (25,   26,   27,   28,   29,  None, None,  None),
     "교보":     (31,   32,   33,   34,   35,  None, None,   36),
 }
@@ -173,22 +167,17 @@ _GROUPS: list[tuple] = [
 
 def _to_decimal(value) -> "Decimal | None":
     """
-    raw 지급률 셀 값 → 100% 기준 지급률 Decimal(소수점 4자리).
+    raw 지급률 셀 값 → Decimal(소수점 4자리).
 
     정책:
-        최종 저장값 = raw 지급률 / 0.97
+        생명보험 지급률은 raw 수치 그대로 저장한다.
     """
     if value is None:
         return None
     
     try:
-        raw = Decimal(str(value).replace(",", "").strip())
-
-        normalized = raw / PAY_NORMALIZE_DIVISOR
-
-        return normalized.quantize(
+        return Decimal(str(value).replace(",", "").strip()).quantize(
             PAY_QUANT,
-            rounding=ROUND_HALF_UP,
         )
 
     except (InvalidOperation, TypeError, ValueError):
