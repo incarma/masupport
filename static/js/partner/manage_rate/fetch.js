@@ -11,6 +11,17 @@ import { showLoading, hideLoading, alertBox } from "./utils.js";
 import { resetInputSection } from "./input_rows.js";
 import { getCSRFToken } from "../../common/manage/csrf.js";
 import { readJsonOrThrow, isSuccessJson } from "../../common/manage/http.js";
+import { getDatasetUrl } from "../../common/manage/dataset.js";
+import {
+  escapeHtml as commonEscapeHtml,
+  escapeAttr as commonEscapeAttr,
+  formatNameId as commonFormatNameId,
+  joinNonEmpty,
+} from "../../common/manage/text.js";
+import {
+  renderEllipsisCell as commonRenderEllipsisCell,
+  initBootstrapTooltips,
+} from "../../common/manage/table_ui.js";
 
 let mainDT = null;
 let delegationBound = false;
@@ -19,26 +30,9 @@ let resizeBound = false;
 /* =========================================================
    Dataset/URL helpers
 ========================================================= */
-function toDashed(camel) {
-  return String(camel || "").replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
-}
-
 function pickDatasetUrl(root, keys = []) {
-  if (!root) return "";
-
-  const ds = root.dataset || {};
-  for (const k of keys) {
-    const v = ds?.[k];
-    if (v && String(v).trim()) return String(v).trim();
-  }
-
-  for (const k of keys) {
-    const attr = `data-${toDashed(k)}`;
-    const v = root.getAttribute?.(attr);
-    if (v && String(v).trim()) return String(v).trim();
-  }
-
-  return "";
+  // ✅ dataset URL 후보 탐색 공통화
+  return getDatasetUrl(root, keys, "");
 }
 
 function getFetchBaseUrl() {
@@ -81,17 +75,11 @@ function normalizeYM(ym) {
 }
 
 function escapeHtml(v) {
-  const s = String(v ?? "");
-  return s
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
+  return commonEscapeHtml(v);
 }
 
 function escapeAttr(v) {
-  return escapeHtml(v);
+  return commonEscapeAttr(v);
 }
 
 function squeezeSpaces(s) {
@@ -124,17 +112,9 @@ function safeResetInput() {
    편제변경 fetch.js 동일 방식
 ========================================================= */
 function initTooltipsInMainTable() {
-  if (!window.bootstrap?.Tooltip) return;
   const scope = els.mainTable?.closest?.("#mainSheet") || els.root || document;
-  scope.querySelectorAll('[data-bs-toggle="tooltip"]').forEach((el) => {
-    const inst = window.bootstrap.Tooltip.getInstance(el);
-    if (inst) inst.dispose();
-    new window.bootstrap.Tooltip(el, {
-      trigger: "hover focus",
-      container: "body",
-      boundary: "viewport",
-    });
-  });
+  // ✅ DataTables redraw 후 tooltip 재초기화 공통화
+  initBootstrapTooltips(scope);
 }
 
 /* =========================================================
@@ -170,14 +150,7 @@ async function updateProcessDate(id, value) {
 /* ✅ 말줄임 + Bootstrap Tooltip — 편제변경 renderEllipsisCell 동일 방식
    요청자/대상자/소속/비고 공통 사용 */
 function renderEllipsisCell(val) {
-  const raw = String(val ?? "").trim();
-  if (!raw) return "";
-  const esc = escapeAttr(raw);
-  return `<span class="dt-ellipsis"
-               data-bs-toggle="tooltip"
-               data-bs-placement="top"
-               data-bs-title="${esc}"
-               tabindex="0">${escapeHtml(raw)}</span>`;
+  return commonRenderEllipsisCell(val);
 }
 
 function renderAfterCell(val) {
@@ -460,17 +433,11 @@ function bindResizeOnce() {
    Normalize row
 ========================================================= */
 function formatNameId(name, id) {
-  const n = String(name || "").trim();
-  const i = String(id || "").trim();
-  if (!n && !i) return "";
-  if (!i) return n;
-  if (!n) return `(${i})`;
-  return `${n}(${i})`;
+  return commonFormatNameId(name, id);
 }
 
 function joinTeams(a, b, c) {
-  const arr = [a, b, c].map((x) => String(x ?? "").trim()).filter((x) => x && x !== "-");
-  return arr.length ? arr.join(" ") : "-";
+  return joinNonEmpty([a, b, c], " ") || "-";
 }
 
 function normalizeRateRow(row = {}) {

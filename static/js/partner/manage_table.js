@@ -1,5 +1,7 @@
 import { getCSRFToken } from "../common/manage/csrf.js";
 import { readJsonOrThrow, isSuccessJson } from "../common/manage/http.js";
+import { escapeHtml } from "../common/manage/text.js";
+import { applyCellTitles } from "../common/manage/table_ui.js";
 
 /**
  * django_ma/static/js/partner/manage_table.js
@@ -107,36 +109,11 @@ document.addEventListener("DOMContentLoaded", () => {
     return hasJQ() && !!(window.$.fn && window.$.fn.DataTable);
   }
 
-  /* ---------------- HTML Escape ---------------- */
-  function escapeHtml(s) {
-    return String(s ?? "")
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;")
-      .replaceAll("'", "&#039;");
-  }
-
   /* ==========================================================
    * 2) UX: Ellipsis + Hover Title
    * - DataTables는 DOM을 계속 갈아끼우므로 draw마다 재적용 필요
    * ========================================================== */
-  function applyCellTitles(tableEl) {
-    if (!tableEl) return;
-
-    const cells = tableEl.querySelectorAll("tbody td");
-    cells.forEach((td) => {
-      // 편집요소가 있으면 title 적용은 스킵(의도치 않은 UX 방지)
-      if (td.querySelector("input, select, textarea, button, a")) return;
-
-      const text = (td.textContent || "").trim();
-      if (!text) {
-        td.removeAttribute("title");
-        return;
-      }
-      if (td.getAttribute("title") !== text) td.setAttribute("title", text);
-    });
-  }
+  // ✅ applyCellTitles는 common/manage/table_ui.js의 공통 유틸 사용
 
   /* ==========================================================
    * 3) Policy: mainTable DataTables 차단
