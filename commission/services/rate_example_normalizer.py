@@ -109,6 +109,9 @@ from commission.services.rate_example_normalizers.fire_aig import (
 from commission.services.rate_example_normalizers.fire_hana import (
     build_fire_hana_pdf_conversion_rows,
 )
+from commission.services.rate_example_normalizers.fire_meritz import (
+    build_fire_meritz_pdf_conversion_rows,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -213,7 +216,7 @@ def normalize_rate_example(
     is_fire_conv_target = (
         example.insurer_type == RateExample.TYPE_FIRE
         and example.category == RateExample.CAT_CONV
-        and example.insurer in {"AIG", "DB", "KB", "농협", "롯데", "삼성", "하나", "한화", "현대"}
+        and example.insurer in {"AIG", "DB", "KB", "농협", "롯데", "메리츠", "삼성", "하나", "한화", "현대"}
     )
 
     if not (is_life_conv_target or is_fire_conv_target):
@@ -237,6 +240,25 @@ def normalize_rate_example(
         # - PDF 테이블의 상품명 병합 영역은 좌측 상품명 블록 기준으로 행 범위 전파
         # - 상품분류 하위 왼쪽 열 → 납기, 오른쪽 열 → 구분
         # - 수정율 raw 값은 year1에 그대로 저장하고 화면에서 %만 붙인다.
+        if (
+            example.insurer_type == RateExample.TYPE_FIRE
+            and example.category == RateExample.CAT_CONV
+            and example.insurer == "메리츠"
+        ):
+            normalized_rows = build_fire_meritz_pdf_conversion_rows(example)
+
+            if normalize_mode == "replace":
+                RateExampleConversionRow.objects.filter(
+                    insurer_type=example.insurer_type,
+                    category=example.category,
+                    insurer=example.insurer,
+                ).delete()
+
+            if normalized_rows:
+                RateExampleConversionRow.objects.bulk_create(normalized_rows, batch_size=500)
+
+            return len(normalized_rows)
+
         if (
             example.insurer_type == RateExample.TYPE_FIRE
             and example.category == RateExample.CAT_CONV
