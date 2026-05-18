@@ -1742,3 +1742,812 @@ python manage.py shell -c "from commission.models import RateExampleConversionRo
 수정률은 raw 백분율 그대로 year1 저장
 ```
 
+
+
+---
+
+# 삼성화재(FIRE) 수정률 정규화 — Final SSOT (2026-05-17 추가)
+
+## 개요
+
+삼성화재 손해보험 수정률 RAW 파일을 `RateExampleConversionRow` 기준으로 정규화한다.
+
+대상:
+
+```text
+insurer_type = fire
+category = conv
+insurer = 삼성
+```
+
+정규화 파일:
+
+```python
+commission/services/rate_example_normalizers/fire_samsung.py
+```
+
+---
+
+# 핵심 정책
+
+## 저장 구조
+
+| 정규화 컬럼 | DB 필드 |
+|---|---|
+| 보험사 | insurer |
+| 상품군 | coverage_type |
+| 상품명 | product_name |
+| 구분 | plan_type |
+| 납기 | pay_period |
+| 수정률 | year1 |
+
+---
+
+# 수정률 저장 정책 (최종)
+
+삼성화재 raw 수정률은 실제 표시값의 100배 형태로 들어온다.
+
+예:
+
+| raw 값 | 실제 의미 |
+|---|---|
+| 2000 | 20% |
+| 14500 | 145% |
+| 24000 | 240% |
+
+따라서 저장 직전:
+
+```python
+Decimal(raw) / Decimal("100")
+```
+
+처리 후 저장한다.
+
+최종 저장 예시:
+
+| raw | 저장값 |
+|---|---|
+| 2000 | 20 |
+| 14500 | 145 |
+| 24000 | 240 |
+
+주의:
+
+- `×100` 보정 금지
+- `/0.97` 보정 금지
+- number_format 기반 percent multiplier 금지
+
+---
+
+# 병합 셀 처리 정책
+
+실제 workbook 수정 없이 parser 내부 matrix에서만 병합 값을 전파한다.
+
+```text
+병합 범위 전체 = 좌상단 셀 값
+```
+
+주의:
+
+- `unmerge_cells()` 사용 금지
+- workbook 직접 수정 금지
+
+---
+
+# 테이블 제목 탐지 정책
+
+삼성 raw는 한 시트 내 여러 테이블과 참고 문구가 혼재한다.
+
+기존 문제:
+
+```text
+(참고용) 삼성화재 GA 주요상품 수정률 한눈에 보기...
+삼성화재 GA 주요상품 & 담보 수정률 요약...
+```
+
+같은 참고 텍스트가 상품명/상품군으로 잘못 정규화됨.
+
+---
+
+# 제목 탐지 개선 정책
+
+## 1. 현재 테이블 컬럼 범위 안에서만 제목 탐색
+
+기존:
+
+```python
+for col_no in range(1, 80)
+```
+
+문제:
+
+- 다른 테이블 제목까지 함께 읽음
+- 병합셀 전파로 같은 문구가 반복됨
+
+최종 정책:
+
+```python
+_header_title_search_bounds(header_cols)
+```
+
+기준으로 현재 테이블 헤더 범위 내에서만 제목 탐색.
+
+---
+
+## 2. 의미 없는 제목 제외
+
+다음 키워드 포함 시 제목 후보 제외:
+
+```python
+TITLE_EXCLUDE_KEYWORDS = (
+    "참고용",
+    "한눈에 보기",
+    "요약",
+    "제작일자",
+    "대외비",
+    "현장관리자",
+    "수수료지급",
+)
+```
+
+---
+
+## 3. 중복 제목 제거
+
+병합셀 전파로 같은 텍스트가 여러 번 등장하는 현상 방어:
+
+```python
+_unique_nonempty_texts(...)
+```
+
+사용.
+
+동일 텍스트는 1회만 유지.
+
+---
+
+# 자녀/태아 상품 정규화 정책
+
+## 대상 제목
+
+예:
+
+```text
+자녀 : NEW 마이 슈퍼스타 1-2종
+```
+
+---
+
+# 상품명 정책
+
+상품명:
+
+```text
+':' 오른쪽 텍스트 + '(' + 갱신구분 + ')'
+```
+
+예:
+
+```text
+NEW 마이 슈퍼스타 1-2종 (비갱신)
+NEW 마이 슈퍼스타 1-2종 (갱신)
+```
+
+---
+
+# 구분 정책
+
+다음 헤더 사용:
+
+```text
+보장(80/90/100세 만기)
+보장(20/30세만기)
+```
+
+저장:
+
+```python
+plan_type
+```
+
+---
+
+# 납기 정책
+
+```text
+납기 컬럼 값 그대로 저장
+```
+
+---
+
+# 상품군 정책
+
+조건:
+
+```text
+납기에 "태아" 포함
+```
+
+저장:
+
+```text
+보장(태아)
+```
+
+그 외:
+
+```text
+보장
+```
+
+---
+
+# 수정률 정책
+
+다음 컬럼 사용:
+
+```text
+"보장" 포함 헤더 컬럼
+```
+
+해당 셀 값을 수정률로 저장.
+
+---
+
+# 최종 중복 방어 정책
+
+최종 업로드 전:
+
+```python
+_dedupe_conversion_rows(rows)
+```
+
+적용.
+
+다음 값이 모두 같으면 동일 상품으로 간주:
+
+| 기준 |
+|---|
+| 상품군 |
+| 상품명 |
+| 구분 |
+| 납기 |
+
+최초 row만 유지.
+
+---
+
+# 상품군 정책
+
+## 단독실손
+
+조건:
+
+```text
+실손 포함
+```
+
+분기:
+
+| 납기 | 상품군 |
+|---|---|
+| 최초 | 단독실손(초회) |
+| 갱신 | 단독실손(갱신) |
+
+---
+
+## 태아/자녀
+
+조건:
+
+```text
+자녀 포함
+슈퍼스타 포함
+```
+
+저장:
+
+```text
+보장(태아)
+```
+
+---
+
+## 일반 상품
+
+저장:
+
+```text
+보장
+```
+
+---
+
+# openpyxl custom.xml 오류 대응
+
+삼성 raw 파일 일부는:
+
+```text
+docProps/custom.xml
+```
+
+custom property가 깨져 있음.
+
+오류 예:
+
+```text
+StringProperty.name should be <class 'str'> but value is <class 'NoneType'>
+```
+
+최종 정책:
+
+- 최초 load_workbook 실패 시
+- custom.xml 제거 후 retry load
+
+서비스:
+
+```python
+_load_workbook_safely()
+```
+
+---
+
+# 최종 회귀 체크리스트
+
+```text
+[ ] 삼성 업로드 정상 완료
+[ ] 수정률 2000 → 20%
+[ ] 수정률 14500 → 145%
+[ ] 참고용 문구 정규화 제외
+[ ] 요약 문구 정규화 제외
+[ ] NEW 마이 슈퍼스타 태아 상품 정상 생성
+[ ] 보장(태아) 정상 분류
+[ ] 동일 상품 중복 insert 방어
+[ ] 생명보험 영향 없음
+[ ] DB/KB/농협 손보 영향 없음
+```
+
+---
+
+# 최종 SSOT
+
+삼성화재 손보 수정률 정책:
+
+```text
+현재 테이블 범위 내 제목만 사용
+참고용/요약 문구 제거
+수정률은 raw / 100 저장
+자녀/태아 상품 별도 정규화
+최종 dedupe 적용
+```
+
+
+---
+
+# 롯데손해보험(FIRE) 수정률 정규화 — Final SSOT (2026-05-18 추가)
+
+## 개요
+
+롯데손해보험 수정률 RAW 파일을 `RateExampleConversionRow` 기준으로 정규화한다.
+
+대상:
+
+```text
+insurer_type = fire
+category = conv
+insurer = 롯데
+```
+
+정규화 파일:
+
+```python
+commission/services/rate_example_normalizers/fire_lotte.py
+```
+
+---
+
+# 핵심 정책
+
+## 저장 구조
+
+| 정규화 컬럼 | DB 필드 |
+|---|---|
+| 보험사 | insurer |
+| 상품군 | coverage_type |
+| 상품명 | product_name |
+| 구분 | plan_type |
+| 납기 | pay_period |
+| 수정률 | year1 |
+
+미사용:
+
+```text
+year2
+year3
+year4
+```
+
+손보 수정률 구조 정책에 따라 `None` 저장.
+
+---
+
+# 좌/우 병렬 테이블 구조 정책
+
+롯데 RAW는 동일 상품에 대해:
+
+- 좌측 테이블
+- 우측 테이블
+
+이 병렬로 배치된 구조를 사용한다.
+
+핵심 규칙:
+
+| 우측 상태 | 처리 정책 |
+|---|---|
+| 좌동 | 좌측 블록 사용 |
+| 판매중지 | 좌/우 전체 제외 |
+| 일반 | 우측 블록 사용 |
+
+---
+
+# 상품 블록(pair) 판별 정책
+
+상품 시작 기준:
+
+| 위치 | 의미 |
+|---|---|
+| B열 | 좌측 상품명 |
+| I열 | 우측 상품명 |
+
+다음 조건이면 상품 블록 시작행으로 판단한다.
+
+```python
+_looks_like_product_start(...)
+```
+
+제외 키워드:
+
+```python
+TITLE_EXCLUDE_KEYWORDS = (
+    "공통사항",
+    "변경전",
+    "변경후",
+    "상품",
+    "■",
+    "※",
+)
+```
+
+---
+
+# 병합 셀 처리 정책
+
+실제 workbook 수정 금지.
+
+parser 내부 matrix에서만 병합 값을 전파한다.
+
+```text
+병합 범위 전체 = 좌상단 셀 값
+```
+
+금지:
+
+```python
+unmerge_cells()
+```
+
+---
+
+# 우측 상태 판별 정책
+
+우측 block 범위 내 텍스트를 검사한다.
+
+## 판매중지
+
+조건:
+
+```text
+판매중지 포함
+```
+
+정책:
+
+```text
+좌/우 block 전체 제외
+```
+
+---
+
+## 좌동
+
+조건:
+
+```text
+좌동 포함
+```
+
+정책:
+
+```text
+좌측 block 기준 정규화
+```
+
+---
+
+## 일반
+
+그 외:
+
+```text
+우측 block 기준 정규화
+```
+
+---
+
+# 상품군(coverage_type) 정책
+
+## 단독실손
+
+조건:
+
+```text
+상품명 또는 구분에 "실손" 포함
+```
+
+분기:
+
+| 납기 | 상품군 |
+|---|---|
+| 최초 포함 | 단독실손(초회) |
+| 갱신 포함 | 단독실손(갱신) |
+| 그 외 | 단독실손(갱신) |
+
+---
+
+## 연금
+
+조건:
+
+```text
+상품명에 "연금" 포함
+```
+
+저장:
+
+```text
+연금
+```
+
+---
+
+## 저축
+
+조건:
+
+```text
+상품명에 "저축" 포함
+```
+
+저장:
+
+```text
+저축
+```
+
+---
+
+## 일반 상품
+
+저장:
+
+```text
+보장
+```
+
+---
+
+# 상품명(product_name) 정책
+
+기준 컬럼:
+
+| 위치 | 컬럼 |
+|---|---|
+| 좌측 | B열 |
+| 우측 | I열 |
+
+정규화:
+
+- 줄바꿈 제거
+- 다중 공백 제거
+- trim 처리
+
+---
+
+# 구분(plan_type) 정책
+
+기준 컬럼:
+
+| 위치 | 컬럼 |
+|---|---|
+| 좌측 | C열 |
+| 우측 | J열 |
+
+저장 정책:
+
+```text
+raw 문자열 그대로 저장
+```
+
+---
+
+# 납기(pay_period) 정책
+
+기준 컬럼:
+
+| 위치 | 컬럼 |
+|---|---|
+| 좌측 | D열 |
+| 우측 | K열 |
+
+저장 정책:
+
+```text
+raw 문자열 그대로 저장
+```
+
+---
+
+# 수정률(year1) 저장 정책
+
+기준 컬럼:
+
+| 위치 | 컬럼 |
+|---|---|
+| 좌측 | E열 |
+| 우측 | L열 |
+
+저장 정책:
+
+```text
+raw 백분율 표시값 그대로 저장
+```
+
+예:
+
+| raw | 저장값 | 화면 표시 |
+|---|---:|---:|
+| 130 | 130 | 130% |
+| 95 | 95 | 95% |
+| 240 | 240 | 240% |
+
+주의:
+
+- `×100` 금지
+- `/100` 금지
+- `/0.97` 금지
+
+---
+
+# 손보 수정률 화면 표시 정책
+
+DB손보만 기존 legacy 배율 정책을 유지한다.
+
+| 보험사 | 저장값 | 화면 |
+|---|---|---|
+| DB | 2.4 | 240% |
+| 롯데 | 130 | 130% |
+
+최종 정책:
+
+```python
+if row.insurer == "DB":
+    shown = value * 100
+else:
+    shown = value
+```
+
+---
+
+# Orchestrator 연동
+
+## __init__.py
+
+```python
+from commission.services.rate_example_normalizers.fire_lotte import (
+    build_fire_lotte_conversion_rows,
+)
+```
+
+---
+
+## __all__
+
+```python
+"build_fire_lotte_conversion_rows",
+```
+
+---
+
+# rate_example_normalizer.py 수정
+
+## 보험사 대상 추가
+
+```python
+and example.insurer in {"DB", "KB", "농협", "삼성", "롯데"}
+```
+
+---
+
+## 실행 분기
+
+```python
+elif example.insurer_type == RateExample.TYPE_FIRE and example.insurer == "롯데":
+    normalized_rows.extend(build_fire_lotte_conversion_rows(example, wb))
+```
+
+---
+
+# 검증 시나리오
+
+```powershell
+python manage.py check
+```
+
+---
+
+## parser import 확인
+
+```powershell
+python manage.py shell -c "from commission.services.rate_example_normalizers.fire_lotte import build_fire_lotte_conversion_rows; print(build_fire_lotte_conversion_rows)"
+```
+
+---
+
+## 저장 결과 검증
+
+```powershell
+python manage.py shell -c "from commission.models import RateExampleConversionRow as R; qs=R.objects.filter(insurer_type='fire', category='conv', insurer='롯데'); print(qs.count())"
+```
+
+---
+
+# 필수 검증 항목
+
+```text
+[ ] 롯데 업로드 정상 완료
+[ ] 좌동 → 좌측 block 사용 정상 동작
+[ ] 판매중지 → 좌/우 전체 제외 정상 동작
+[ ] 실손 최초 → 단독실손(초회)
+[ ] 실손 갱신 → 단독실손(갱신)
+[ ] 연금 상품 → 연금
+[ ] 저축 상품 → 저축
+[ ] 일반 상품 → 보장
+[ ] 수정률 130 → 130%
+[ ] 삼성/농협/KB/DB 손보 영향 없음
+[ ] 생명보험 환산율 영향 없음
+```
+
+---
+
+# 운영 주의사항
+
+- migration 불필요
+- model 변경 없음
+- URL 변경 없음
+- static rebuild 불필요
+- replace 모드 재업로드 권장
+- 기존 롯데 데이터 초기화 후 재업로드 권장
+
+---
+
+# 최종 SSOT
+
+롯데손해보험 수정률 정책:
+
+```text
+좌/우 병렬 상품 block pair 기반 처리
+우측 "좌동" → 좌측 block 사용
+우측 "판매중지" → 전체 제외
+수정률은 raw 백분율 그대로 저장
+DB손보만 legacy ×100 표시 유지
+```

@@ -94,6 +94,12 @@ from commission.services.rate_example_normalizers.fire_nh import (
 from commission.services.rate_example_normalizers.fire_samsung import (
     build_fire_samsung_conversion_rows,
 )
+from commission.services.rate_example_normalizers.fire_lotte import (
+    build_fire_lotte_conversion_rows,
+)
+from commission.services.rate_example_normalizers.fire_hanhwa import (
+    build_fire_hanhwa_conversion_rows,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -198,7 +204,7 @@ def normalize_rate_example(
     is_fire_conv_target = (
         example.insurer_type == RateExample.TYPE_FIRE
         and example.category == RateExample.CAT_CONV
-        and example.insurer in {"DB", "KB", "농협", "삼성"}
+        and example.insurer in {"DB", "KB", "농협", "롯데", "삼성", "한화"}
     )
 
     if not (is_life_conv_target or is_fire_conv_target):
@@ -385,6 +391,18 @@ def normalize_rate_example(
     elif example.insurer_type == RateExample.TYPE_FIRE and example.insurer == "농협":
         normalized_rows.extend(build_fire_nh_conversion_rows(example, wb))
 
+    # ── 롯데손해보험 수정률 정규화 ────────────────────────────────
+    # 롯데 손보 규칙:
+    # - 좌측/우측 병렬 상품 블록을 pair 단위로 판단
+    # - 우측이 "좌동"이면 좌측 블록을 정규화 기준으로 사용
+    # - 우측이 "판매중지"이면 좌/우 블록 전체 제외
+    # - 그 외에는 우측 블록을 정규화 기준으로 사용
+    # - 상품/담보구분/수정률 병합셀은 parser 내부 matrix에서 값 전파
+    # - 수정률은 raw 숫자 그대로 year1에 저장한다.
+    #   예: raw 130 → DB 130 → 화면 표시 130%
+    elif example.insurer_type == RateExample.TYPE_FIRE and example.insurer == "롯데":
+        normalized_rows.extend(build_fire_lotte_conversion_rows(example, wb))
+
     # ── 삼성화재 손해보험 수정률 정규화 ────────────────────────────────
     # 삼성 손보 규칙:
     # - 시트 내 복수 테이블을 제목행 + 헤더행 기준으로 각각 인식
@@ -395,6 +413,18 @@ def normalize_rate_example(
     #   예: raw 160 → DB 160 → 화면 표시 160%
     elif example.insurer_type == RateExample.TYPE_FIRE and example.insurer == "삼성":
         normalized_rows.extend(build_fire_samsung_conversion_rows(example, wb))
+    
+    # ── 한화손해보험 수정률 정규화 ────────────────────────────────
+    # 한화 손보 규칙:
+    # - 병합 셀 값을 점유 범위 전체에 전파
+    # - B열 값이 "구분"인 테이블을 상품 단위로 인식
+    # - 최초 "구분" 셀 2행 상단의 "○" 포함 텍스트를 상품명으로 사용
+    # - B/C열 구분이 다르면 "B (C)" 형태로 결합
+    # - "신계약환산율" 하위 헤더 또는 "환산율" 포함 헤더를 납기로 사용
+    # - 상품군이 "보장(태아)"인 경우 구분의 "주)" 텍스트 제거
+    # - 수정률은 raw 백분율 표시값 그대로 year1에 저장
+    elif example.insurer_type == RateExample.TYPE_FIRE and example.insurer == "한화":
+        normalized_rows.extend(build_fire_hanhwa_conversion_rows(example, wb))
 
     # ── ABL 생명 환산율/수정률 정규화 ─────────────────────────────
     # 보험사별 parser는 rate_example_normalizers/life_*.py에 둔다.

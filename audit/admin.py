@@ -69,6 +69,8 @@ _ACTION_LABEL = {
     "commission.rate_example.delete":          "삭제",
     "commission.rate_example.normalize":       "정규화",
     "commission.rate_example.strategy_update": "전략유무 변경",
+    "commission.rate_example.conversion.bulk_edit": "환산율/수정률 일괄수정",
+    "commission.rate_example.calculate":       "수수료 예시표 조회",
 }
 
 
@@ -125,7 +127,18 @@ class RateExampleAuditLogAdmin(admin.ModelAdmin):
     def meta_summary(self, obj: RateExampleAuditLog):
         meta = obj.meta or {}
         parts = []
-        for key in ("insurer", "insurer_type", "from", "to", "original_name", "normalized_count"):
+        for key in (
+            "insurer_type_label",
+            "insurer",
+            "product_name",
+            "plan_type",
+            "pay_period",
+            "premium_range",
+            "commission_rate",
+            "total_amount",
+            "total_ratio",
+            "from", "to", "original_name", "normalized_count",
+        ):
             if key in meta:
                 parts.append(f"{key}={meta[key]}")
         return " | ".join(parts) if parts else "-"

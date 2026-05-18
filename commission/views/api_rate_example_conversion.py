@@ -80,21 +80,24 @@ def _format_rate_percent(value) -> str:
     return f"{text}%"
 
 
-def _format_fire_mod_rate_percent(value) -> str:
+def _format_fire_mod_rate_percent(row: RateExampleConversionRow, value) -> str:
     """
     손해보험 수정률 화면 표시용 포맷.
 
     저장 정책:
-    - DB에는 raw 배율값 그대로 저장한다.
-      예: raw 2.4 → Decimal("2.4")
+    - DB손보 기존 데이터는 배율값으로 저장된 이력이 있다.
+      예: DB raw 2.4 → 화면 240%
+    - KB/농협/삼성/롯데 손보는 raw 백분율 표시값 그대로 저장한다.
+      예: 롯데 raw 130 → 화면 130%
 
     표시 정책:
-    - 사용자 화면에서는 2.4를 240%로 표시한다.
+    - DB만 ×100 표시를 유지한다.
+    - 그 외 손보 수정률은 저장값에 %만 붙인다.
     """
     if value is None:
         return ""
 
-    shown = value * 100
+    shown = value * 100 if row.insurer == "DB" else value
     text = _format_decimal(shown)
     if not text:
         return ""
@@ -191,7 +194,7 @@ def rate_example_conversion_list(request):
             "year4": _format_rate_percent(row.year4),
             # 손보 수정률은 DB 저장값 2.4를 화면에서 240%로 보여준다.
             "mod_rate": (
-                _format_fire_mod_rate_percent(row.year1)
+                _format_fire_mod_rate_percent(row, row.year1)
                 if is_fire
                 else _format_rate_percent(row.year1)
             ),
