@@ -8,21 +8,27 @@ from . import deposit
 from . import collect as collect_handler
 
 Mode = Literal["df", "file"]
+HandlerFn = Callable[..., dict]
 
 
 @dataclass(frozen=True)
 class UploadSpec:
     """
-    SSOT 업로드 스펙
+    commission 업로드 라우팅 스펙 SSOT.
 
     - mode == "df"
       views에서 _read_excel_safely로 DataFrame을 만든 후 fn(df) 호출
     - mode == "file"
       views에서 임시 저장된 file_path/original_name을 fn(file_path, original_name)로 전달
+
+    return dict 계약:
+    - deposit 계열은 주로 {"updated": n, ...}
+    - approval/efficiency/collect 계열은 주로 {"inserted_or_updated": n, ...}
+    - views.api_upload._get_uploaded_n()이 두 계약을 모두 흡수한다.
     """
     upload_type: str
     mode: Mode
-    fn: Callable
+    fn: HandlerFn
     msg_tpl: str
 
 
@@ -119,7 +125,12 @@ _REGISTRY: Dict[str, UploadSpec] = {
 
 
 def get_upload_spec(upload_type: str) -> UploadSpec:
-    """upload_type -> UploadSpec (없으면 KeyError)"""
+    """
+    upload_type에 해당하는 UploadSpec을 반환한다.
+
+    없으면 KeyError를 발생시켜 뷰에서 400 응답으로 변환한다.
+    registry 외부에서 upload_type 분기문을 새로 만들지 않는다.
+    """
     try:
         return _REGISTRY[upload_type]
     except KeyError:
@@ -127,7 +138,11 @@ def get_upload_spec(upload_type: str) -> UploadSpec:
 
 
 def supported_upload_types() -> Iterable[str]:
-    """지원 업로드 타입 목록"""
+    """
+    지원 업로드 타입 목록.
+
+    commission.views.constants.SUPPORTED_UPLOAD_TYPES 생성 시 이 함수를 사용한다.
+    """
     return tuple(_REGISTRY.keys())
 
 

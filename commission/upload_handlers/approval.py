@@ -2,10 +2,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List
+from typing import Dict
 
 from accounts.models import CustomUser
 from commission.models import ApprovalPending
+from commission.upload_handlers._common import safe_cell_text, upload_result
 from commission.upload_utils import _norm_emp_id, _read_excel_raw_matrix, _to_int
 
 # =============================================================================
@@ -14,7 +15,12 @@ from commission.upload_utils import _norm_emp_id, _read_excel_raw_matrix, _to_in
 
 @dataclass(frozen=True)
 class _ApprovalRowSpec:
-    """raw matrix 기반 컬럼 인덱스(0-based)."""
+    """
+    수수료결재 raw matrix 기반 컬럼 인덱스(0-based).
+
+    원본 엑셀 구조가 고정된 파일이므로 컬럼명 탐지 대신 위치 기반으로 읽는다.
+    위치 정책을 이 dataclass에 모아두어 magic number가 핸들러 본문에 퍼지지 않게 한다.
+    """
     idx_emp_name: int = 1   # B
     idx_user_id: int = 2    # C
     idx_pay: int = 13       # N
@@ -27,18 +33,17 @@ _SPEC = _ApprovalRowSpec()
 _ELIGIBLE_REGIST = {"손생등록", "생보등록", "손보등록"}
 
 
-def _safe_cell(row, idx: int) -> str:
+def _safe_cell(row: Sequence[object], idx: int) -> str:
     """
     raw matrix row에서 cell을 안전하게 문자열로 변환한다.
-    - None / NaN / "none" / "nan" -> ""
+
+    - None / NaN / "none" / "nan" / "-" -> ""
+    - 실제 공란 판정은 upload_handlers._common.safe_cell_text()를 경유한다.
+    - 이 wrapper는 approval 파일의 위치 기반 접근(len 방어)을 담당한다.
     """
     if len(row) <= idx:
         return ""
-    v = row[idx]
-    if v is None:
-        return ""
-    s = str(v).strip()
-    return "" if s.lower() in ("nan", "none") else s
+    return safe_cell_text(row[idx])
 
 
 def handle_upload_commission_approval(
@@ -58,10 +63,15 @@ def handle_upload_commission_approval(
 
     part:
     - 주어지면 해당 part 사용자만 저장(스코프 안전장치)
+
+    return contract:
+    - inserted_or_updated: 저장/upsert 건수
+    - missing_users: 사용자 미존재 또는 part/regist 스코프 제외 건수
+    - missing_sample: 실패 샘플 최대 10건
     """
     df = _read_excel_raw_matrix(file_path, original_name=original_name, skiprows=0, header_none=True)
     if df is None or getattr(df, "empty", False):
-        return {"inserted_or_updated": 0, "missing_users": 0, "missing_sample": []}
+        return upload_result()
 
     # uid -> {emp_name:str, paid_sum:int}
     bucket: Dict[str, Dict[str, object]] = {}
@@ -90,7 +100,7 @@ def handle_upload_commission_approval(
             rec["paid_sum"] = int(rec.get("paid_sum") or 0) + pay
 
     if not bucket:
-        return {"inserted_or_updated": 0, "missing_users": 0, "missing_sample": []}
+        return upload_result()
 
     # ✅ 유자격 + (선택) part 스코프
     qs = (
@@ -122,7 +132,10 @@ def handle_upload_commission_approval(
         )
 
     if not objs:
-        return {"inserted_or_updated": 0, "missing_users": len(missing), "missing_sample": missing_sample}
+        return upload_result(
+            missing_users=len(missing),
+            missing_sample=missing_sample,
+        )
 
     ApprovalPending.objects.bulk_create(
         objs,
@@ -132,11 +145,11 @@ def handle_upload_commission_approval(
         update_fields=["emp_name", "actual_pay", "approval_flag", "updated_at"],
     )
 
-    return {
-        "inserted_or_updated": len(objs),
-        "missing_users": len(missing),
-        "missing_sample": missing_sample,
-    }
+    return upload_result(
+        inserted_or_updated=len(objs),
+        missing_users=len(missing),
+        missing_sample=missing_sample,
+    )
 
 
 # ---------------------------------------------------------------------

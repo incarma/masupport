@@ -2,6 +2,14 @@
 
 from __future__ import annotations
 
+"""
+commission 업로드 컬럼 탐지 유틸 SSOT.
+
+엑셀 원장은 보험사/부서/월도별로 컬럼명이 조금씩 달라진다.
+이 모듈은 컬럼명을 정규화한 뒤 token 기반으로 탐지하되,
+계약번호·증권번호·주민번호 등 오탐 위험 컬럼은 ban group으로 제외한다.
+"""
+
 import re
 from typing import Optional, Sequence
 
@@ -11,7 +19,13 @@ import pandas as pd
 # Column detection helpers
 # =========================================================
 def _norm_col(s: str) -> str:
-    """컬럼명 normalize: 소문자/특수문자 제거/0→o(보증(0) 케이스)"""
+    """
+    컬럼명 normalize.
+
+    - 소문자 변환
+    - 공백/특수문자 제거
+    - 보증 O/X 컬럼에서 숫자 0이 문자 O처럼 들어오는 케이스 보정
+    """
     if s is None:
         return ""
     s = str(s).strip().lower()
@@ -26,7 +40,14 @@ def _best_match_col(
     optional_tokens: Optional[Sequence[str]] = None,
     ban_tokens: Optional[Sequence[str]] = None,
 ):
-    """df columns 중 required token 포함 + optional token 점수로 best match."""
+    """
+    required token을 모두 포함하는 컬럼 중 가장 높은 점수의 원본 컬럼명을 반환한다.
+
+    점수 정책:
+    - required token은 필수 조건이다.
+    - optional token은 가산점만 부여한다.
+    - ban token이 포함된 컬럼은 즉시 제외한다.
+    """
     optional_tokens = optional_tokens or []
     ban_tokens = ban_tokens or []
 
@@ -55,7 +76,15 @@ def _best_match_col(
 
 
 def _find_col_by_aliases(df: pd.DataFrame, alias_groups, ban_groups=None):
-    """여러 alias 후보 중 하나를 찾아 컬럼명 반환."""
+    """
+    alias group 목록을 순서대로 탐색해 컬럼명을 반환한다.
+
+    alias_groups 예:
+    - [["사번"], ["사원", "코드"]]
+
+    ban_groups 예:
+    - [["계약"], ["증권"], ["주민"]]
+    """
     df_cols = list(df.columns)
     ban_groups = ban_groups or []
 
@@ -72,7 +101,13 @@ def _find_col_by_aliases(df: pd.DataFrame, alias_groups, ban_groups=None):
 
 
 def _detect_emp_id_col(df: pd.DataFrame):
-    """사번/사원코드/등록번호/FC코드 컬럼 자동 탐지."""
+    """
+    사번/사원코드/등록번호/FC코드 컬럼 자동 탐지.
+
+    주의:
+    - "등록번호"는 사번성 등록번호를 의미한다.
+    - 계약번호/증권번호/주민번호/연락처/email은 사번으로 오탐되면 안 되므로 ban group에 둔다.
+    """
     alias_groups = [
         ["사번"],
         ["사원", "코드"],
@@ -168,6 +203,8 @@ def _detect_refundpay_col(df: pd.DataFrame, flag: Optional[str], kind: str, line
     - flag: None(일반), "o"(보증 O), "x"(보증 X)
     - kind: "refund" | "pay"
     - line: "ns"(손보) | "ls"(생보) | "total"(합계)
+
+    손보/생보 컬럼은 서로 ban 처리해 교차 오탐을 방지한다.
     """
     if df is None or df.empty:
         return None

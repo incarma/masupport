@@ -30,12 +30,15 @@ from __future__ import annotations
 """
 
 import logging
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from typing import Any
 
 from openpyxl.workbook.workbook import Workbook
 
 from commission.models import RateExample, RateExampleConversionRow
+from commission.services.rate_example_normalizers._common.decimal import (
+    decimal_percent_cell,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -90,20 +93,8 @@ def _to_decimal_percent(cell) -> Decimal | None:
     - value=0.75, number_format='0%' → Decimal("75.00")
     - value=150, number_format='General' → Decimal("150")
     """
-    value = getattr(cell, "value", None)
-    if value is None or value == "":
-        return None
-
-    try:
-        dec = Decimal(str(value).replace(",", "").strip())
-    except (InvalidOperation, ValueError):
-        return None
-
-    number_format = str(getattr(cell, "number_format", "") or "")
-    if "%" in number_format:
-        dec = dec * Decimal("100")
-
-    return dec
+    # 교보 정책: Excel % 셀은 openpyxl 실제값을 ×100 보정해 저장한다.
+    return decimal_percent_cell(cell)
 
 
 def _last_data_row(ws, rate_col: int) -> int:

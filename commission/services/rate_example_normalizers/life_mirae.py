@@ -17,7 +17,7 @@ from __future__ import annotations
 - 줄바꿈 상품명은 각 줄을 strip 후 붙여 한 줄로 정규화한다.
 """
 
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 import re
 from typing import Any
 
@@ -25,6 +25,10 @@ from openpyxl.workbook.workbook import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
 from commission.models import RateExample, RateExampleConversionRow
+from commission.services.rate_example_normalizers._common.decimal import (
+    decimal_percent_value,
+)
+from commission.services.rate_example_normalizers._common.rows import append_unique
 
 
 DEC4 = Decimal("0.0001")
@@ -83,33 +87,10 @@ def _to_decimal(value: Any, *, number_format: str = "") -> Decimal | None:
       raw 숫자 그대로 저장한다.
     - Excel 서식 자체가 %인 경우에만 openpyxl 실제값 보정을 위해 x100 한다.
     """
-    if value is None:
+    dec = decimal_percent_value(value, number_format=number_format)
+    if dec is None:
         return None
-
-    if isinstance(value, str):
-        text = value.strip().replace(",", "")
-        if not text or text in {"-", "－", "–"}:
-            return None
-
-        has_percent = "%" in text
-        text = text.replace("%", "").strip()
-
-        try:
-            dec = Decimal(text)
-        except InvalidOperation:
-            return None
-
-        # 문자열에 %가 직접 포함된 경우 이미 표시 기준 숫자로 본다.
-        return dec.quantize(DEC4)
-
-    try:
-        dec = Decimal(str(value))
-    except (InvalidOperation, TypeError, ValueError):
-        return None
-
-    if "%" in str(number_format or ""):
-        dec *= Decimal("100")
-
+    
     return dec.quantize(DEC4)
 
 
@@ -217,10 +198,7 @@ def _append_unique(
         row.year3,
         row.year4,
     )
-    if key in seen:
-        return
-    seen.add(key)
-    rows.append(row)
+    append_unique(rows, seen, row, key)
 
 
 def _parse_base_protection_sheet(

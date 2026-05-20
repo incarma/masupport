@@ -14,7 +14,7 @@ Excel export helpers (views layer SSOT)
 """
 
 import io
-from typing import Any, Iterable, Mapping
+from typing import Any
 
 from django.http import HttpResponse
 
@@ -57,7 +57,12 @@ def xlsx_bytes_response(*, content: bytes, filename: str) -> HttpResponse:
     return resp
 
 
-def rows_to_excel_response(*, rows: list[dict[str, Any]], sheet_name: str, filename: str) -> HttpResponse:
+def rows_to_excel_response(
+    *,
+    rows: list[dict[str, Any]],
+    sheet_name: str,
+    filename: str,
+) -> HttpResponse:
     """
     one-shot helper:
     rows -> xlsx bytes -> response

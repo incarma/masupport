@@ -27,7 +27,6 @@ DB생명 환산율/수정률 정규화 모듈.
 """
 
 import logging
-import re
 from decimal import Decimal, InvalidOperation
 from typing import Iterable
 
@@ -35,6 +34,7 @@ from openpyxl.workbook.workbook import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
 from commission.models import RateExample, RateExampleConversionRow
+from commission.services.rate_example_normalizers._common.text import clean_spaces
 
 logger = logging.getLogger(__name__)
 
@@ -44,13 +44,7 @@ STOP_TABLE_KEYWORDS = ("특약", "의무부가")
 
 def _clean_text(value) -> str:
     """엑셀 셀 값을 문자열로 안전 정규화한다."""
-    if value is None:
-        return ""
-    return re.sub(
-        r"\s+",
-        " ",
-        str(value).replace("\r", "\n").replace("\n", " "),
-    ).strip()
+    return clean_spaces(value)
 
 
 def _clean_product_name(value) -> str:

@@ -1,6 +1,5 @@
 # django_ma/commission/views/approval.py
 from __future__ import annotations
-import logging
 
 """
 Approval/Efficiency Excel Upload API (superuser only)
@@ -31,6 +30,8 @@ from ._files import save_temp_upload, safe_delete
 from ._ym import resolve_ym
 from .utils_fail_excel import store_fail_rows_as_excel
 from .utils_json import _json_error, _json_ok
+
+import logging
 
 
 logger = logging.getLogger(__name__)
@@ -153,7 +154,7 @@ def approval_upload_excel(request):
                 request,
                 ACTION.COMMISSION_EXCEL_UPLOAD,
                 meta={"ym": ym, "part": part, "kind": kind, "error": "missing excel_file"},
-            success=False,
+                success=False,
             )
         except Exception:
             logger.exception("[commission.approval] audit failed: missing excel_file")

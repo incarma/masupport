@@ -7,12 +7,15 @@ commission.upload_utils public API (SSOT)
 - 외부에서는 commission.upload_utils 로만 import 한다.
 - 실제 구현은 하위 모듈로 분리되었고, 여기서 동일 심볼을 re-export 한다.
 - 기능 영향 없이 가독성/유지보수성만 개선하는 목적.
+- __all__은 legacy shim(upload_utils.py)과 외부 import 호환을 위한 공개 surface다.
 """
 
 # ---- Converters / constants ----
 from ._convert import (  # noqa: F401
     DEC2,
+    EMPTY_LIKE_VALUES,
     _extract_emp7_from_a,
+    _is_empty_like,
     _norm_emp_id,
     _safe_decimal_q2,
     _to_date,
@@ -48,7 +51,9 @@ from ._db import _bulk_existing_user_ids, _update_upload_log  # noqa: F401
 __all__ = [
     # constants
     "DEC2",
+    "EMPTY_LIKE_VALUES",
     # convert
+    "_is_empty_like",
     "_to_int",
     "_to_decimal",
     "_safe_decimal_q2",

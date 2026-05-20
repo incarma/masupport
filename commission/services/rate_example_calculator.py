@@ -67,6 +67,23 @@ def _pct_to_multiplier(value: Decimal | None) -> Decimal | None:
     return Decimal(value) / Decimal("100")
 
 
+def _fire_mod_to_multiplier(value: Decimal | None) -> Decimal | None:
+    """
+    손해보험 수정률 multiplier 변환.
+
+    일부 손보 parser는 raw 1.6을 그대로 저장하고,
+    일부 parser는 화면 표시 기준 160(%)을 저장한다.
+    계산에서는 둘 다 1.6배로 사용해야 하므로,
+    명백한 percent 값(20 초과)은 /100 처리한다.
+    """
+    if value is None:
+        return None
+    raw = Decimal(value)
+    if raw > Decimal("20"):
+        return raw / Decimal("100")
+    return raw
+
+
 def _money_round(value: Decimal) -> int:
     return int(value.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
 
@@ -362,7 +379,7 @@ def _build_fire_result(*, data: CalcInput, conv: RateExampleConversionRow, pay: 
     - 14회: col_yr3
     - 15회: col_m36
     """
-    mod_multiplier = Decimal(conv.year1) if conv.year1 is not None else None
+    mod_multiplier = _fire_mod_to_multiplier(conv.year1)
 
     def amount(pay_rate):
         return _amount_or_none_with_conversion_multiplier(

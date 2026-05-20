@@ -28,9 +28,9 @@ from __future__ import annotations
   예: Excel 표시 70% → openpyxl value 0.7 → DB Decimal("70")
 """
 
-from decimal import Decimal, InvalidOperation
-
 from commission.models import RateExampleConversionRow
+from commission.services.rate_example_normalizers._common.decimal import decimal_percent_cell
+from commission.services.rate_example_normalizers._common.text import clean_text
 
 TARGET_SHEET_NAME = "주계약"
 INSURER_NAME = "동양"
@@ -50,9 +50,7 @@ def _text(value) -> str:
     Excel cell value를 안전한 문자열로 변환한다.
     None은 공란으로 처리하고, 앞뒤 공백을 제거한다.
     """
-    if value is None:
-        return ""
-    return str(value).strip()
+    return clean_text(value)
 
 
 def _coverage_type(product_name: str) -> str:
@@ -98,21 +96,8 @@ def _to_decimal_percent(cell) -> Decimal | None:
     - 서식에 '%'가 없으면 원 숫자를 그대로 사용한다.
     - 빈 값/문자 변환 실패는 None으로 처리한다.
     """
-    value = getattr(cell, "value", None)
-    if value is None or value == "":
-        return None
-
-    try:
-        dec = Decimal(str(value).replace(",", "").strip())
-    except (InvalidOperation, ValueError, AttributeError):
-        return None
-
-    number_format = getattr(cell, "number_format", "") or ""
-    if "%" in number_format:
-        dec = dec * Decimal("100")
-
-    # 기존 모달 표시 정책과 맞추기 위해 불필요한 지수 표기만 제거한다.
-    return dec.normalize() if dec == dec.to_integral() else dec
+    # 동양 정책: Excel percent format이면 ×100, 아니면 원 숫자 유지.
+    return decimal_percent_cell(cell, normalize_integral=True)
 
 
 def _has_any_rate(year1: Decimal | None, next_year: Decimal | None) -> bool:

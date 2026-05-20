@@ -2,6 +2,18 @@
 
 from __future__ import annotations
 
+"""
+commission 업로드 파일 reader SSOT.
+
+지원 순서:
+1. HTML table로 내려온 Excel 유사 파일
+2. xlsx/xlsm 계열(openpyxl)
+3. xls OLE2 계열(xlrd 필요)
+4. csv/tsv/semicolon 텍스트 fallback
+
+핸들러는 파일 포맷을 직접 판별하지 않고 이 모듈을 경유한다.
+"""
+
 import io
 import os
 from html.parser import HTMLParser
@@ -12,7 +24,7 @@ import pandas as pd
 # Excel readers (xlsx/xls/html/tsv/csv)
 # =========================================================
 def _decode_bytes_best_effort(raw: bytes) -> str:
-    """utf-8/cp949 등으로 최대한 텍스트 복원."""
+    """한국어 엑셀/CSV에서 자주 쓰이는 인코딩 순서로 최대한 텍스트를 복원한다."""
     for enc in ("utf-8-sig", "utf-8", "cp949", "euc-kr"):
         try:
             return raw.decode(enc)
@@ -22,7 +34,12 @@ def _decode_bytes_best_effort(raw: bytes) -> str:
 
 
 def _parse_first_html_table(file_path: str) -> pd.DataFrame:
-    """엑셀이 HTML 테이블로 내려오는 케이스 대응(첫 table 파싱)."""
+    """
+    HTML table 형식으로 내려온 Excel 유사 파일을 DataFrame으로 읽는다.
+
+    일부 내부 시스템은 확장자가 .xls여도 실제 내용은 HTML table이다.
+    이 경우 pandas read_excel보다 HTMLParser 기반 파싱이 안정적이다.
+    """
     with open(file_path, "rb") as f:
         raw = f.read()
     text = _decode_bytes_best_effort(raw)
@@ -97,7 +114,12 @@ def _parse_first_html_table(file_path: str) -> pd.DataFrame:
 
 
 def _read_text_table(file_path: str) -> pd.DataFrame:
-    """csv/tsv/세미콜론 등 텍스트 테이블 추정 로딩."""
+    """
+    csv/tsv/semicolon 텍스트 테이블을 추정 로딩한다.
+
+    구분자 추정 실패 또는 read_csv 실패 시 한 줄짜리 COL_1 DataFrame으로 fallback한다.
+    이 fallback은 업로드 실패 원인 확인용으로 최소 원문을 보존하기 위한 방어다.
+    """
     with open(file_path, "rb") as f:
         raw = f.read()
     text = _decode_bytes_best_effort(raw)
@@ -126,7 +148,7 @@ def _read_text_table(file_path: str) -> pd.DataFrame:
 
 
 def _read_text_table_matrix(file_path: str, skiprows: int = 0) -> pd.DataFrame:
-    """텍스트 테이블을 header=None 형태의 matrix로 로딩."""
+    """raw matrix 기반 핸들러용 텍스트 reader. header=None 형태를 유지한다."""
     with open(file_path, "rb") as f:
         raw = f.read()
     text = _decode_bytes_best_effort(raw)
@@ -152,6 +174,7 @@ def _read_text_table_matrix(file_path: str, skiprows: int = 0) -> pd.DataFrame:
 
 
 def _read_head_bytes(file_path: str, n: int = 4096) -> bytes:
+    """파일 시그니처 판별용 선두 bytes를 읽는다. 실패 시 빈 bytes 반환."""
     try:
         with open(file_path, "rb") as f:
             return f.read(n)
@@ -160,6 +183,7 @@ def _read_head_bytes(file_path: str, n: int = 4096) -> bytes:
 
 
 def _is_html_bytes(head: bytes) -> bool:
+    """파일 선두부 기준 HTML table 계열 여부를 판별한다."""
     head_l = head.lstrip().lower()
     return head_l.startswith(b"<html") or head_l.startswith(b"<!doctype") or head_l.startswith(b"<table")
 
@@ -168,6 +192,7 @@ def _read_excel_safely(file_path: str, original_name: str = "") -> pd.DataFrame:
     """
     업로드 파일을 안전하게 DataFrame(header=0)로 읽는다.
     - HTML table / xlsx / xls / csv(tsv) 모두 대응
+    - 반환 DataFrame은 header=0 기준이다.
     """
     ext = os.path.splitext((original_name or file_path))[1].lower()
     head = _read_head_bytes(file_path)
@@ -203,6 +228,7 @@ def _read_excel_raw_matrix(
     """
     업로드 파일을 header=None 형태의 matrix(DataFrame)로 읽는다.
     - HTML table / xlsx / xls / csv(tsv) 모두 대응
+    - 반환 DataFrame은 기본적으로 header=None matrix 형태다.
     """
     ext = os.path.splitext((original_name or file_path))[1].lower()
     head = _read_head_bytes(file_path)

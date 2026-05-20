@@ -30,13 +30,20 @@ KDB raw 컬럼 매핑:
 """
 
 import logging
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from typing import Any
 
 from openpyxl.workbook.workbook import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
 from commission.models import RateExample, RateExampleConversionRow
+from commission.services.rate_example_normalizers._common.excel import (
+    build_merged_value_map,
+    cell_value_with_merged,
+)
+from commission.services.rate_example_normalizers._common.decimal import (
+    decimal_percent_value,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -65,26 +72,15 @@ def _build_merged_cell_lookup(ws: Worksheet) -> dict[str, Any]:
     각 행을 독립 정규화하려면 병합 범위 내 모든 좌표에서
     좌상단 셀 값을 읽을 수 있어야 한다.
     """
-    merged_values: dict[str, Any] = {}
-    for merged_range in ws.merged_cells.ranges:
-        top_left_value = ws.cell(
-            row=merged_range.min_row,
-            column=merged_range.min_col,
-        ).value
-        for row_no in range(merged_range.min_row, merged_range.max_row + 1):
-            for col_no in range(merged_range.min_col, merged_range.max_col + 1):
-                merged_values[f"{row_no}:{col_no}"] = top_left_value
-    return merged_values
+    # legacy 함수명은 유지하되 실제 구현은 공통 helper를 사용한다.
+    return build_merged_value_map(ws)
 
 
-def _cell_value(ws: Worksheet, merged_values: dict[str, Any], row_no: int, col_no: int) -> Any:
+def _cell_value(ws: Worksheet, merged_values: dict[tuple[int, int], Any], row_no: int, col_no: int) -> Any:
     """
     일반 셀/병합 셀 값을 동일하게 읽는다.
     """
-    value = ws.cell(row=row_no, column=col_no).value
-    if value not in (None, ""):
-        return value
-    return merged_values.get(f"{row_no}:{col_no}")
+    return cell_value_with_merged(ws, merged_values, row_no, col_no)
 
 
 def _build_pay_period(pay_period: str, age_basis: str) -> str:
@@ -103,18 +99,6 @@ def _build_pay_period(pay_period: str, age_basis: str) -> str:
     return pay_period or age_basis
 
 
-def _is_percent_number_format(number_format: str) -> bool:
-    """
-    openpyxl 셀 number_format이 백분율 형식인지 판정한다.
-
-    예:
-    - "0%"
-    - "0.0%"
-    - "0.00%"
-    """
-    return "%" in str(number_format or "")
-
-
 def _to_decimal_percent(value: Any, *, number_format: str = "") -> Decimal | None:
     """
     KDB 변경후(K열) 값을 DB 저장용 Decimal로 변환한다.
@@ -124,39 +108,9 @@ def _to_decimal_percent(value: Any, *, number_format: str = "") -> Decimal | Non
     - Excel 셀이 100% 표시이지만 실제값 1.0으로 읽히는 경우 number_format의 %를 보고 ×100 보정한다.
     - 문자열 "100%"는 "%" 제거 후 Decimal("100")으로 저장한다.
     """
-    if value is None:
-        return None
-
-    if isinstance(value, Decimal):
-        dec = value
-    elif isinstance(value, (int, float)):
-        try:
-            dec = Decimal(str(value))
-        except InvalidOperation:
-            return None
-    else:
-        text = _cell_text(value)
-        if not text:
-            return None
-
-        text = (
-            text.replace(",", "")
-            .replace("%", "")
-            .replace("％", "")
-            .strip()
-        )
-        if not text:
-            return None
-
-        try:
-            dec = Decimal(text)
-        except InvalidOperation:
-            return None
-
-    if _is_percent_number_format(number_format):
-        dec = dec * Decimal("100")
-
-    return dec
+    # KDB 정책: DB에는 백분율 표시 기준 Decimal을 저장한다.
+    # 예: Excel value=1.0 + number_format='0%' → Decimal('100')
+    return decimal_percent_value(value, number_format=number_format)
 
 
 def _infer_kdb_coverage_type(product_name: str) -> str:

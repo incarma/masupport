@@ -17,8 +17,84 @@ from django.views.decorators.http import require_GET
 
 from accounts.decorators import grade_required
 from ..models import ApprovalPending, EfficiencyPayExcess
-from ._excel_export import rows_to_excel_response
+from ._excel_export import rows_to_excel_response, xlsx_bytes_response
 from .utils_json import _json_error
+
+
+NO_DOWNLOAD_DATA_MESSAGE = "다운로드할 데이터가 없습니다."
+NO_MATCHED_DATA_MESSAGE = "해당 조건의 데이터가 없습니다."
+
+
+def _get_requested_ym(request) -> str:
+    """GET ym 파라미터를 기존 정책 그대로 읽는다."""
+    return (request.GET.get("ym") or "").strip()
+
+
+def _filter_by_requested_or_latest_ym(qs, ym: str):
+    """
+    다운로드 공통 월도 필터.
+    - ym이 있으면 해당 ym 필터
+    - ym이 없으면 최신 ym fallback
+    """
+    if ym:
+        return ym, qs.filter(ym=ym)
+
+    latest = qs.order_by("-ym").values_list("ym", flat=True).first()
+    if not latest:
+        return "", None
+
+    return latest, qs.filter(ym=latest)
+
+
+def _format_updated_at(value) -> str:
+    """엑셀 row의 updated_at 문자열 포맷을 기존과 동일하게 유지."""
+    return value.strftime("%Y-%m-%d %H:%M:%S") if value else ""
+
+
+def _excel_download_response(*, rows, sheet_name: str, filename: str):
+    """
+    공통 엑셀 다운로드 응답.
+
+    기능 변화 없음:
+    - rows가 비어 있으면 기존과 동일하게 404 JSON 반환
+    - rows_to_excel_response() SSOT 유지
+    """
+    if not rows:
+        return _json_error(NO_MATCHED_DATA_MESSAGE, status=404)
+
+    return rows_to_excel_response(
+        rows=rows,
+        sheet_name=sheet_name,
+        filename=filename,
+    )
+
+
+def _approval_pending_rows(qs):
+    """수수료 미결현황 queryset을 기존 엑셀 row dict 구조로 변환."""
+    return [
+        {
+            "ym": r.ym,
+            "user_id": str(r.user_id),
+            "emp_name": r.emp_name,
+            "actual_pay": int(r.actual_pay or 0),
+            "approval_flag": r.approval_flag,
+            "updated_at": _format_updated_at(r.updated_at),
+        }
+        for r in qs.order_by("user_id")
+    ]
+
+
+def _efficiency_excess_rows(qs):
+    """지점효율 지급 초과현황 queryset을 기존 엑셀 row dict 구조로 변환."""
+    return [
+        {
+            "ym": r.ym,
+            "user_id": str(r.user_id),
+            "pay_amount_sum": int(r.pay_amount_sum or 0),
+            "updated_at": _format_updated_at(r.updated_at),
+        }
+        for r in qs.order_by("user_id")
+    ]
 
 
 def _can_download_fail_payload(request, payload: dict) -> bool:
@@ -58,7 +134,7 @@ def download_upload_fail_excel(request):
     payload = cache.get(key)
     if not payload:
         return _json_error("만료되었거나 존재하지 않는 token입니다.", status=404)
-    
+
     if not _can_download_fail_payload(request, payload):
         return _json_error("다운로드 권한이 없습니다.", status=403)
 
@@ -68,7 +144,6 @@ def download_upload_fail_excel(request):
         return _json_error("파일 데이터가 비어있습니다.", status=404)
 
     # 기존 동작 유지: cache에 저장된 bytes를 그대로 내려준다.
-    from ._excel_export import xlsx_bytes_response
     return xlsx_bytes_response(content=content, filename=filename)
 
 
@@ -81,34 +156,14 @@ def download_approval_pending_excel(request):
     - GET 파라미터: ym(YYYY-MM) optional
     - ym 없으면 최신 ym 기준
     """
-    ym = (request.GET.get("ym") or "").strip()
-
+    ym = _get_requested_ym(request)
     qs = ApprovalPending.objects.all().select_related("user")
-    if ym:
-        qs = qs.filter(ym=ym)
-    else:
-        latest = qs.order_by("-ym").values_list("ym", flat=True).first()
-        if not latest:
-            return _json_error("다운로드할 데이터가 없습니다.", status=404)
-        ym = latest
-        qs = qs.filter(ym=ym)
+    ym, qs = _filter_by_requested_or_latest_ym(qs, ym)
+    if qs is None:
+        return _json_error(NO_DOWNLOAD_DATA_MESSAGE, status=404)
 
-    rows = [
-        {
-            "ym": r.ym,
-            "user_id": str(r.user_id),
-            "emp_name": r.emp_name,
-            "actual_pay": int(r.actual_pay or 0),
-            "approval_flag": r.approval_flag,
-            "updated_at": r.updated_at.strftime("%Y-%m-%d %H:%M:%S") if r.updated_at else "",
-        }
-        for r in qs.order_by("user_id")
-    ]
-    if not rows:
-        return _json_error("해당 조건의 데이터가 없습니다.", status=404)
-
-    return rows_to_excel_response(
-        rows=rows,
+    return _excel_download_response(
+        rows=_approval_pending_rows(qs),
         sheet_name="approval_pending",
         filename=f"approval_pending_{ym}.xlsx",
     )
@@ -123,32 +178,14 @@ def download_efficiency_excess_excel(request):
     - GET 파라미터: ym(YYYY-MM) optional
     - ym 없으면 최신 ym 기준
     """
-    ym = (request.GET.get("ym") or "").strip()
-
+    ym = _get_requested_ym(request)
     qs = EfficiencyPayExcess.objects.all().select_related("user")
-    if ym:
-        qs = qs.filter(ym=ym)
-    else:
-        latest = qs.order_by("-ym").values_list("ym", flat=True).first()
-        if not latest:
-            return _json_error("다운로드할 데이터가 없습니다.", status=404)
-        ym = latest
-        qs = qs.filter(ym=ym)
+    ym, qs = _filter_by_requested_or_latest_ym(qs, ym)
+    if qs is None:
+        return _json_error(NO_DOWNLOAD_DATA_MESSAGE, status=404)
 
-    rows = [
-        {
-            "ym": r.ym,
-            "user_id": str(r.user_id),
-            "pay_amount_sum": int(r.pay_amount_sum or 0),
-            "updated_at": r.updated_at.strftime("%Y-%m-%d %H:%M:%S") if r.updated_at else "",
-        }
-        for r in qs.order_by("user_id")
-    ]
-    if not rows:
-        return _json_error("해당 조건의 데이터가 없습니다.", status=404)
-
-    return rows_to_excel_response(
-        rows=rows,
+    return _excel_download_response(
+        rows=_efficiency_excess_rows(qs),
         sheet_name="efficiency_excess",
         filename=f"efficiency_excess_{ym}.xlsx",
     )

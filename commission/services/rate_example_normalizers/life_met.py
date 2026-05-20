@@ -21,9 +21,10 @@ from __future__ import annotations
 """
 
 import logging
-from decimal import Decimal, InvalidOperation
 
 from commission.models import RateExampleConversionRow
+from commission.services.rate_example_normalizers._common.decimal import decimal_percent_cell
+from commission.services.rate_example_normalizers._common.text import clean_text
 
 logger = logging.getLogger(__name__)
 
@@ -33,10 +34,7 @@ DATA_START_ROW = 11
 
 
 def _clean(value) -> str:
-    if value is None:
-        return ""
-    return str(value).strip()
-
+    return clean_text(value)
 
 def _is_dash(value) -> bool:
     text = _clean(value)
@@ -89,32 +87,8 @@ def _to_percent_decimal(cell) -> Decimal | None:
     - 100%는 Decimal("100")으로 저장한다.
     - Excel number_format에 %가 있으면 openpyxl raw 값에 100을 곱한다.
     """
-    value = cell.value
-    if value is None or value == "":
-        return None
-
-    if isinstance(value, str):
-        text = value.strip()
-        if not text or text == "-":
-            return None
-        has_percent = "%" in text
-        text = text.replace("%", "").replace(",", "").strip()
-        try:
-            number = Decimal(text)
-        except InvalidOperation:
-            return None
-        return number
-
-    try:
-        number = Decimal(str(value))
-    except (InvalidOperation, TypeError, ValueError):
-        return None
-
-    number_format = str(getattr(cell, "number_format", "") or "")
-    if "%" in number_format:
-        number *= Decimal("100")
-
-    return number
+    # 메트 정책: 100%는 DB Decimal("100") 기준으로 저장한다.
+    return decimal_percent_cell(cell)
 
 
 def build_life_met_conversion_rows(example, workbook) -> list[RateExampleConversionRow]:
