@@ -2,16 +2,24 @@
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import Any, Dict, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
 
-from django.db.models import Q, Sum
-from django.db.models.functions import Coalesce
+from django.db.models import Q
 from django.http import JsonResponse
 from django.views.decorators.http import require_GET
 
 from accounts.models import CustomUser
-from commission.models import DepositOther, DepositSummary, DepositSurety
+from commission.services.deposit import (
+    calc_filtered_totals,
+    calc_keep_totals_all,
+    get_deposit_other_queryset,
+    get_deposit_summary,
+    get_deposit_surety_queryset,
+)
 from commission.views.utils_json import _json_error as _json_err
+
+if TYPE_CHECKING:
+    from commission.models import DepositOther, DepositSummary, DepositSurety
 
 # =============================================================================
 # 0) Common helpers
@@ -59,6 +67,16 @@ def _int0(v: Any) -> int:
             return int(v)
         except Exception:
             return 0
+        
+
+def _json_rows(rows: list[dict[str, Any]]) -> JsonResponse:
+    """Deposit rows API 공통 성공 응답."""
+    return JsonResponse({"ok": True, "rows": rows})
+
+
+def _json_user_detail(payload: Dict[str, Any]) -> JsonResponse:
+    """legacy 호환: data + user 키를 모두 유지."""
+    return JsonResponse({"ok": True, "data": payload, "user": payload})
 
 
 # =============================================================================
@@ -89,7 +107,16 @@ def _find_user_by_any_id(user_id: str) -> Optional[CustomUser]:
     if not user_id:
         return None
 
-    base = CustomUser.objects.only("id", "name", "part", "branch", "enter", "quit", "regist", "grade")
+    base = CustomUser.objects.only(
+        "id",
+        "name",
+        "part",
+        "branch",
+        "enter",
+        "quit",
+        "regist",
+        "grade",
+    )
 
     # 1) pk/id
     u = base.filter(Q(pk=user_id) | Q(id=user_id)).first()
@@ -159,6 +186,32 @@ def _resolve_target_or_err(request) -> Tuple[Optional[CustomUser], Optional[Json
         return None, perm, user_id
 
     return target, None, user_id
+
+
+def _resolve_target_or_empty_rows(
+    request,
+) -> Tuple[Optional[CustomUser], Optional[JsonResponse]]:
+    """
+    Deposit rows API 공통 대상자 해석.
+
+    기존 동작 유지:
+    - user 파라미터 없음: 400 JSON error
+    - 대상자 없음: ok=True, rows=[]
+    - 권한 없음: 403 JSON error
+    """
+    user_id = _get_user_id_from_request(request)
+    if not user_id:
+        return None, _json_err("user 파라미터가 필요합니다.")
+
+    target = _find_user_by_any_id(user_id)
+    if not target:
+        return None, _json_rows([])
+
+    perm = _require_view_permission(request, target)
+    if perm:
+        return None, perm
+
+    return target, None
 
 
 # =============================================================================
@@ -280,36 +333,32 @@ def _other_to_payload(x: DepositOther) -> Dict[str, Any]:
 # =============================================================================
 # 4) Business rules: filtered totals
 # =============================================================================
-
-
-def _calc_filtered_totals(user_pk: str) -> Tuple[int, int]:
+def _apply_deposit_summary_totals(payload: Dict[str, Any], user_pk: str) -> Dict[str, Any]:
     """
-    요구사항 기준 합계:
-    - 보증합계: DepositSurety / 상품명 'GA개인' 포함 + 상태 '유지' 합계
-    - 기타합계: DepositOther  / 보증내용 '수수료' 포함 + 상태 ('유지','유지인') 합계
+    DepositSummary payload 후처리.
+
+    기능 변화 없음:
+    - 원본 surety_total/other_total은 *_all 키로 보존
+    - 화면 표시용 surety_total/other_total은 요구사항 기준 필터 합계로 덮어씀
+    - 상태='유지' 전체 합계와 debt_keep_total 제공 유지
     """
-    surety_total = (
-        DepositSurety.objects.filter(user_id=user_pk, product_name__icontains="GA개인", status="유지")
-        .aggregate(total=Coalesce(Sum("amount"), 0))["total"]
-    )
-    other_total = (
-        DepositOther.objects.filter(user_id=user_pk, product_type__icontains="수수료", status__in=["유지인", "유지"])
-        .aggregate(total=Coalesce(Sum("amount"), 0))["total"]
-    )
-    return int(surety_total or 0), int(other_total or 0)
+    surety_filtered, other_filtered = calc_filtered_totals(user_pk)
 
+    payload["surety_total_all"] = int(payload.get("surety_total", 0) or 0)
+    payload["other_total_all"] = int(payload.get("other_total", 0) or 0)
 
-def _calc_keep_totals_all(user_pk: str) -> Tuple[int, int]:
-    """(호환/표기용) 상태='유지' 전체 합계."""
-    surety_keep_all = (
-        DepositSurety.objects.filter(user_id=user_pk, status="유지")
-        .aggregate(total=Coalesce(Sum("amount"), 0))["total"]
+    payload["surety_total"] = int(surety_filtered or 0)
+    payload["other_total"] = int(other_filtered or 0)
+
+    surety_keep_all, other_keep_all = calc_keep_totals_all(user_pk)
+    payload["surety_keep_total"] = int(surety_keep_all or 0)
+    payload["other_keep_total"] = int(other_keep_all or 0)
+    payload["debt_keep_total"] = (
+        int(payload["surety_keep_total"])
+        + int(payload["other_keep_total"])
     )
-    other_keep_all = (
-        DepositOther.objects.filter(user_id=user_pk, status="유지")
-        .aggregate(total=Coalesce(Sum("amount"), 0))["total"]
-    )
-    return int(surety_keep_all or 0), int(other_keep_all or 0)
+
+    return payload
 
 
 # =============================================================================
@@ -325,80 +374,40 @@ def api_user_detail(request):
 
     payload = _user_to_payload(target)
     # legacy: data + user 둘 다 내려줌(기존 유지)
-    return JsonResponse({"ok": True, "data": payload, "user": payload})
+    return _json_user_detail(payload)
 
 
 @require_GET
 def api_deposit_summary(request):
-    user_id = _get_user_id_from_request(request)
-    if not user_id:
-        return _json_err("user 파라미터가 필요합니다.")
+    target, err = _resolve_target_or_empty_rows(request)
+    if err:
+        return err
 
-    target = _find_user_by_any_id(user_id)
-    if not target:
-        # 기존 동작 유지: 대상자 없으면 ok+rows:[]
-        return JsonResponse({"ok": True, "rows": []})
-
-    perm = _require_view_permission(request, target)
-    if perm:
-        return perm
-
-    s = DepositSummary.objects.filter(user_id=target.pk).first()
+    s = get_deposit_summary(target.pk)
     if not s:
-        return JsonResponse({"ok": True, "rows": []})
+        return _json_rows([])
 
     payload = _summary_to_payload(s)
+    payload = _apply_deposit_summary_totals(payload, target.pk)
 
-    # 요구사항 기준 합계로 교체 (템플릿/JS 수정 최소화를 위해 여기서 덮어씀)
-    surety_filtered, other_filtered = _calc_filtered_totals(target.pk)
-
-    # 원본 보존(검증/표기용)
-    payload["surety_total_all"] = int(payload.get("surety_total", 0) or 0)
-    payload["other_total_all"] = int(payload.get("other_total", 0) or 0)
-
-    payload["surety_total"] = int(surety_filtered or 0)
-    payload["other_total"] = int(other_filtered or 0)
-
-    # 유지 전체 합계도 함께 제공(필요 시 화면 표기/디버그용)
-    surety_keep_all, other_keep_all = _calc_keep_totals_all(target.pk)
-    payload["surety_keep_total"] = int(surety_keep_all or 0)
-    payload["other_keep_total"] = int(other_keep_all or 0)
-    payload["debt_keep_total"] = int(payload["surety_keep_total"]) + int(payload["other_keep_total"])
-
-    return JsonResponse({"ok": True, "rows": [payload]})
+    return _json_rows([payload])
 
 
 @require_GET
 def api_deposit_surety_list(request):
-    user_id = _get_user_id_from_request(request)
-    if not user_id:
-        return _json_err("user 파라미터가 필요합니다.")
+    target, err = _resolve_target_or_empty_rows(request)
+    if err:
+        return err
 
-    target = _find_user_by_any_id(user_id)
-    if not target:
-        return JsonResponse({"ok": True, "rows": []})
-
-    perm = _require_view_permission(request, target)
-    if perm:
-        return perm
-
-    qs = DepositSurety.objects.filter(user_id=target.pk).order_by("-id")
-    return JsonResponse({"ok": True, "rows": [_surety_to_payload(x) for x in qs]})
+    qs = get_deposit_surety_queryset(target.pk)
+    return _json_rows([_surety_to_payload(x) for x in qs])
 
 
 @require_GET
 def api_deposit_other_list(request):
-    user_id = _get_user_id_from_request(request)
-    if not user_id:
-        return _json_err("user 파라미터가 필요합니다.")
+    target, err = _resolve_target_or_empty_rows(request)
+    if err:
+        return err
 
-    target = _find_user_by_any_id(user_id)
-    if not target:
-        return JsonResponse({"ok": True, "rows": []})
-
-    perm = _require_view_permission(request, target)
-    if perm:
-        return perm
-
-    qs = DepositOther.objects.filter(user_id=target.pk).order_by("-id")
-    return JsonResponse({"ok": True, "rows": [_other_to_payload(x) for x in qs]})
+    qs = get_deposit_other_queryset(target.pk)
+    return _json_rows([_other_to_payload(x) for x in qs])

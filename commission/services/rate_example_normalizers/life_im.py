@@ -20,7 +20,7 @@ from numbers import Number
 
 from openpyxl.workbook.workbook import Workbook
 
-from commission.models import RateExample, RateExampleConversionRow
+from commission.services.rate_example_normalizers._common.text import clean_spaces
 
 SHEET_IM_SUMMARY = "(총괄)환산성적표"
 
@@ -35,9 +35,7 @@ COL_BASIC_RATE = 12   # L열: 기본형
 
 def _clean_text(value) -> str:
     """엑셀 셀 값을 비교/저장 가능한 문자열로 정규화한다."""
-    if value is None:
-        return ""
-    return str(value).replace("\n", " ").strip()
+    return clean_spaces(value)
 
 
 def _format_excel_display_text(cell) -> str:

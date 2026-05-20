@@ -172,11 +172,21 @@
 
   function positionComboMenu(input, menu) {
     if (!input || !menu) return;
-    /*
-     * CSP strict(style-src 'self') 환경에서는 JS의 element.style.* 적용이
-     * inline style로 차단될 수 있다.
-     * 위치는 CSS 고정 규칙으로 처리하고, JS는 메뉴 렌더/표시만 담당한다.
-     */
+
+    const rect = input.getBoundingClientRect();
+    const viewportH = window.innerHeight || document.documentElement.clientHeight;
+    const viewportW = window.innerWidth || document.documentElement.clientWidth;
+    const gap = 4;
+    const minWidth = Math.max(rect.width, 240);
+
+    menu.style.minWidth = `${minWidth}px`;
+    menu.style.left = `${Math.max(8, Math.min(rect.left, viewportW - minWidth - 8))}px`;
+
+    const belowTop = rect.bottom + gap;
+    const aboveTop = rect.top - gap - 220;
+    const shouldOpenAbove = belowTop + 220 > viewportH && aboveTop > 8;
+
+    menu.style.top = `${shouldOpenAbove ? Math.max(8, aboveTop) : belowTop}px`;
   }
 
   function renderComboMenu(input, menu, values, keyword) {
@@ -561,6 +571,17 @@
       const fromCombo = e.target.closest(".re-combo");
       if (!fromCombo) return;
 
+      /*
+       * 보험사 input에서 상품명 input으로 이동하면:
+       * 1) 보험사 combo focusout 타이머가 등록되고
+       * 2) 상품명 combo focusin에서 activeComboMenu가 상품명 메뉴로 교체된다.
+       *
+       * 이때 이전 보험사 combo 타이머가 hideActiveComboMenu()를 실행하면
+       * 새로 열린 상품명 메뉴까지 닫히므로, 현재 active combo가
+       * focusout이 발생한 combo와 동일할 때만 닫는다.
+       */
+      const comboAtFocusOut = fromCombo;
+
       window.setTimeout(function () {
         const activeEl = document.activeElement;
 
@@ -568,7 +589,15 @@
          * Tab 이동 후 포커스가 같은 combo 내부에 남아 있으면 유지하고,
          * 다른 input/select/페이지 영역으로 이동했으면 열린 메뉴를 닫는다.
          */
-        if (!fromCombo.contains(activeEl)) {
+        const activeCombo = activeComboInput
+          ? activeComboInput.closest(".re-combo")
+          : null;
+
+        if (activeCombo !== comboAtFocusOut) {
+          return;
+        }
+
+        if (!comboAtFocusOut.contains(activeEl)) {
           hideActiveComboMenu();
         }
       }, 0);
@@ -588,6 +617,18 @@
     if (e.target.closest(".re-combo")) return;
     if (e.target.closest(".re-combo-menu")) return;
     hideActiveComboMenu();
+  });
+
+  window.addEventListener("scroll", function () {
+    if (activeComboInput && activeComboMenu && !activeComboMenu.hidden) {
+      positionComboMenu(activeComboInput, activeComboMenu);
+    }
+  }, true);
+
+  window.addEventListener("resize", function () {
+    if (activeComboInput && activeComboMenu && !activeComboMenu.hidden) {
+      positionComboMenu(activeComboInput, activeComboMenu);
+    }
   });
 
   // ── 수수료 예시표 계산 API 연동 ─────────────────────────────────────

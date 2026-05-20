@@ -25,6 +25,10 @@ from typing import Any
 from openpyxl.worksheet.worksheet import Worksheet
 
 from commission.models import RateExample, RateExampleConversionRow
+from commission.services.rate_example_normalizers._common.excel import (
+    build_merged_value_map,
+    cell_value_with_merged,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -167,21 +171,12 @@ def _merged_value_map(ws: Worksheet) -> dict[tuple[int, int], Any]:
 
     원본 worksheet는 수정하지 않는다.
     """
-    merged_map: dict[tuple[int, int], Any] = {}
-
-    for merged_range in ws.merged_cells.ranges:
-        top_left = ws.cell(merged_range.min_row, merged_range.min_col).value
-
-        for row_no in range(merged_range.min_row, merged_range.max_row + 1):
-            for col_no in range(merged_range.min_col, merged_range.max_col + 1):
-                merged_map[(row_no, col_no)] = top_left
-
-    return merged_map
+    return build_merged_value_map(ws)
 
 
 def _cell_value(ws: Worksheet, merged_map: dict[tuple[int, int], Any], row_no: int, col_no: int) -> Any:
     """병합 셀 전파값을 우선 적용해 셀 값을 반환한다."""
-    return merged_map.get((row_no, col_no), ws.cell(row_no, col_no).value)
+    return cell_value_with_merged(ws, merged_map, row_no, col_no)
 
 
 def _find_header_row(ws: Worksheet, merged_map: dict[tuple[int, int], Any]) -> int | None:

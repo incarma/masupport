@@ -29,11 +29,27 @@ VALID_INSURER_TYPES = {RateExample.TYPE_LIFE, RateExample.TYPE_FIRE}
 
 INSURER_CANONICAL_MAP = {
     "db": "DB",
+    "db손해보험": "DB",
+    "db손보": "DB",
     "abl": "ABL",
     "im": "IM",
     "kb": "KB",
+    "kb손해보험": "KB",
+    "kb손보": "KB",
     "kdb": "KDB",
     "ibk": "IBK",
+    "농협손해보험": "농협",
+    "nh손해보험": "농협",
+    "nh손보": "농협",
+    "롯데손해보험": "롯데",
+    "롯데손보": "롯데",
+    "삼성화재": "삼성",
+    "삼성손해보험": "삼성",
+    "한화손해보험": "한화",
+    "한화손보": "한화",
+    "현대해상": "현대",
+    "현대해상화재": "현대",
+    "현대손해보험": "현대",
 }
 
 
@@ -95,10 +111,45 @@ def _base_qs(insurer_type: str):
     - category: conv
     - 정규화 row 기준 옵션 조회
     """
+    normalized_type = _normalize_insurer_type(insurer_type)
+
+    # 손해보험은 현재 canonical key가 "fire"지만,
+    # 과거/레거시 적재 데이터가 "nonlife"로 남아 있으면
+    # 상품명 드랍다운이 비는 문제가 발생한다.
+    insurer_types = [normalized_type]
+    if normalized_type == RateExample.TYPE_FIRE:
+        insurer_types.append("nonlife")
+
     return RateExampleConversionRow.objects.filter(
-        insurer_type=_normalize_insurer_type(insurer_type),
+        insurer_type__in=insurer_types,
         category=RateExample.CAT_CONV,
     )
+
+
+def _insurer_filter_values(insurer_type: str, insurer: str) -> list[str]:
+    """
+    보험사 조회값 후보.
+
+    - canonical short name 우선
+    - 손보는 full name/약칭으로 저장된 과거 데이터까지 방어
+    """
+    normalized_type = _normalize_insurer_type(insurer_type)
+    canonical = _normalize_insurer(insurer)
+    values = [canonical]
+
+    if normalized_type == RateExample.TYPE_FIRE:
+        alias_map = {
+            "DB": ["DB손해보험", "DB손보"],
+            "KB": ["KB손해보험", "KB손보"],
+            "농협": ["농협손해보험", "NH손해보험", "NH손보"],
+            "롯데": ["롯데손해보험", "롯데손보"],
+            "삼성": ["삼성화재", "삼성손해보험"],
+            "한화": ["한화손해보험", "한화손보"],
+            "현대": ["현대해상", "현대해상화재", "현대손해보험"],
+        }
+        values.extend(alias_map.get(canonical, []))
+
+    return list(dict.fromkeys(v for v in values if v))
 
 
 def _distinct_values(field: str, qs) -> list[str]:
@@ -184,7 +235,7 @@ def get_rate_example_options(query: RateExampleOptionQuery) -> list[str]:
     plan_type = _clean(query.plan_type)
 
     if insurer:
-        qs = qs.filter(insurer=insurer)
+        qs = qs.filter(insurer__in=_insurer_filter_values(insurer_type, insurer))
 
     if kind == "products":
         if not insurer:

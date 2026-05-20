@@ -19,6 +19,13 @@
 [SSOT 재사용]
 - _norm_emp_id, _to_int: commission/upload_handlers/deposit.py에서 import
 - 컬럼 탐지는 COL_MAP의 정확한 컬럼명을 직접 매핑 (엑셀 헤더가 고정이므로 _detect_col 불필요)
+
+[return dict 계약]
+- inserted_or_updated: CollectRecord upsert 건수
+- skipped: emp_id/ym 정규화 실패로 제외된 행 수
+- ym: 처리 월도
+- missing_sample: 스킵 샘플 최대 10건
+- matched_columns: 실제 매칭된 컬럼 정보
 """
 
 from __future__ import annotations
@@ -117,7 +124,11 @@ def _norm_ym(val) -> str:
 
 
 def _norm_str(val, maxlen: int = 100) -> str:
-    """값을 문자열로 변환하고 maxlen 이내로 자른다. None → ""."""
+    """
+    값을 문자열로 변환하고 maxlen 이내로 자른다. None → "".
+
+    CollectRecord 모델 필드 길이에 맞춰 저장 전 과도한 원문 길이를 방어한다.
+    """
     if val is None or (isinstance(val, float) and pd.isna(val)):
         return ""
     return str(val).strip()[:maxlen]
@@ -161,6 +172,10 @@ def handle_upload_collect(df: pd.DataFrame) -> dict:
             "missing_sample":      list, # 스킵된 emp_id 샘플 (최대 10개)
             "matched_columns":     dict, # 탐지된 컬럼 매핑 정보
         }
+    
+    주의:
+    - Audit 로그는 뷰 레이어에서 수행한다.
+    - 이 핸들러는 파싱/검증/DB upsert만 담당한다.
     """
 
     # ──────────────────────────────────────────────────────────────────

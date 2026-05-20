@@ -1,15 +1,18 @@
 # django_ma/commission/upload_handlers/efficiency.py
 from __future__ import annotations
 
+from typing import Dict
+
 from accounts.models import CustomUser
 from commission.models import EfficiencyPayExcess
+from commission.upload_handlers._common import safe_cell_text, upload_result
 from commission.upload_utils import _norm_emp_id, _read_excel_raw_matrix, _to_int
 
 # =============================================================================
 # EfficiencyPayExcess Upload (kind=efficiency)
 # =============================================================================
 
-def _find_header_row_and_col_indices(df_raw):
+def _find_header_row_and_col_indices(df_raw) -> tuple[int | None, int | None, int | None]:
     """
     raw matrix(header=None)에서
     - 헤더 행(구분/금액 키워드 포함)을 찾아
@@ -17,6 +20,10 @@ def _find_header_row_and_col_indices(df_raw):
 
     탐색 범위:
     - 상단 0~5행(최대 6행)만 검사(파일 편차 대응)
+
+    반환:
+    - (header_row, div_idx, amt_idx)
+    - 찾지 못하면 (None, None, None)
     """
     def _norm(x):
         s = "" if x is None else str(x).strip()
@@ -45,12 +52,23 @@ def _find_header_row_and_col_indices(df_raw):
     return None, None, None
 
 
+def _safe_text(value: object) -> str:
+    """
+    raw matrix cell 텍스트 정규화.
+
+    - 기존 nan/none 방어 로직을 공통 공란 판정으로 통일한다.
+    - '지급' 비교 정책은 그대로 유지한다.
+    - 실제 구현은 upload_handlers._common.safe_cell_text()가 SSOT다.
+    """
+    return safe_cell_text(value)
+
+
 def handle_upload_efficiency_pay_excess(
     file_path: str,
     original_name: str,
     ym: str,
     part: str = "",
-):
+) -> dict[str, object]:
     """
     지점효율(kind=efficiency) 업로드
 
@@ -58,8 +76,15 @@ def handle_upload_efficiency_pay_excess(
     - 지급금액합계: 구분 == '지급' 인 금액 합계
     - 저장: EfficiencyPayExcess(ym+user unique)
     - part가 있으면 해당 part 사용자만 저장(스코프 안전장치)
+
+    return contract:
+    - inserted_or_updated: 저장/upsert 건수
+    - missing_users: 사용자 미존재 또는 part 스코프 제외 건수
+    - missing_sample: 실패 샘플 최대 10건
     """
     df = _read_excel_raw_matrix(file_path, original_name=original_name, skiprows=0, header_none=True)
+    if df is None or getattr(df, "empty", False):
+        return upload_result()
 
     IDX_E = 4  # 사원번호(E열)
 
@@ -68,7 +93,7 @@ def handle_upload_efficiency_pay_excess(
         raise ValueError("엑셀에서 '구분'/'금액' 헤더를 찾지 못했습니다. (지점효율 파일 형식을 확인해주세요)")
 
     # uid -> 지급 합계
-    bucket = {}
+    bucket: Dict[str, int] = {}
 
     for r in range(header_row + 1, len(df.index)):
         row = df.iloc[r]
@@ -80,9 +105,7 @@ def handle_upload_efficiency_pay_excess(
         if not uid or not uid.isdigit():
             continue
 
-        div_val = ("" if row[div_idx] is None else str(row[div_idx])).strip()
-        if div_val.lower() in ("nan", "none"):
-            div_val = ""
+        div_val = _safe_text(row[div_idx])
 
         if div_val != "지급":
             continue
@@ -94,7 +117,7 @@ def handle_upload_efficiency_pay_excess(
         bucket[uid] = bucket.get(uid, 0) + amt
 
     if not bucket:
-        return {"inserted_or_updated": 0, "missing_users": 0, "missing_sample": []}
+        return upload_result()
 
     qs = CustomUser.objects.filter(pk__in=bucket.keys())
     if part:
@@ -125,12 +148,11 @@ def handle_upload_efficiency_pay_excess(
         update_fields=["pay_amount_sum", "updated_at"],
     )
 
-    return {
-        "inserted_or_updated": len(objs),
-        "missing_users": len(missing),
-        "missing_sample": missing_sample,
-    }
-
+    return upload_result(
+        inserted_or_updated=len(objs),
+        missing_users=len(missing),
+        missing_sample=missing_sample,
+    )
 
 # ---------------------------------------------------------------------
 # Backward-compatible alias

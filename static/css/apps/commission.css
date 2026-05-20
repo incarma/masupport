@@ -715,7 +715,7 @@
 
 #rate-example-root .re-combo-menu {
   position: fixed;
-  z-index: 3000;
+  z-index: 2147483200;
   width: max-content;
   min-width: 240px;
   max-width: min(720px, 90vw);
@@ -1097,33 +1097,4 @@
   #rateExampleConvModal .re-conv-filter-bar {
     flex-wrap: nowrap !important;
   }
-}
-
-/* ==========================================================
- * 손해보험 제작중 워터마크
- * - 기존 개인정보 워터마크(.privacy-watermark)와 완전 분리
- * - "사용금지 제작중" 전용 스타일
- * ========================================================== */
-
-#rate-example-root .re-fire-dev-watermark {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 2147482500;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-#rate-example-root .re-fire-dev-watermark-text.wm-dev-only {
-  font-size: clamp(72px, 9vw, 140px);
-  font-weight: 900;
-  line-height: 1.2;
-  text-align: center;
-  white-space: normal;
-
-  color: rgba(220, 53, 69, 0.5);
-
-  transform: rotate(-18deg);
-  user-select: none;
 }

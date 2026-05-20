@@ -101,6 +101,9 @@ from commission.services.rate_example_normalizers.fire_hana import (
 from commission.services.rate_example_normalizers.fire_meritz import (
     build_fire_meritz_pdf_conversion_rows,
 )
+from commission.services.rate_example_normalizers.fire_heungkuk import (
+    build_fire_heungkuk_conversion_rows,
+)
 
 
 __all__ = [
@@ -136,4 +139,5 @@ __all__ = [
     "build_fire_aig_pdf_conversion_rows",
     "build_fire_hana_pdf_conversion_rows",
     "build_fire_meritz_pdf_conversion_rows",
+    "build_fire_heungkuk_conversion_rows",
 ]

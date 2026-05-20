@@ -20,7 +20,7 @@ from __future__ import annotations
 - 세로 병합은 기존 점유 행 전체에 같은 값을 전파한다.
 """
 
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 import re
 from typing import Any
 
@@ -28,6 +28,10 @@ from openpyxl.workbook.workbook import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
 from commission.models import RateExample, RateExampleConversionRow
+from commission.services.rate_example_normalizers._common.decimal import (
+    decimal_percent_value,
+)
+from commission.services.rate_example_normalizers._common.rows import append_unique
 
 
 DEC4 = Decimal("0.0001")
@@ -88,30 +92,9 @@ def _to_decimal(value: Any, *, number_format: str = "") -> Decimal | None:
     - 120%는 Decimal("120")으로 저장한다.
     - Excel percent 서식의 0.8은 80으로 보정한다.
     """
-    if value is None:
+    dec = decimal_percent_value(value, number_format=number_format)
+    if dec is None:
         return None
-
-    if isinstance(value, str):
-        text = value.strip().replace(",", "")
-        if not text or text in {"-", "－", "–"}:
-            return None
-
-        text = text.replace("%", "").strip()
-
-        try:
-            dec = Decimal(text)
-        except InvalidOperation:
-            return None
-
-        return dec.quantize(DEC4)
-
-    try:
-        dec = Decimal(str(value))
-    except (InvalidOperation, TypeError, ValueError):
-        return None
-
-    if "%" in str(number_format or ""):
-        dec *= Decimal("100")
 
     return dec.quantize(DEC4)
 
@@ -210,12 +193,7 @@ def _append_unique(
         row.year3,
         row.year4,
     )
-    if key in seen:
-        return
-
-    seen.add(key)
-    rows.append(row)
-
+    append_unique(rows, seen, row, key)
 
 def _parse_standard_sheet(
     example: RateExample,

@@ -8,6 +8,8 @@ SSOT(단일 진실) 정책:
 - DepositUploadLog 갱신 로직은 deposit._update_upload_log 를 SSOT로 사용한다.
 - 외부(views 등)에서는 commission.upload_handlers.* 로 import 하는 것을 권장한다.
   (내부 구현 파일 위치 변경 시에도 import surface 유지 가능)
+- registry.py의 UploadSpec이 upload_type → handler 라우팅의 SSOT다.
+- underscore alias는 기존 import 호환을 위한 surface이므로 P2 단계에서는 제거하지 않는다.
 """
 
 # ---------------------------------------------------------------------

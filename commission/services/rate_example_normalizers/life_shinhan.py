@@ -15,12 +15,15 @@ from __future__ import annotations
 """
 
 import logging
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from typing import Any
 
 from openpyxl.worksheet.worksheet import Worksheet
 
 from commission.models import RateExample, RateExampleConversionRow
+from commission.services.rate_example_normalizers._common.decimal import (
+    decimal_percent_value,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -57,36 +60,16 @@ def _to_decimal_percent(value: Any, *, number_format: str = "") -> Decimal | Non
     - DB에는 1.0이 아니라 100.0을 저장한다.
     - Excel 셀이 percent format이고 openpyxl이 1.0으로 읽으면 100을 곱한다.
     """
-    if value is None or value == "":
-        return None
-
-    if isinstance(value, str):
-        raw = value.strip().replace(",", "")
-        if not raw:
-            return None
-
-        has_percent = "%" in raw
-        raw = raw.replace("%", "").strip()
-
-        try:
-            dec = Decimal(raw)
-        except InvalidOperation:
-            logger.debug("shinhan rate value skipped: value=%r", value)
-            return None
-
-        if has_percent and abs(dec) <= Decimal("10"):
-            dec *= Decimal("100")
-
-        return dec.quantize(Decimal("0.0001"))
-
-    try:
-        dec = Decimal(str(value))
-    except (InvalidOperation, ValueError):
+    dec = decimal_percent_value(
+        value,
+        number_format=number_format,
+        # 기존 신한 parser 정책 보존:
+        # 문자열 "0.8%"처럼 10 이하 percent 표기는 80으로 보정한다.
+        scale_small_percent_text=True,
+    )
+    if dec is None:
         logger.debug("shinhan rate value skipped: value=%r", value)
         return None
-
-    if "%" in str(number_format or "") and abs(dec) <= Decimal("10"):
-        dec *= Decimal("100")
 
     return dec.quantize(Decimal("0.0001"))
 

@@ -15,7 +15,7 @@ Upload file helpers (views layer SSOT)
 
 from dataclasses import dataclass
 import logging
-from typing import Optional, Tuple
+from typing import Optional
 
 from django.core.files.storage import FileSystemStorage
 

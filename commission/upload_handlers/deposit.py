@@ -32,6 +32,9 @@ from commission.upload_utils import (
 def _existing_ids(ids: Sequence[str]) -> Tuple[set, List[str]]:
     """
     CustomUser 존재하는 ID를 bulk 조회한다.
+
+    row별 exists() 호출을 피하기 위한 성능 SSOT다.
+
     반환:
     - existing_set
     - missing_sample(최대 10개)
@@ -42,7 +45,11 @@ def _existing_ids(ids: Sequence[str]) -> Tuple[set, List[str]]:
 
 
 def _update_summary(uid: str, defaults: Dict):
-    """DepositSummary(user_id=uid) upsert."""
+    """
+    DepositSummary(user_id=uid) upsert.
+
+    Deposit 계열 handler는 이 helper를 통해 요약 테이블만 갱신한다.
+    """
     DepositSummary.objects.update_or_create(user_id=uid, defaults=defaults)
 
 
@@ -611,10 +618,12 @@ _handle_upload_ls_total_from_file = handle_upload_ls_total_from_file
 # =============================================================================
 def _update_upload_log(part: str, upload_type: str, excel_file_name: str, count: int) -> str:
     """
-    DepositUploadLog(part + upload_type unique) 갱신
+    DepositUploadLog(part + upload_type unique) 갱신 SSOT.
 
     - DB/모델 필드명이 row_count(rows_count) / file_name(filename) 등
       환경차가 있을 수 있어 _meta.get_field로 안전하게 매핑한다.
+    - commission.upload_utils._update_upload_log는 이 함수를 호출하는 deprecated wrapper다.
+    - 신규 코드는 이 함수를 직접 재구현하지 말고 commission.upload_handlers export를 경유한다.
     """
     def _pick_field(*candidates: str) -> str:
         for name in candidates:
