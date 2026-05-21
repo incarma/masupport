@@ -221,6 +221,11 @@
       setFailDownload(data?.fail_download_url || "");
       showToast();
 
+      if (data?.fail_download_url) {
+        showResult(`${buildSuccessMessage(data)} · 제외목록을 먼저 다운로드한 뒤 페이지를 새로고침하세요.`, "success");
+        return;
+      }
+
       setTimeout(() => {
         closeModal();
         window.location.reload();
