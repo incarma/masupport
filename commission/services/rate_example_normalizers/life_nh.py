@@ -37,9 +37,12 @@ from __future__ import annotations
 """
 
 import logging
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 
 from commission.models import RateExample, RateExampleConversionRow
+from commission.services.rate_example_normalizers._common.decimal import (
+    decimal_percent_value,
+)
 
 logger = logging.getLogger(__name__)
 

@@ -39,6 +39,7 @@ from commission.models import RateExample, RateExampleConversionRow
 from commission.services.rate_example_normalizers._common.decimal import (
     decimal_percent_cell,
 )
+from commission.services.rate_example_normalizers._common.text import clean_text
 
 logger = logging.getLogger(__name__)
 
@@ -52,9 +53,7 @@ DATA_START_ROW = 6
 
 def _text(value: Any) -> str:
     """Excel 셀 값을 문자열로 안전하게 정규화한다."""
-    if value is None:
-        return ""
-    return str(value).strip()
+    return clean_text(value)
 
 
 def _should_exclude(product_name: str) -> bool:

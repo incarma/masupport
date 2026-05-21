@@ -44,6 +44,7 @@ from commission.services.rate_example_normalizers._common.excel import (
 from commission.services.rate_example_normalizers._common.decimal import (
     decimal_percent_value,
 )
+from commission.services.rate_example_normalizers._common.rows import append_unique
 
 logger = logging.getLogger(__name__)
 
@@ -204,11 +205,9 @@ def build_life_kdb_conversion_rows(
         # 최종 중복 제거 기준:
         # 상품명 + 구분 + 납기가 모두 같으면 같은 상품으로 판단한다.
         dedupe_key = (product_name, plan_type, pay_period)
-        if dedupe_key in seen_keys:
-            continue
-        seen_keys.add(dedupe_key)
-
-        rows.append(
+        append_unique(
+            rows,
+            seen_keys,
             RateExampleConversionRow(
                 source_file=example,
                 source_sheet=KDB_TARGET_SHEET,
@@ -225,7 +224,8 @@ def build_life_kdb_conversion_rows(
                 year2=rate_value,
                 year3=rate_value,
                 year4=rate_value,
-            )
+            ),
+            dedupe_key,
         )
 
     return rows

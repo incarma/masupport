@@ -32,6 +32,7 @@ from typing import Iterable
 from openpyxl.worksheet.worksheet import Worksheet
 
 from commission.models import RateExampleConversionRow
+from commission.services.rate_example_normalizers._common.text import clean_spaces
 
 logger = logging.getLogger(__name__)
 
@@ -60,11 +61,7 @@ RATE_QUANT = Decimal("0.0001")
 
 def _clean_text(value) -> str:
     """셀 값을 비교·저장 가능한 단일 문자열로 정리한다."""
-    if value is None:
-        return ""
-    text = str(value).replace("\u3000", " ")
-    text = re.sub(r"\s+", " ", text)
-    return text.strip()
+    return clean_spaces(str(value or "").replace("\u3000", " "))
 
 
 def _row_text(ws: Worksheet, row_idx: int) -> str:

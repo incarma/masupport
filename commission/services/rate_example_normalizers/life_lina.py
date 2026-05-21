@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import logging
 import re
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from typing import Any
 
 from openpyxl.worksheet.worksheet import Worksheet
@@ -29,6 +29,10 @@ from commission.services.rate_example_normalizers._common.excel import (
     build_merged_value_map,
     cell_value_with_merged,
 )
+from commission.services.rate_example_normalizers._common.decimal import (
+    decimal_percent_value,
+)
+from commission.services.rate_example_normalizers._common.text import clean_spaces
 
 logger = logging.getLogger(__name__)
 
@@ -59,9 +63,7 @@ PAGE_NOISE_KEYWORDS = (
 
 def _to_text(value: Any) -> str:
     """셀/PDF 값을 비교·저장 가능한 문자열로 정규화한다."""
-    if value is None:
-        return ""
-    return re.sub(r"\s+", " ", str(value)).strip()
+    return clean_spaces(value)
 
 
 def _clean_pdf_text(value: str) -> str:
@@ -88,38 +90,10 @@ def _to_decimal_rate(value: Any, *, number_format: str = "") -> Decimal | None:
     - 245 → Decimal("245")
     - Excel percent cell 2.45 + number_format "%" → Decimal("245")
     """
-    if value is None:
-        return None
-
-    if isinstance(value, Decimal):
-        raw = value
-        has_percent_format = "%" in (number_format or "")
-        return raw * Decimal("100") if has_percent_format and abs(raw) <= 10 else raw
-
-    if isinstance(value, (int, float)):
-        raw = Decimal(str(value))
-        has_percent_format = "%" in (number_format or "")
-        return raw * Decimal("100") if has_percent_format and abs(raw) <= 10 else raw
-
-    text = _to_text(value)
-    if not text:
-        return None
-
-    has_percent_text = "%" in text
-    text = text.replace("%", "").replace(",", "").strip()
-
-    try:
-        raw = Decimal(text)
-    except InvalidOperation:
-        return None
-
-    if has_percent_text:
-        return raw
-
-    if "%" in (number_format or "") and abs(raw) <= 10:
-        return raw * Decimal("100")
-
-    return raw
+    return decimal_percent_value(
+        value,
+        number_format=number_format,
+    )
 
 
 def _coverage_type(product_name: str) -> str:
