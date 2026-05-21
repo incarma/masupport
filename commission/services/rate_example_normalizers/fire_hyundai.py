@@ -32,6 +32,9 @@ import re
 from decimal import Decimal, InvalidOperation
 
 from commission.models import RateExample, RateExampleConversionRow
+from commission.services.rate_example_normalizers._common import (
+    build_worksheet_value_map,
+)
 
 
 INSURER = "현대"
@@ -111,20 +114,7 @@ def _merged_value_map(ws) -> dict[tuple[int, int], object]:
 
     openpyxl worksheet 자체를 수정하지 않아 원본 workbook side effect를 만들지 않는다.
     """
-    values: dict[tuple[int, int], object] = {}
-
-    for row in ws.iter_rows():
-        for cell in row:
-            values[(cell.row, cell.column)] = cell.value
-
-    for merged in ws.merged_cells.ranges:
-        min_col, min_row, max_col, max_row = merged.bounds
-        top_left_value = ws.cell(row=min_row, column=min_col).value
-        for row_no in range(min_row, max_row + 1):
-            for col_no in range(min_col, max_col + 1):
-                values[(row_no, col_no)] = top_left_value
-
-    return values
+    return build_worksheet_value_map(ws)
 
 
 def _mv(values: dict[tuple[int, int], object], row_no: int, col_no: int) -> str:

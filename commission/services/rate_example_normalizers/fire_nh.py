@@ -18,10 +18,17 @@ from __future__ import annotations
 """
 
 import re
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from typing import Any
 
 from commission.models import RateExample, RateExampleConversionRow
+from commission.services.rate_example_normalizers._common import (
+    append_unique,
+    build_worksheet_value_map,
+    clean_spaces,
+    decimal_from_text,
+    filled_value_above,
+)
 
 
 HEADER_LABELS = ("납입기간", "보험기간", "계약구분", "모집(ㄱ)", "수금(ㄴ)")
@@ -31,7 +38,7 @@ def _text(value: Any) -> str:
     """셀 값을 공백 정리된 단일 문자열로 변환한다."""
     if value is None:
         return ""
-    return re.sub(r"\s+", " ", str(value).replace("\u3000", " ")).strip()
+    return clean_spaces(str(value).replace("\u3000", " "))
 
 
 def _multiline_text(value: Any) -> str:
@@ -48,23 +55,13 @@ def _multiline_text(value: Any) -> str:
 
 def _decimal_or_none(value: Any) -> Decimal | None:
     """수정률 값을 Decimal로 변환한다. raw 백분율 수치를 그대로 저장한다."""
-    if value is None or value == "":
-        return None
-
     if isinstance(value, Decimal):
         return value
 
     if isinstance(value, (int, float)):
         return Decimal(str(value))
 
-    s = str(value).strip().replace(",", "").replace("%", "")
-    if not s or s in {"-", "–"}:
-        return None
-
-    try:
-        return Decimal(s)
-    except (InvalidOperation, ValueError):
-        return None
+    return decimal_from_text(value)
 
 
 def _strip_bracket_text(value: str) -> str:
@@ -90,21 +87,7 @@ def _expanded_matrix(ws) -> dict[tuple[int, int], Any]:
     - 실제 worksheet는 unmerge하지 않는다.
     - 정규화 parser 내부에서만 전개 matrix를 사용한다.
     """
-    values: dict[tuple[int, int], Any] = {}
-
-    for row in ws.iter_rows():
-        for cell in row:
-            values[(cell.row, cell.column)] = cell.value
-
-    for merged_range in ws.merged_cells.ranges:
-        min_col, min_row, max_col, max_row = merged_range.bounds
-        merged_value = values.get((min_row, min_col))
-
-        for r in range(min_row, max_row + 1):
-            for c in range(min_col, max_col + 1):
-                values[(r, c)] = merged_value
-
-    return values
+    return build_worksheet_value_map(ws)
 
 
 def _is_header_row(values: dict[tuple[int, int], Any], row_no: int) -> bool:
@@ -126,16 +109,13 @@ def _filled_table_value(
     현재 셀이 비어 있으면 현재 행과 헤더 행 사이의 같은 컬럼에서
     가장 가까운 상단 텍스트를 사용한다.
     """
-    current = values.get((row_no, col_no))
-    if _text(current):
-        return current
-
-    for r in range(row_no - 1, header_row, -1):
-        candidate = values.get((r, col_no))
-        if _text(candidate):
-            return candidate
-
-    return current
+    return filled_value_above(
+        values,
+        header_row=header_row,
+        row_no=row_no,
+        col_no=col_no,
+        is_filled=lambda value: bool(_text(value)),
+    )
 
 
 def _is_header_or_note_row(pay_period: str, insurance_period: str, rate: Decimal | None) -> bool:
@@ -297,11 +277,9 @@ def build_fire_nh_conversion_rows(example: RateExample, wb) -> list[RateExampleC
             coverage = _coverage_type(current_product, current_plan, contract_type)
 
             dedupe_key = (current_product, current_plan, final_pay_period, rate)
-            if dedupe_key in seen_keys:
-                continue
-            seen_keys.add(dedupe_key)
-
-            rows.append(
+            append_unique(
+                rows,
+                seen_keys,
                 RateExampleConversionRow(
                     source_file=example,
                     source_sheet=ws.title,
@@ -320,7 +298,8 @@ def build_fire_nh_conversion_rows(example: RateExample, wb) -> list[RateExampleC
                     year2=None,
                     year3=None,
                     year4=None,
-                )
+                ),
+                dedupe_key,
             )
 
     return rows

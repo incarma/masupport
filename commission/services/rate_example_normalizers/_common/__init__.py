@@ -11,7 +11,12 @@ RateExample normalizer 공통 helper 패키지.
 """
 
 from .decimal import decimal_percent_cell, decimal_percent_value, decimal_from_text
-from .excel import build_merged_value_map, cell_value_with_merged
+from .excel import (
+    build_merged_value_map,
+    build_worksheet_value_map,
+    cell_value_with_merged,
+    filled_value_above,
+)
 from .rows import append_unique
 from .text import clean_text, clean_spaces, is_empty_like
 
@@ -22,7 +27,9 @@ __all__ = [
     "decimal_from_text",
     "decimal_percent_cell",
     "build_merged_value_map",
+    "build_worksheet_value_map",
     "cell_value_with_merged",
+    "filled_value_above",
     "append_unique",
     "decimal_percent_value",
 ]

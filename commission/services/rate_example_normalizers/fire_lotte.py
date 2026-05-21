@@ -20,13 +20,18 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from typing import Any
 
 from openpyxl.workbook.workbook import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
 from commission.models import RateExample, RateExampleConversionRow
+from commission.services.rate_example_normalizers._common import (
+    build_worksheet_value_map,
+    clean_spaces,
+    decimal_from_text,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -104,10 +109,7 @@ def _norm_text(value: Any) -> str:
     if value is None:
         return ""
 
-    text = str(value).replace("\r", "\n")
-    text = re.sub(r"\s*\n+\s*", " ", text)
-    text = re.sub(r"\s+", " ", text)
-    return text.strip()
+    return clean_spaces(str(value).replace("\r", "\n"))
 
 
 def _to_decimal(value: Any) -> Decimal | None:
@@ -123,14 +125,10 @@ def _to_decimal(value: Any) -> Decimal | None:
     if not text:
         return None
 
-    text = text.replace("%", "").replace(",", "").strip()
     if text in {"-", "없음"}:
         return None
 
-    try:
-        return Decimal(text)
-    except (InvalidOperation, ValueError):
-        return None
+    return decimal_from_text(text)
 
 
 def _build_value_matrix(ws: Worksheet) -> dict[tuple[int, int], Any]:
@@ -140,23 +138,7 @@ def _build_value_matrix(ws: Worksheet) -> dict[tuple[int, int], Any]:
     실제 workbook에는 unmerge_cells()를 실행하지 않는다.
     parser 내부 dict에서만 병합 범위 전체에 좌상단 값을 전파한다.
     """
-    values: dict[tuple[int, int], Any] = {}
-
-    for row in ws.iter_rows():
-        for cell in row:
-            if cell.value is not None:
-                values[(cell.row, cell.column)] = cell.value
-
-    for merged in ws.merged_cells.ranges:
-        top_left_value = ws.cell(merged.min_row, merged.min_col).value
-        if top_left_value is None:
-            continue
-
-        for row_no in range(merged.min_row, merged.max_row + 1):
-            for col_no in range(merged.min_col, merged.max_col + 1):
-                values[(row_no, col_no)] = top_left_value
-
-    return values
+    return build_worksheet_value_map(ws, include_empty=False)
 
 
 def _looks_like_product_start(text: str) -> bool:

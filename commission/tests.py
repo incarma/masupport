@@ -32,7 +32,9 @@ from commission.services.rate_example_normalizers._common.decimal import (
 )
 from commission.services.rate_example_normalizers._common.excel import (
     build_merged_value_map,
+    build_worksheet_value_map,
     cell_value_with_merged,
+    filled_value_above,
 )
 from commission.services.rate_example_normalizers._common.rows import append_unique
 from commission.services.rate_example_normalizers._common.text import (
@@ -248,6 +250,48 @@ class RateExampleCommonExcelTests(SimpleTestCase):
         merged_map = build_merged_value_map(ws)
 
         self.assertIsNone(cell_value_with_merged(ws, merged_map, 5, 5))
+
+    def test_build_worksheet_value_map_keeps_plain_cells_and_expands_merged_cells(self):
+        wb = Workbook()
+        ws = wb.active
+        ws["A1"] = "병합값"
+        ws["B2"] = "일반값"
+        ws.merge_cells("A1:A3")
+
+        values = build_worksheet_value_map(ws)
+
+        self.assertEqual(values[(1, 1)], "병합값")
+        self.assertEqual(values[(2, 1)], "병합값")
+        self.assertEqual(values[(3, 1)], "병합값")
+        self.assertEqual(values[(2, 2)], "일반값")
+
+    def test_build_worksheet_value_map_can_skip_plain_empty_cells(self):
+        wb = Workbook()
+        ws = wb.active
+        ws["A1"] = "값"
+
+        values = build_worksheet_value_map(ws, include_empty=False)
+
+        self.assertEqual(values[(1, 1)], "값")
+        self.assertNotIn((5, 5), values)
+
+    def test_filled_value_above_uses_nearest_upper_value(self):
+        values = {
+            (1, 2): "헤더",
+            (2, 2): "상단값",
+            (3, 2): "",
+            (4, 2): None,
+        }
+
+        result = filled_value_above(
+            values,
+            header_row=1,
+            row_no=4,
+            col_no=2,
+            is_filled=lambda value: bool(str(value or "").strip()),
+        )
+
+        self.assertEqual(result, "상단값")
 
 
 # =============================================================================
