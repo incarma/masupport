@@ -310,9 +310,10 @@ def collect_notice(request):
 
     [설계 원칙]
     - superuser 전용 (@grade_required 단독 적용 — login_required는 grade_required 내부에서 처리)
-    - 파일 처리는 100% 클라이언트(SheetJS + ExcelJS)에서 전담 → 서버 업로드/저장 없음
-    - 비즈니스 로직 없음 → 서비스 레이어 호출 없음
-    - audit 로그 미적용 (서버 전송 없음, 추후 확장 가능)
+    - 원본 파일은 collect_notice_export_excel API로 전송
+    - 서버에서 openpyxl 기반 xlsx 생성 및 LibreOffice PDF 변환 수행
+    - 업로드 원본 파일은 영구 저장하지 않고 요청 처리 중에만 사용
+    - 결과는 attachment response로만 제공하며 파일 URL 직접 노출 없음
 
     [컨텍스트]
     - accounts_search_url : 대상자 검색 모달 연동 (collect_home과 동일 SSOT 재사용)

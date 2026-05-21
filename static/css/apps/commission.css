@@ -239,34 +239,34 @@
 ---------------------------------------------------------- */
 
 /* 컬럼폭 제어: collectTableHead 스코프 */
-#collectTableHead th:nth-child(1)  { min-width: 70px;  max-width: 90px;  } /* 부서 */
-#collectTableHead th:nth-child(2)  { min-width: 55px;  max-width: 70px;  } /* 부문 */
-#collectTableHead th:nth-child(3)  { min-width: 80px;  max-width: 120px; } /* 영업가족 */
-#collectTableHead th:nth-child(4)  { min-width: 60px;  max-width: 80px;  } /* 사원명 */
-#collectTableHead th:nth-child(5)  { min-width: 75px;  max-width: 90px;  } /* 사번 */
-#collectTableHead th:nth-child(6)  { min-width: 70px;  max-width: 85px;  } /* 재직상태 */
-#collectTableHead th:nth-child(7)  { min-width: 80px;  max-width: 100px; } /* 채권합계 */
-#collectTableHead th:nth-child(8)  { min-width: 80px;  max-width: 100px; } /* 보증합계 */
-#collectTableHead th:nth-child(9)  { min-width: 80px;  max-width: 100px; } /* 기타합계 */
-#collectTableHead th:nth-child(10) { min-width: 80px;  max-width: 100px; } /* 환수예상 */
-#collectTableHead th:nth-child(11) { min-width: 90px;  max-width: 120px; } /* 최종지급액 */
+#collect-home #collectTableHead th:nth-child(1)  { min-width: 70px;  max-width: 90px;  } /* 부서 */
+#collect-home #collectTableHead th:nth-child(2)  { min-width: 55px;  max-width: 70px;  } /* 부문 */
+#collect-home #collectTableHead th:nth-child(3)  { min-width: 80px;  max-width: 120px; } /* 영업가족 */
+#collect-home #collectTableHead th:nth-child(4)  { min-width: 60px;  max-width: 80px;  } /* 사원명 */
+#collect-home #collectTableHead th:nth-child(5)  { min-width: 75px;  max-width: 90px;  } /* 사번 */
+#collect-home #collectTableHead th:nth-child(6)  { min-width: 70px;  max-width: 85px;  } /* 재직상태 */
+#collect-home #collectTableHead th:nth-child(7)  { min-width: 80px;  max-width: 100px; } /* 채권합계 */
+#collect-home #collectTableHead th:nth-child(8)  { min-width: 80px;  max-width: 100px; } /* 보증합계 */
+#collect-home #collectTableHead th:nth-child(9)  { min-width: 80px;  max-width: 100px; } /* 기타합계 */
+#collect-home #collectTableHead th:nth-child(10) { min-width: 80px;  max-width: 100px; } /* 환수예상 */
+#collect-home #collectTableHead th:nth-child(11) { min-width: 90px;  max-width: 120px; } /* 최종지급액 */
 /* 최신 피드백 헤더: sortKey 없는 마지막 컬럼 — JS 렌더 시 collect-th-feedback 클래스 부여 */
-#collectTableHead th.collect-th-feedback { min-width: 200px; width: auto; }
+#collect-home #collectTableHead th.collect-th-feedback { min-width: 200px; width: auto; }
 
 /* tbody도 동일 적용 */
-#collectTableBody td:nth-child(1)  { min-width: 70px;  max-width: 90px;  }
-#collectTableBody td:nth-child(2)  { min-width: 55px;  max-width: 70px;  }
-#collectTableBody td:nth-child(3)  { min-width: 80px;  max-width: 120px; }
-#collectTableBody td:nth-child(4)  { min-width: 60px;  max-width: 80px;  }
-#collectTableBody td:nth-child(5)  { min-width: 75px;  max-width: 90px;  }
-#collectTableBody td:nth-child(6)  { min-width: 70px;  max-width: 85px;  }
-#collectTableBody td:nth-child(7)  { min-width: 80px;  max-width: 100px; }
-#collectTableBody td:nth-child(8)  { min-width: 80px;  max-width: 100px; }
-#collectTableBody td:nth-child(9)  { min-width: 80px;  max-width: 100px; }
-#collectTableBody td:nth-child(10) { min-width: 80px;  max-width: 100px; }
-#collectTableBody td:nth-child(11) { min-width: 90px;  max-width: 120px; }
+#collect-home #collectTableBody td:nth-child(1)  { min-width: 70px;  max-width: 90px;  }
+#collect-home #collectTableBody td:nth-child(2)  { min-width: 55px;  max-width: 70px;  }
+#collect-home #collectTableBody td:nth-child(3)  { min-width: 80px;  max-width: 120px; }
+#collect-home #collectTableBody td:nth-child(4)  { min-width: 60px;  max-width: 80px;  }
+#collect-home #collectTableBody td:nth-child(5)  { min-width: 75px;  max-width: 90px;  }
+#collect-home #collectTableBody td:nth-child(6)  { min-width: 70px;  max-width: 85px;  }
+#collect-home #collectTableBody td:nth-child(7)  { min-width: 80px;  max-width: 100px; }
+#collect-home #collectTableBody td:nth-child(8)  { min-width: 80px;  max-width: 100px; }
+#collect-home #collectTableBody td:nth-child(9)  { min-width: 80px;  max-width: 100px; }
+#collect-home #collectTableBody td:nth-child(10) { min-width: 80px;  max-width: 100px; }
+#collect-home #collectTableBody td:nth-child(11) { min-width: 90px;  max-width: 120px; }
 /* 피드백 셀: 탭 무관 클래스 기반 (탭별 컬럼 수 차이 해결) */
-#collectTableBody td.collect-td-feedback {
+#collect-home #collectTableBody td.collect-td-feedback {
   min-width: 200px;
   width: auto;
   white-space: normal !important;
@@ -325,13 +325,13 @@
 ========================================================== */
 
 /* 드랍다운 헤더 */
-#collectTableHead th.collect-th-dropdown {
+#collect-home #collectTableHead th.collect-th-dropdown {
   min-width: 120px;
   max-width: 150px;
 }
 
 /* 드랍다운 셀 */
-#collectTableBody td.collect-td-dropdown {
+#collect-home #collectTableBody td.collect-td-dropdown {
   min-width: 120px;
   max-width: 150px;
   white-space: nowrap;
@@ -350,18 +350,18 @@
 ---------------------------------------------------------- */
 
 /* 읽기 전용 텍스트 색상 */
-#collectTableBody td.collect-td-dropdown.val-green  { color: #198754; font-weight: 600; }
-#collectTableBody td.collect-td-dropdown.val-blue   { color: #005BAC; font-weight: 600; }
-#collectTableBody td.collect-td-dropdown.val-red    { color: #dc3545; font-weight: 600; }
-#collectTableBody td.collect-td-dropdown.val-gray   { color: #6c757d; }
-#collectTableBody td.collect-td-dropdown.val-yellow { color: #b45309; font-weight: 600; }
+#collect-home #collectTableBody td.collect-td-dropdown.val-green  { color: #198754; font-weight: 600; }
+#collect-home #collectTableBody td.collect-td-dropdown.val-blue   { color: #005BAC; font-weight: 600; }
+#collect-home #collectTableBody td.collect-td-dropdown.val-red    { color: #dc3545; font-weight: 600; }
+#collect-home #collectTableBody td.collect-td-dropdown.val-gray   { color: #6c757d; }
+#collect-home #collectTableBody td.collect-td-dropdown.val-yellow { color: #b45309; font-weight: 600; }
 
 /* select 선택값 색상 (option 선택 후 select 자체 텍스트 색) */
-#collectTableBody .collect-dropdown-select.val-green { color: #198754; font-weight: 600; }
-#collectTableBody .collect-dropdown-select.val-blue  { color: #005BAC; font-weight: 600; }
-#collectTableBody .collect-dropdown-select.val-red   { color: #dc3545; font-weight: 600; }
-#collectTableBody .collect-dropdown-select.val-gray  { color: #6c757d; }
-#collectTableBody .collect-dropdown-select.val-yellow { color: #b45309; font-weight: 600; }
+#collect-home #collectTableBody .collect-dropdown-select.val-green { color: #198754; font-weight: 600; }
+#collect-home #collectTableBody .collect-dropdown-select.val-blue  { color: #005BAC; font-weight: 600; }
+#collect-home #collectTableBody .collect-dropdown-select.val-red   { color: #dc3545; font-weight: 600; }
+#collect-home #collectTableBody .collect-dropdown-select.val-gray  { color: #6c757d; }
+#collect-home #collectTableBody .collect-dropdown-select.val-yellow { color: #b45309; font-weight: 600; }
 
 /* 안내 문구 */
 #collect-home .collect-notice {
@@ -519,32 +519,48 @@
 
 #approval-home .aph-count-label { white-space: nowrap; }
 
-/* 정렬 가능 헤더 */
+/* 정렬 가능 헤더 — 환수관리 페이지와 동일한 시각 패턴 */
 #approval-home .commission-nowrap-table thead th {
   cursor: pointer;
   user-select: none;
   position: relative;
+  transition: background-color 0.15s;
 }
 
+#approval-home .commission-nowrap-table thead th:hover {
+  background-color: #e8f0fa;
+}
+
+/* 정렬 대기(↕): 회색 — 클릭 가능하다는 시각적 힌트 */
 #approval-home .commission-nowrap-table thead th.aph-sortable::after {
-  content: " \21D5"; /* ⇕ */
-  font-size: 0.65rem;
-  color: #adb5bd;
-  margin-left: 2px;
+  content: " ↕";
+  font-size: 0.75rem;
+  color: #6c757d;
+  margin-left: 3px;
 }
 
+/* 오름차순(▲): 파란색 + 헤더 배경 강조 */
+#approval-home .commission-nowrap-table thead th.aph-sort-asc {
+  background-color: #ddeeff;
+}
 #approval-home .commission-nowrap-table thead th.aph-sort-asc::after {
-  content: " \25B2"; /* ▲ */
-  font-size: 0.65rem;
+  content: " ▲";
+  font-size: 0.75rem;
   color: #005BAC;
-  margin-left: 2px;
+  font-weight: 700;
+  margin-left: 3px;
 }
 
+/* 내림차순(▼): 파란색 + 헤더 배경 강조 */
+#approval-home .commission-nowrap-table thead th.aph-sort-desc {
+  background-color: #ddeeff;
+}
 #approval-home .commission-nowrap-table thead th.aph-sort-desc::after {
-  content: " \25BC"; /* ▼ */
-  font-size: 0.65rem;
+  content: " ▼";
+  font-size: 0.75rem;
   color: #005BAC;
-  margin-left: 2px;
+  font-weight: 700;
+  margin-left: 3px;
 }
 
 /* ── 예시표 페이지 (#rate-example-root 스코프) ───────────────── */

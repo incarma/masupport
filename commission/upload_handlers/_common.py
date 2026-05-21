@@ -44,13 +44,16 @@ class UploadHandlerResult:
     excluded_summary: dict[str, int] | None = None
 
     def as_dict(self) -> dict[str, object]:
-        return {
+        result: dict[str, object] = {
             "inserted_or_updated": self.inserted_or_updated,
             "missing_users": self.missing_users,
             "missing_sample": self.missing_sample or [],
-            "excluded_rows": self.excluded_rows or [],
-            "excluded_summary": self.excluded_summary or {},
         }
+        if self.excluded_rows is not None:
+            result["excluded_rows"] = self.excluded_rows
+        if self.excluded_summary is not None:
+            result["excluded_summary"] = self.excluded_summary
+        return result
 
 
 def upload_result(
@@ -76,6 +79,6 @@ def upload_result(
         inserted_or_updated=inserted_or_updated,
         missing_users=missing_users,
         missing_sample=missing_sample or [],
-        excluded_rows=excluded_rows or [],
-        excluded_summary=excluded_summary or {},
+        excluded_rows=excluded_rows,
+        excluded_summary=excluded_summary,
     ).as_dict()

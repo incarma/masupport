@@ -16,19 +16,26 @@ from __future__ import annotations
 import logging
 from datetime import date
 import re
-from typing import Optional
+from typing import Any, TypeAlias
 
 from dateutil.relativedelta import relativedelta
 from django.db import transaction
-from django.db.models import OuterRef, Subquery
+from django.db.models import OuterRef, QuerySet, Subquery
 
 from accounts.models import CustomUser
-from commission.upload_handlers import collect
 from partner.models import SubAdminTemp
-from commission.models import CollectFeedback, CollectRecord, DepositSummary, CollectDropdownFeedback
+from commission.models import (
+    CollectDropdownFeedback,
+    CollectFeedback,
+    CollectRecord,
+    DepositSummary,
+)
 
 
 logger = logging.getLogger(__name__)
+
+CollectRow: TypeAlias = dict[str, Any]
+DepositData: TypeAlias = dict[str, int]
 
 
 # =============================================================================
@@ -95,8 +102,16 @@ def _parse_surety_bond_detail(detail: str) -> tuple[int, int]:
 
 def _build_deposit_map(emp_ids: list[str]) -> dict[str, dict]:
     """
-    emp_id 목록을 받아 DepositSummary의 채권관련 4개 필드를 dict로 반환한다.
-    반환 형태: {emp_id: {"debt_total": int, "surety_total": int, "other_total": int, "refund_expected": int}}
+    emp_id 목록을 받아 DepositSummary의 환수 보조 필드를 dict로 반환한다.
+
+    반환 형태:
+        {
+            emp_id: {
+                "other_total": int,
+                "refund_expected": int,
+            }
+        }
+
     DepositSummary.user_id == emp_id (CustomUser PK = 사번 문자열) 규약 활용.
     DepositSummary에 없는 emp_id는 0으로 처리.
     N+1 방지: bulk IN 쿼리 1회.
@@ -111,9 +126,11 @@ def _build_deposit_map(emp_ids: list[str]) -> dict[str, dict]:
         for uid, o, r in qs
     }
 
-_DEPOSIT_DEFAULTS = {
-    "other_total": 0, "refund_expected": 0
+_DEPOSIT_DEFAULTS: DepositData = {
+    "other_total": 0,
+    "refund_expected": 0,
 }
+
 
 def _latest_feedback_subquery() -> Subquery:
     """
@@ -149,7 +166,7 @@ def _latest_hq_feedback_subquery() -> Subquery:
     )
 
 
-def _get_allowed_emp_ids_for_leader(user) -> list[str] | None:
+def _get_allowed_emp_ids_for_leader(user: CustomUser) -> list[str] | None:
     """
     leader의 팀 스코프에 해당하는 emp_id 목록 반환.
     - SubAdminTemp에서 level/team 확인 → 같은 팀의 CustomUser.id 목록
@@ -180,12 +197,21 @@ def _get_allowed_emp_ids_for_leader(user) -> list[str] | None:
     return team_user_ids if team_user_ids else [str(user.id)]
 
 
-def _apply_scope(qs, user=None, part: str = "", bizmoon: str = ""):
+def _apply_scope(
+    qs: QuerySet[CollectRecord],
+    *,
+    user: CustomUser | None = None,
+    part: str = "",
+    bizmoon: str = "",
+) -> QuerySet[CollectRecord]:
     """
     부서(part) / 부문(bizmoon) 필터 + 권한 스코프 적용.
+
+    권한 스코프:
     - superuser: part/bizmoon 필터만
-    - head: branch 고정
-    - leader: 팀 emp_id 목록으로 필터
+    - head: 로그인 사용자의 branch로 고정
+    - leader: SubAdminTemp 팀 emp_id 목록으로 필터
+      단, 팀 정보가 없으면 기존 동작대로 branch 전체 fallback
     """
     if user is not None:
         grade = getattr(user, "grade", "")
@@ -212,12 +238,19 @@ def _apply_scope(qs, user=None, part: str = "", bizmoon: str = ""):
 
 def _serialize_record(
     r: CollectRecord,
-    extra: dict | None = None,
-    deposit_data: dict | None = None,
-) -> dict:
+    extra: CollectRow | None = None,
+    deposit_data: DepositData | None = None,
+) -> CollectRow:
     """
     CollectRecord 인스턴스를 API 응답용 dict로 직렬화한다.
-    extra: 탭별 추가 컬럼 (prev_payment, oldest_payment 등)
+    
+    extra:
+        탭별 추가 컬럼.
+        예: prev_ym, prev_payment, oldest_ym, oldest_payment
+
+    deposit_data:
+        DepositSummary 기반 보조 금액.
+        값이 없으면 _DEPOSIT_DEFAULTS를 사용해 기존 0 fallback 유지.
     """
     bond_debt, bond_surety = _parse_surety_bond_detail(r.surety_bond_detail)
     _dep = deposit_data or _DEPOSIT_DEFAULTS
@@ -285,7 +318,20 @@ def get_available_bizmoons() -> list[str]:
 # =============================================================================
 # 탭별 쿼리 함수
 # =============================================================================
-def get_collect_all(ym: str, part: str = "", bizmoon: str = "", user=None) -> list[dict]:
+def get_collect_all(
+    ym: str,
+    part: str = "",
+    bizmoon: str = "",
+    user: CustomUser | None = None,
+) -> list[CollectRow]:
+    """
+    전체 환수 대상 조회.
+
+    조건:
+    - 기준 월도 ym
+    - final_payment < 0
+    - part/bizmoon 및 사용자 권한 스코프 적용
+    """
     qs = (
         CollectRecord.objects
         .filter(ym=ym, final_payment__lt=0)
@@ -304,7 +350,19 @@ def get_collect_all(ym: str, part: str = "", bizmoon: str = "", user=None) -> li
     ]
 
 
-def get_collect_new(ym: str, part: str = "", bizmoon: str = "", user=None) -> list[dict]:
+def get_collect_new(
+    ym: str,
+    part: str = "",
+    bizmoon: str = "",
+    user: CustomUser | None = None,
+) -> list[CollectRow]:
+    """
+    신규 환수 대상 조회.
+
+    조건:
+    - 당월 final_payment < 0
+    - 전월 final_payment >= 0
+    """
     prev_ym = offset_ym(ym, -1)
 
     curr_neg: set[str] = set(
@@ -353,7 +411,20 @@ def get_collect_new(ym: str, part: str = "", bizmoon: str = "", user=None) -> li
     return rows
 
 
-def get_collect_long(ym: str, months: int, part: str = "", bizmoon: str = "", user=None) -> list[dict]:
+def get_collect_long(
+    ym: str,
+    months: int,
+    part: str = "",
+    bizmoon: str = "",
+    user: CustomUser | None = None,
+) -> list[CollectRow]:
+    """
+    장기 환수 대상 조회.
+
+    조건:
+    - months는 3, 6, 12만 허용
+    - 기준 월도부터 months개월 연속 final_payment < 0
+    """
     if months not in (3, 6, 12):
         raise ValueError(f"months는 3, 6, 12 중 하나여야 합니다. 입력값: {months}")
 
@@ -402,10 +473,19 @@ def get_collect_long(ym: str, months: int, part: str = "", bizmoon: str = "", us
     return rows
 
 
-def get_collect_list(ym: str, tab: str, part: str = "", bizmoon: str = "", user=None) -> list[dict]:
+def get_collect_list(
+    ym: str,
+    tab: str,
+    part: str = "",
+    bizmoon: str = "",
+    user: CustomUser | None = None,
+) -> list[CollectRow]:
     """
     탭 키(tab)에 따라 해당 서비스 함수를 호출하는 dispatcher.
     API 뷰에서 단일 진입점으로 사용한다.
+
+    tab:
+        all | new | long3 | long6 | long12
     """
     if tab == "all":
         return get_collect_all(ym, part=part, bizmoon=bizmoon, user=user)
@@ -425,7 +505,7 @@ def get_collect_list(ym: str, tab: str, part: str = "", bizmoon: str = "", user=
 # 피드백 CRUD 서비스
 # =============================================================================
 
-def get_feedbacks(emp_id: str) -> list[dict]:
+def get_feedbacks(emp_id: str) -> list[CollectRow]:
     """
     특정 사번의 피드백 전체 목록을 최신순으로 반환한다.
     author 정보(id, name)를 select_related로 포함한다.
@@ -466,7 +546,7 @@ def create_feedback(
     author: CustomUser,
     emp_id: str,
     content: str,
-    date_input=None,
+    date_input: date | None = None,
     department: str = "",
     manager: str = "",
 ) -> CollectFeedback:

@@ -23,6 +23,9 @@ from __future__ import annotations
 
 import json
 import logging
+from dataclasses import dataclass
+from datetime import date
+from typing import Any, TypeAlias
 
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_GET, require_POST
@@ -35,21 +38,88 @@ import commission.services.collect as svc
 
 logger = logging.getLogger(__name__)
 
+JsonBody: TypeAlias = dict[str, Any]
+COLLECT_TABS = frozenset({"all", "new", "long3", "long6", "long12"})
+DROPDOWN_FEEDBACK_TYPES = frozenset({"branch", "hq"})
+
+
+@dataclass(frozen=True)
+class CollectListParams:
+    """collect 목록 조회 querystring 파라미터 계약."""
+
+    tab: str
+    ym: str
+    part: str
+    bizmoon: str
+
 
 # =============================================================================
 # 내부 헬퍼
 # =============================================================================
 
-def _parse_json_body(request) -> tuple[dict, str | None]:
+def _parse_json_body(request) -> tuple[JsonBody, str | None]:
     """
     요청 body를 JSON으로 파싱한다.
     성공: (data_dict, None)
     실패: ({}, 에러 메시지)
     """
     try:
-        return json.loads(request.body or "{}"), None
+        data = json.loads(request.body or "{}")
     except (json.JSONDecodeError, ValueError) as exc:
         return {}, f"요청 형식이 잘못되었습니다: {exc}"
+    
+    if not isinstance(data, dict):
+        return {}, "요청 본문은 JSON 객체 형식이어야 합니다."
+
+    return data, None
+
+
+def _parse_collect_list_params(request) -> tuple[CollectListParams | None, str | None]:
+    """목록 조회 querystring을 파싱하고 기존 오류 메시지 계약을 유지한다."""
+    params = CollectListParams(
+        tab=(request.GET.get("tab", "all") or "all").strip(),
+        ym=(request.GET.get("ym", "") or "").strip(),
+        part=(request.GET.get("part", "") or "").strip(),
+        bizmoon=(request.GET.get("bizmoon", "") or "").strip(),
+    )
+
+    if not params.ym:
+        return None, "월도를 선택해주세요."
+    if len(params.ym) != 6 or not params.ym.isdigit():
+        return None, "월도 형식이 올바르지 않습니다. (예: 202603)"
+    if params.tab not in COLLECT_TABS:
+        return None, f"알 수 없는 탭입니다: {params.tab!r}"
+
+    return params, None
+
+
+def _parse_date_input(value: str) -> date | None:
+    """YYYY-MM-DD 입력일을 date로 변환한다. 빈 값은 None."""
+    raw = (value or "").strip()
+    if not raw:
+        return None
+    return date.fromisoformat(raw)
+
+
+def _parse_feedback_id(value: Any) -> int | None:
+    """feedback_id를 int로 변환한다. 변환 불가 시 None."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _log_action_safe(request, action: str, **kwargs: Any) -> None:
+    """
+    Audit 기록 실패가 사용자 API 동작을 막지 않도록 방어한다.
+
+    감사 로그 자체는 중요하지만, log_action 내부 예외가 피드백 저장/수정/삭제
+    성공 응답을 깨뜨리면 운영 영향이 더 크므로 logger.exception으로 분리한다.
+    """
+    try:
+        log_action(request, action, **kwargs)
+    except Exception:
+        logger.exception("[api_collect] audit log failed action=%s", action)
 
 
 # =============================================================================
@@ -72,26 +142,38 @@ def api_collect_list(request):
     응답:
         {"ok": true, "data": {"rows": [...], "tab": "...", "ym": "..."}}
     """
-    tab     = request.GET.get("tab",     "all").strip()
-    ym      = request.GET.get("ym",      "").strip()
-    part    = request.GET.get("part",    "").strip()
-    bizmoon = request.GET.get("bizmoon", "").strip()
-
-    # ym 필수 + 형식 검증
-    if not ym:
-        return _json_error("월도를 선택해주세요.")
-    if len(ym) != 6 or not ym.isdigit():
-        return _json_error("월도 형식이 올바르지 않습니다. (예: 202603)")
+    params, err = _parse_collect_list_params(request)
+    if err:
+        return _json_error(err)
+    assert params is not None
 
     try:
-        rows = svc.get_collect_list(ym, tab, part=part, bizmoon=bizmoon, user=request.user)
-        return _json_ok("조회 완료", data={"rows": rows, "tab": tab, "ym": ym})
+        rows = svc.get_collect_list(
+            params.ym,
+            params.tab,
+            part=params.part,
+            bizmoon=params.bizmoon,
+            user=request.user,
+        )
+        return _json_ok(
+            "조회 완료",
+            data={"rows": rows, "tab": params.tab, "ym": params.ym},
+        )
 
     except ValueError as exc:
-        logger.warning("[api_collect_list] ValueError tab=%s ym=%s: %s", tab, ym, exc)
+        logger.warning(
+            "[api_collect_list] ValueError tab=%s ym=%s: %s",
+            params.tab,
+            params.ym,
+            exc,
+        )
         return _json_error(str(exc))
     except Exception:
-        logger.exception("[api_collect_list] 예외 발생 tab=%s ym=%s", tab, ym)
+        logger.exception(
+            "[api_collect_list] 예외 발생 tab=%s ym=%s",
+            params.tab,
+            params.ym,
+        )
         return _json_error("조회 중 오류가 발생했습니다.")
 
 
@@ -181,14 +263,10 @@ def api_collect_feedback_create(request):
     if not content:
         return _json_error("피드백 내용을 입력해주세요.")
     
-    # date_input 파싱 (YYYY-MM-DD 형식, 빈 값이면 None)
-    from datetime import date as _date
-    date_input = None
-    if date_input_str:
-        try:
-            date_input = _date.fromisoformat(date_input_str)
-        except ValueError:
-            return _json_error("입력일 형식이 올바르지 않습니다. (YYYY-MM-DD)")
+    try:
+        date_input = _parse_date_input(date_input_str)
+    except ValueError:
+        return _json_error("입력일 형식이 올바르지 않습니다. (YYYY-MM-DD)")
 
     try:
         fb = svc.create_feedback(
@@ -200,7 +278,7 @@ def api_collect_feedback_create(request):
             manager=manager,
         )
         # Audit 로그 — 생성 성공
-        log_action(
+        _log_action_safe(
             request,
             ACTION.COLLECT_FEEDBACK_CREATE,
             meta={"emp_id": emp_id, "feedback_id": fb.id},
@@ -215,7 +293,7 @@ def api_collect_feedback_create(request):
             "[api_collect_feedback_create] 예외 발생 emp_id=%s author=%s",
             emp_id, request.user.id,
         )
-        log_action(
+        _log_action_safe(
             request,
             ACTION.COLLECT_FEEDBACK_CREATE,
             meta={"emp_id": emp_id},
@@ -246,7 +324,7 @@ def api_collect_feedback_update(request):
     if err:
         return _json_error(err)
 
-    feedback_id = body.get("feedback_id")
+    feedback_id = _parse_feedback_id(body.get("feedback_id"))
     content     = str(body.get("content", "")).strip()
 
     if not feedback_id:
@@ -256,13 +334,13 @@ def api_collect_feedback_update(request):
 
     try:
         result = svc.update_feedback(
-            feedback_id=int(feedback_id),
+            feedback_id=feedback_id,
             author=request.user,
             content=content,
         )
         if result is None:
             # 서비스 레이어 권한 판정: 본인 아님 또는 존재하지 않음
-            log_action(
+            _log_action_safe(
                 request,
                 ACTION.COLLECT_FEEDBACK_UPDATE,
                 meta={"feedback_id": feedback_id},
@@ -271,7 +349,7 @@ def api_collect_feedback_update(request):
             return _json_error("권한이 없습니다.", status=403)
 
         # Audit 로그 — 수정 성공
-        log_action(
+        _log_action_safe(
             request,
             ACTION.COLLECT_FEEDBACK_UPDATE,
             meta={"feedback_id": result.id},
@@ -311,18 +389,18 @@ def api_collect_feedback_delete(request):
     if err:
         return _json_error(err)
 
-    feedback_id = body.get("feedback_id")
+    feedback_id = _parse_feedback_id(body.get("feedback_id"))
     if not feedback_id:
         return _json_error("feedback_id가 필요합니다.")
 
     try:
         success = svc.delete_feedback(
-            feedback_id=int(feedback_id),
+            feedback_id=feedback_id,
             author=request.user,
         )
         if not success:
             # 서비스 레이어 권한 판정: 본인 아님 또는 존재하지 않음
-            log_action(
+            _log_action_safe(
                 request,
                 ACTION.COLLECT_FEEDBACK_DELETE,
                 meta={"feedback_id": feedback_id},
@@ -331,7 +409,7 @@ def api_collect_feedback_delete(request):
             return _json_error("권한이 없습니다.", status=403)
 
         # Audit 로그 — 삭제 성공
-        log_action(
+        _log_action_safe(
             request,
             ACTION.COLLECT_FEEDBACK_DELETE,
             meta={"feedback_id": feedback_id},
@@ -383,7 +461,7 @@ def api_collect_dropdown_feedback_save(request):
         return _json_error("대상자 사번을 입력해주세요.")
     if not ym:
         return _json_error("월도를 입력해주세요.")
-    if feedback_type not in ("branch", "hq"):
+    if feedback_type not in DROPDOWN_FEEDBACK_TYPES:
         return _json_error("피드백 구분이 올바르지 않습니다.")
 
     # 권한 검증 (서버 최종 판정)
@@ -401,7 +479,7 @@ def api_collect_dropdown_feedback_save(request):
             feedback_type=feedback_type,
             value=value,
         )
-        log_action(
+        _log_action_safe(
             request,
             ACTION.COLLECT_FEEDBACK_CREATE,
             meta={
