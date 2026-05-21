@@ -1,7 +1,7 @@
 ========================================
  django_ma Harness Lint 결과
- 실행일시: 2026-05-21 11:30:55
- 기준 커밋: 90bb8b7
+ 실행일시: 2026-05-21 13:59:41
+ 기준 커밋: bba6bbf
 ========================================
 
 ────────────────────────────────────────
@@ -28,6 +28,7 @@
      static/js/board/worktask_form.js
      static/js/commission/approval_excel_upload.js
      static/js/commission/approval_home_export.js
+     static/js/commission/approval_table_controls.js
      static/js/commission/deposit_home.js
      static/js/commission/_modals.js
      static/js/dash/dash_sales_page.js

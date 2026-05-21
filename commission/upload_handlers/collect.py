@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import logging
 from datetime import date
+from typing import Any, Literal, TypeAlias, TypedDict
 
 import pandas as pd
 from django.db import transaction
@@ -47,6 +48,23 @@ from commission.upload_handlers.deposit import (
 
 logger = logging.getLogger(__name__)
 
+ColumnKind: TypeAlias = Literal["ym_str", "str", "date", "emp_id", "int"]
+
+
+class CollectUploadResult(TypedDict):
+    """
+    handle_upload_collect() 반환 dict 계약.
+
+    views/api_upload.py 및 upload registry가 이 key들을 기대하므로
+    key 이름 변경 금지.
+    """
+
+    inserted_or_updated: int
+    skipped: int
+    ym: str
+    missing_sample: list[str]
+    matched_columns: dict[str, str]
+
 
 # =============================================================================
 # 컬럼 → 모델 필드 매핑 (가이드맵 v2 COL_MAP 기준)
@@ -56,7 +74,7 @@ PART_ALIAS: dict[str, str] = {
     "1인GA사업부": "MA사업4부",
 }
 
-COL_MAP: dict[str, tuple[str, str]] = {
+COL_MAP: dict[str, tuple[str, ColumnKind]] = {
     "월도":         ("ym",               "ym_str"),
     "부문총괄":     ("bizmoon_total",    "str"),
     "부문":         ("bizmoon",          "str"),
@@ -95,10 +113,12 @@ COL_MAP: dict[str, tuple[str, str]] = {
     "자체정산":     ("self_settle",      "int"),
 }
 
+REQUIRED_COLS: frozenset[str] = frozenset({"사번", "월도", "최종지급액"})
+
 # update_conflicts 시 갱신할 필드 목록 (emp_id, ym 제외한 데이터 필드 전체)
 UPDATE_FIELDS = [
     field
-    for col, (field, _) in COL_MAP.items()
+    for field, _ in COL_MAP.values()
     if field not in ("emp_id", "ym")
 ] + ["uploaded_at"]
 
@@ -107,7 +127,7 @@ UPDATE_FIELDS = [
 # 내부 헬퍼
 # =============================================================================
 
-def _norm_ym(val) -> str:
+def _norm_ym(val: Any) -> str:
     """
     월도 값을 YYYYMM 6자리 문자열로 정규화한다.
     - "202603"  → "202603" (str 그대로)
@@ -123,7 +143,7 @@ def _norm_ym(val) -> str:
     return s if len(s) == 6 and s.isdigit() else ""
 
 
-def _norm_str(val, maxlen: int = 100) -> str:
+def _norm_str(val: Any, maxlen: int = 100) -> str:
     """
     값을 문자열로 변환하고 maxlen 이내로 자른다. None → "".
 
@@ -134,7 +154,7 @@ def _norm_str(val, maxlen: int = 100) -> str:
     return str(val).strip()[:maxlen]
 
 
-def _norm_date(val) -> date | None:
+def _norm_date(val: Any) -> date | None:
     """
     입사일 값을 date 객체로 변환한다.
     - "2026-01-14" (str) → date(2026, 1, 14)
@@ -156,7 +176,7 @@ def _norm_date(val) -> date | None:
 # =============================================================================
 
 @transaction.atomic
-def handle_upload_collect(df: pd.DataFrame) -> dict:
+def handle_upload_collect(df: pd.DataFrame) -> CollectUploadResult:
     """
     환수관리 전용 엑셀 업로드 핸들러.
 
@@ -185,7 +205,6 @@ def handle_upload_collect(df: pd.DataFrame) -> dict:
     df_cols_normalized = {str(c).strip(): c for c in df.columns}
 
     # 필수 컬럼 존재 확인
-    REQUIRED_COLS = {"사번", "월도", "최종지급액"}
     missing_required = REQUIRED_COLS - set(df_cols_normalized.keys())
     if missing_required:
         raise ValueError(
@@ -237,7 +256,7 @@ def handle_upload_collect(df: pd.DataFrame) -> dict:
         ym_set.add(ym)
 
         # ── 나머지 필드 파싱 (COL_MAP 기준) ──
-        kwargs: dict = {"emp_id": emp_id, "ym": ym}
+        kwargs: dict[str, Any] = {"emp_id": emp_id, "ym": ym}
 
         for excel_col, (field, col_type) in COL_MAP.items():
             if field in ("emp_id", "ym"):   # 이미 처리
@@ -311,10 +330,11 @@ def handle_upload_collect(df: pd.DataFrame) -> dict:
         inserted_or_updated, skipped,
     )
 
-    return {
+    result: CollectUploadResult = {
         "inserted_or_updated": inserted_or_updated,
         "skipped":             skipped,
         "ym":                  next(iter(ym_set), ""),
         "missing_sample":      skipped_ids[:10],
         "matched_columns":     {k: v for k, v in matched_columns.items() if v},
     }
+    return result

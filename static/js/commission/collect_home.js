@@ -27,6 +27,7 @@
 // 0) Boot Guard — root 없으면 즉시 종료
 // ============================================================
 import { getCSRFToken } from "../common/manage/csrf.js";
+import { readJsonOrThrow } from "../common/manage/http.js";
 const root = document.getElementById("collect-home");
 if (!root) throw new Error("[collect_home] #collect-home not found");
 
@@ -93,21 +94,27 @@ function getOrCreateModal(id) {
 // 4) GET fetch 헬퍼
 // ============================================================
 async function apiFetch(url, params = {}) {
+  if (!url) throw new Error("API URL이 설정되지 않았습니다.");
+
   const u = new URL(url, location.origin);
   Object.entries(params).forEach(([k, v]) => {
     if (v !== "" && v !== null && v !== undefined) u.searchParams.set(k, String(v));
   });
+
   const res = await fetch(u.toString(), {
     credentials: "same-origin",
     headers: { "X-Requested-With": "XMLHttpRequest" },
   });
-  return res.json().catch(() => ({}));
+  
+  return readJsonOrThrow(res, "조회 중 오류가 발생했습니다.");
 }
 
 // ============================================================
 // 5) POST fetch 헬퍼
 // ============================================================
 async function apiPost(url, payload = {}) {
+  if (!url) throw new Error("API URL이 설정되지 않았습니다.");
+
   const res = await fetch(url, {
     method: "POST",
     credentials: "same-origin",
@@ -118,7 +125,8 @@ async function apiPost(url, payload = {}) {
     },
     body: JSON.stringify(payload),
   });
-  return res.json().catch(() => ({}));
+  
+  return readJsonOrThrow(res, "저장 중 오류가 발생했습니다.");
 }
 
 // ============================================================

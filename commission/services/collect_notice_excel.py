@@ -25,7 +25,7 @@ import tempfile
 import logging
 from pathlib import Path
 import re
-from typing import Any, Iterable
+from typing import Any, Iterable, TypeAlias
 
 from openpyxl import Workbook, load_workbook
 from openpyxl.worksheet.page import PageMargins
@@ -34,6 +34,9 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
 logger = logging.getLogger(__name__)
 PDF_MAGIC = b"%PDF"
+
+NoticeRow: TypeAlias = dict[str, str]
+ManualRow: TypeAlias = dict[str, Any]
 
 
 # =============================================================================
@@ -111,6 +114,14 @@ class NoticeWorkbookResult:
 
 @dataclass(frozen=True)
 class NoticePdfResult:
+    """
+    PDF 변환 결과.
+
+    NoticeWorkbookResult와 동일한 View 계약을 유지한다.
+    content는 반드시 PDF bytes여야 하며, 호출부와 서비스 내부에서
+    PDF_MAGIC 검증을 중복 수행한다.
+    """
+
     content: bytes
     filename: str
     row_count: int
@@ -127,7 +138,7 @@ def build_collect_notice_excel(
     title_year: str,
     title_month: str,
     sources: list[NoticeSourceFile],
-    manual_rows: list[dict[str, Any]] | None = None,
+    manual_rows: list[ManualRow] | None = None,
 ) -> NoticeWorkbookResult:
     """
     환수내역 안내자료 xlsx 생성.
@@ -148,7 +159,7 @@ def build_collect_notice_excel(
         manual_rows=manual_rows or [],
     )
 
-    rows: list[dict[str, str]] = []
+    rows: list[NoticeRow] = []
     for src in sources:
         rows.extend(_clean_rows(_iter_first_sheet_rows(src.file), src.ym))
     rows.extend(_normalize_manual_rows(manual_rows or []))
@@ -189,7 +200,7 @@ def build_collect_notice_pdf(
     title_year: str,
     title_month: str,
     sources: list[NoticeSourceFile],
-    manual_rows: list[dict[str, Any]] | None = None,
+    manual_rows: list[ManualRow] | None = None,
 ) -> NoticePdfResult:
     """
     환수내역 안내자료 PDF 생성.
@@ -242,7 +253,7 @@ def _validate_meta(
     title_year: str,
     title_month: str,
     sources: list[NoticeSourceFile],
-    manual_rows: list[dict[str, Any]],
+    manual_rows: list[ManualRow],
 ) -> None:
     if not str(target_name or "").strip():
         raise ValueError("대상자 이름이 없습니다. 대상자를 다시 선택해주세요.")
@@ -299,7 +310,7 @@ def _cell(row: tuple[Any, ...], idx: int) -> Any:
     return row[idx] if len(row) > idx else ""
 
 
-def _clean_rows(raw_rows: Iterable[tuple[Any, ...]], ym: str) -> list[dict[str, str]]:
+def _clean_rows(raw_rows: Iterable[tuple[Any, ...]], ym: str) -> list[NoticeRow]:
     """
     기존 collect_notice.js 전처리 규칙을 서버로 이전.
 
@@ -309,7 +320,7 @@ def _clean_rows(raw_rows: Iterable[tuple[Any, ...]], ym: str) -> list[dict[str, 
     3. 지급금액(index 12)이 0 또는 빈 값이면 제거
     4. 개인정보성 필드 마스킹
     """
-    result: list[dict[str, str]] = []
+    result: list[NoticeRow] = []
 
     for idx, row in enumerate(raw_rows):
         if idx == 0:
@@ -347,7 +358,7 @@ def _clean_rows(raw_rows: Iterable[tuple[Any, ...]], ym: str) -> list[dict[str, 
     return result
 
 
-def _normalize_manual_rows(manual_rows: list[dict[str, Any]]) -> list[dict[str, str]]:
+def _normalize_manual_rows(manual_rows: list[ManualRow]) -> list[NoticeRow]:
     """
     수기 입력 행을 결과 Workbook row 구조로 정규화한다.
 
@@ -356,7 +367,7 @@ def _normalize_manual_rows(manual_rows: list[dict[str, Any]]) -> list[dict[str, 
     - 지급/환수: 지급 또는 환수만 허용
     - 증권번호/계약자/모집자/지급자는 원본 파일 처리와 동일하게 마스킹
     """
-    result: list[dict[str, str]] = []
+    result: list[NoticeRow] = []
 
     for idx, row in enumerate(manual_rows, start=1):
         if not isinstance(row, dict):
@@ -415,7 +426,7 @@ def _normalize_manual_rows(manual_rows: list[dict[str, Any]]) -> list[dict[str, 
 
 def _build_workbook(
     *,
-    rows: list[dict[str, str]],
+    rows: list[NoticeRow],
     target_name: str,
     target_branch: str,
     title_year: str,

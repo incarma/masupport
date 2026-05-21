@@ -1,4 +1,5 @@
 import { getCSRFToken } from "../common/manage/csrf.js";
+import { showLoading, hideLoading } from "../common/manage/loading.js";
 
 /**
  * static/js/commission/collect_notice.js
@@ -45,6 +46,12 @@ const EXPORT_URL   = root.dataset.exportUrl || "";
 let _rowCounter = 0;
 let _blobUrl    = null;
 let _blobName   = "";
+
+function _setSubmitting(btn, isSubmitting) {
+  if (!btn) return;
+  btn.dataset.submitting = isSubmitting ? "1" : "0";
+  btn.disabled = Boolean(isSubmitting);
+}
 
 // 상수/상태 선언 이후 초기화해야 CURRENT_YEAR TDZ 오류가 발생하지 않는다.
 _boot();
@@ -408,6 +415,9 @@ function _onDownload() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function _onMakeNotice() {
+  const btn = document.getElementById("btnMakeNotice");
+  if (btn?.dataset.submitting === "1") return;
+
   // 유효성 검사
   const empId = document.getElementById("targetEmpId").value.trim();
   if (!empId) { alert("대상자를 먼저 선택해주세요."); return; }
@@ -426,8 +436,8 @@ async function _onMakeNotice() {
     }
   }
 
-  const overlay  = document.getElementById("loadingOverlay");
-  overlay.hidden = false;
+  _setSubmitting(btn, true);
+  showLoading("안내자료 제작 중...");
 
   try {
     // Step 4: 서버 openpyxl 생성 요청
@@ -440,7 +450,8 @@ async function _onMakeNotice() {
     console.error("[collect_notice] 제작 오류:", err);
     alert(`안내자료 제작 중 오류가 발생했습니다.\n${err.message || err}`);
   } finally {
-    overlay.hidden = true;
+    hideLoading();
+    _setSubmitting(btn, false);
   }
 }
 
@@ -612,6 +623,9 @@ async function _postNoticeExport(
 // - A4 가로 / 모든 열 1페이지 맞춤 설정은 서버 openpyxl 인쇄설정에서 처리
 // ─────────────────────────────────────────────────────────────────────────────
 async function _onDownloadPdf() {
+  const btn = document.getElementById("btnDownloadPdfResult");
+  if (btn?.dataset.submitting === "1") return;
+
   const empId = document.getElementById("targetEmpId").value.trim();
   if (!empId) {
     alert("대상자를 먼저 선택해주세요.");
@@ -633,10 +647,8 @@ async function _onDownloadPdf() {
     }
   }
 
-  const overlay = document.getElementById("loadingOverlay");
-  const btn = document.getElementById("btnDownloadPdfResult");
-  if (btn) btn.disabled = true;
-  overlay.hidden = false;
+  _setSubmitting(btn, true);
+  showLoading("PDF 변환 중...");
 
   try {
     const manualPayload = _collectManualRowsOrThrow();
@@ -660,8 +672,8 @@ async function _onDownloadPdf() {
     console.error("[collect_notice] PDF 다운로드 오류:", err);
     alert(`PDF 다운로드 중 오류가 발생했습니다.\n${err.message || err}`);
   } finally {
-    overlay.hidden = true;
-    if (btn) btn.disabled = false;
+    hideLoading();
+    _setSubmitting(btn, false);
   }
 }
 
