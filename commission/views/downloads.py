@@ -16,6 +16,7 @@ from django.core.cache import cache
 from django.views.decorators.http import require_GET
 
 from accounts.decorators import grade_required
+from commission.upload_handlers.approval import APPROVAL_PENDING_MIN_ACTUAL_PAY
 from ..models import ApprovalPending, EfficiencyPayExcess
 from ._excel_export import rows_to_excel_response, xlsx_bytes_response
 from .utils_json import _json_error
@@ -157,7 +158,14 @@ def download_approval_pending_excel(request):
     - ym 없으면 최신 ym 기준
     """
     ym = _get_requested_ym(request)
-    qs = ApprovalPending.objects.all().select_related("user")
+    qs = (
+        ApprovalPending.objects
+        .filter(
+            approval_flag="N",
+            actual_pay__gte=APPROVAL_PENDING_MIN_ACTUAL_PAY,
+        )
+        .select_related("user")
+    )
     ym, qs = _filter_by_requested_or_latest_ym(qs, ym)
     if qs is None:
         return _json_error(NO_DOWNLOAD_DATA_MESSAGE, status=404)

@@ -33,8 +33,7 @@ KB 생명보험 환산율/수정률 정규화 모듈.
    - 3차년: H열
    - 4차년: I열
 """
-
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 import logging
 import re
 from typing import Any
@@ -42,6 +41,11 @@ from typing import Any
 from openpyxl.workbook.workbook import Workbook
 
 from commission.models import RateExample, RateExampleConversionRow
+from commission.services.rate_example_normalizers._common.decimal import (
+    decimal_from_text,
+    decimal_percent_cell,
+)
+from commission.services.rate_example_normalizers._common.text import clean_text
 
 
 logger = logging.getLogger(__name__)
@@ -52,26 +56,20 @@ PAREN_RE = re.compile(r"\(([^()]*)\)")
 
 
 def _clean_text(value: Any) -> str:
-    """셀 값을 비교/저장 가능한 문자열로 정규화한다."""
-    if value is None:
-        return ""
+    """
+    KB parser 전용 저장/비교 문자열 정규화.
 
-    text = str(value).strip()
+    공통 clean_text()를 경유하되, 기존 KB 정책인 숫자형 문자열의 ".0" 제거는 유지한다.
+    예: 1000.0 -> "1000"
+    """
+    text = clean_text(value)
     if not text:
         return ""
 
-    # Excel에서 숫자 코드/금액이 1000.0처럼 들어오는 경우 표시를 정리한다.
     if text.endswith(".0"):
-        try:
-            dec = Decimal(text)
-            if dec == dec.to_integral_value():
-                return str(dec.to_integral_value())
-        except (InvalidOperation, ValueError):
-            logger.warning(
-                "KB text cleanup decimal conversion skipped: value=%r",
-                value,
-                exc_info=True,
-            )
+        dec = decimal_from_text(text)
+        if dec is not None and dec == dec.to_integral_value():
+            return str(dec.to_integral_value())
 
     return text
 
@@ -91,24 +89,11 @@ def _to_decimal(value: Any) -> Decimal | None:
     - "100.0%" → Decimal("100.0")
     - "-" / "" → None
     """
-    if value is None:
-        return None
-
-    if isinstance(value, Decimal):
-        return value
-
     text = _clean_text(value)
     if _is_blank_or_dash(text):
         return None
 
-    text = text.replace("%", "").replace(",", "").strip()
-    if not text:
-        return None
-
-    try:
-        return Decimal(text)
-    except (InvalidOperation, ValueError):
-        return None
+    return decimal_from_text(text)
 
 
 def _rate_cell_to_decimal(cell) -> Decimal | None:
@@ -119,16 +104,7 @@ def _rate_cell_to_decimal(cell) -> Decimal | None:
     실제값 3.36으로 읽힌다. number_format에 '%'가 있으면 ×100 해서
     DB에는 Decimal("336.0") 기준으로 저장한다.
     """
-    value = cell.value
-    dec = _to_decimal(value)
-    if dec is None:
-        return None
-
-    number_format = str(getattr(cell, "number_format", "") or "")
-    if "%" in number_format and "%" not in str(value):
-        return dec * Decimal("100")
-
-    return dec
+    return decimal_percent_cell(cell)
 
 
 def _has_any_rate_cell(*cells: Any) -> bool:
