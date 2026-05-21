@@ -40,12 +40,16 @@ class UploadHandlerResult:
     inserted_or_updated: int = 0
     missing_users: int = 0
     missing_sample: list[str] | None = None
+    excluded_rows: list[dict[str, object]] | None = None
+    excluded_summary: dict[str, int] | None = None
 
     def as_dict(self) -> dict[str, object]:
         return {
             "inserted_or_updated": self.inserted_or_updated,
             "missing_users": self.missing_users,
             "missing_sample": self.missing_sample or [],
+            "excluded_rows": self.excluded_rows or [],
+            "excluded_summary": self.excluded_summary or {},
         }
 
 
@@ -54,6 +58,8 @@ def upload_result(
     inserted_or_updated: int = 0,
     missing_users: int = 0,
     missing_sample: list[str] | None = None,
+    excluded_rows: list[dict[str, object]] | None = None,
+    excluded_summary: dict[str, int] | None = None,
 ) -> dict[str, object]:
     """
     기존 업로드 handler return dict 생성 helper.
@@ -62,9 +68,14 @@ def upload_result(
     - inserted_or_updated
     - missing_users
     - missing_sample
+    신규 approval 제외 리포트용 key:
+    - excluded_rows
+    - excluded_summary
     """
     return UploadHandlerResult(
         inserted_or_updated=inserted_or_updated,
         missing_users=missing_users,
         missing_sample=missing_sample or [],
+        excluded_rows=excluded_rows or [],
+        excluded_summary=excluded_summary or {},
     ).as_dict()
