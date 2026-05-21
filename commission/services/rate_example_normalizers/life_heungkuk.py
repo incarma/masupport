@@ -23,10 +23,14 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from typing import Iterable
 
 from commission.models import RateExample, RateExampleConversionRow
+from commission.services.rate_example_normalizers._common import (
+    clean_spaces,
+    decimal_from_text,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -428,10 +432,7 @@ def _to_decimal_percent(value: str) -> Decimal | None:
     if not re.fullmatch(r"\d+(?:\.\d+)?", text):
         return None
 
-    try:
-        return Decimal(text)
-    except InvalidOperation:
-        return None
+    return decimal_from_text(text)
 
 
 def _looks_like_rate(value: str) -> bool:
@@ -485,7 +486,7 @@ def _normalize_product_name(value: str) -> str:
 
 
 def _normalize_space(value: str) -> str:
-    return re.sub(r"\s+", " ", str(value or "")).strip()
+    return clean_spaces(value)
 
 
 def _compact_text(value: str) -> str:

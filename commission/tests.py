@@ -34,6 +34,12 @@ from commission.services.rate_example_normalizers._common.excel import (
     build_merged_value_map,
     cell_value_with_merged,
 )
+from commission.services.rate_example_normalizers._common.rows import append_unique
+from commission.services.rate_example_normalizers._common.text import (
+    clean_spaces,
+    clean_text,
+    is_empty_like,
+)
 from commission.upload_handlers._common import safe_cell_text, upload_result
 from commission.upload_utils import (
     EMPTY_LIKE_VALUES,
@@ -75,6 +81,32 @@ class RateExampleCommonDecimalTests(SimpleTestCase):
 
     def test_decimal_percent_value_keeps_already_scaled_percent(self):
         self.assertEqual(decimal_percent_value("80%"), Decimal("80"))
+
+
+class RateExampleCommonTextTests(SimpleTestCase):
+    def test_clean_text_preserves_line_policy(self):
+        self.assertEqual(clean_text(" A\nB "), "A\nB")
+
+    def test_clean_spaces_compacts_whitespace(self):
+        self.assertEqual(clean_spaces(" A\n  B\tC "), "A B C")
+
+    def test_is_empty_like(self):
+        self.assertTrue(is_empty_like(None))
+        self.assertTrue(is_empty_like("nan"))
+        self.assertTrue(is_empty_like("-"))
+        self.assertFalse(is_empty_like("0"))
+
+
+class RateExampleCommonRowsTests(SimpleTestCase):
+    def test_append_unique_dedupes_only_same_key(self):
+        rows = []
+        seen = set()
+
+        append_unique(rows, seen, "A", ("p1", "10년"))
+        append_unique(rows, seen, "A-duplicate", ("p1", "10년"))
+        append_unique(rows, seen, "B", ("p2", "10년"))
+
+        self.assertEqual(rows, ["A", "B"])
 
 
 # =============================================================================

@@ -15,10 +15,15 @@ BNP파리바 카디프생명 PDF 환산율 정규화 parser.
 import logging
 import os
 import re
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from decimal import Decimal, ROUND_HALF_UP
 from tempfile import NamedTemporaryFile
 
 from commission.models import RateExample, RateExampleConversionRow
+from commission.services.rate_example_normalizers._common import (
+    append_unique,
+    clean_spaces,
+    decimal_from_text,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -29,11 +34,7 @@ NO_PLAN_TYPE = "사용안함"
 
 
 def _clean_text(value) -> str:
-    text = "" if value is None else str(value)
-    text = text.replace("\r", "\n")
-    text = re.sub(r"\s*\n\s*", " ", text)
-    text = re.sub(r"\s+", " ", text)
-    return text.strip()
+    return clean_spaces(value)
 
 
 def _header_key(value: str) -> str:
@@ -41,17 +42,8 @@ def _header_key(value: str) -> str:
 
 
 def _to_decimal_x12(value):
-    text = _clean_text(value)
-    if not text or text in {"-", "—", "–"}:
-        return None
-
-    text = text.replace("%", "").replace(",", "").strip()
-    if not text:
-        return None
-
-    try:
-        raw = Decimal(text)
-    except (InvalidOperation, ValueError):
+    raw = decimal_from_text(value)
+    if raw is None:
         return None
 
     return (raw * MULTIPLIER).quantize(DEC4, rounding=ROUND_HALF_UP)
@@ -362,10 +354,6 @@ def build_life_cardif_pdf_conversion_rows(example: RateExample) -> list[RateExam
             row.year3,
             row.year4,
         )
-        if key in seen:
-            continue
-
-        seen.add(key)
-        deduped.append(row)
+        append_unique(deduped, seen, row, key)
 
     return deduped

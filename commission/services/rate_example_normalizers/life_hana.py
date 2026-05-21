@@ -26,10 +26,14 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from typing import Iterable
 
 from commission.models import RateExample, RateExampleConversionRow
+from commission.services.rate_example_normalizers._common import (
+    clean_spaces,
+    decimal_from_text,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -485,8 +489,7 @@ def _join_lines(value: object, *, sep: str) -> str:
 
 
 def _clean_inline(value: str) -> str:
-    value = re.sub(r"\s+", " ", value or "")
-    return value.strip()
+    return clean_spaces(value)
 
 
 def _compact(value: str) -> str:
@@ -507,10 +510,7 @@ def _to_decimal_percent(value: object) -> Decimal | None:
     if not m:
         return None
 
-    try:
-        return Decimal(m.group(0))
-    except InvalidOperation:
-        return None
+    return decimal_from_text(m.group(0))
 
 
 def _infer_coverage_type(product_name: str) -> str:

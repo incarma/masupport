@@ -23,6 +23,10 @@ from decimal import Decimal, InvalidOperation
 from typing import Iterable
 
 from commission.models import RateExample, RateExampleConversionRow
+from commission.services.rate_example_normalizers._common import (
+    append_unique,
+    clean_spaces,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -86,11 +90,9 @@ def build_life_chubb_pdf_conversion_rows(
             normalized_rate = _to_year_rate(selected_rate)
 
             key = (product_name, plan_type, pay_period, normalized_rate, normalized_rate)
-            if key in seen:
-                continue
-            seen.add(key)
-
-            rows.append(
+            append_unique(
+                rows,
+                seen,
                 RateExampleConversionRow(
                     source_file=example,
                     source_sheet=f"{PDF_SOURCE_SHEET}:page-{raw.page_no}",
@@ -107,7 +109,8 @@ def build_life_chubb_pdf_conversion_rows(
                     year2=normalized_rate,
                     year3=normalized_rate,
                     year4=normalized_rate,
-                )
+                ),
+                key,
             )
 
     return rows
@@ -599,4 +602,4 @@ def _split_csv_values(value: str) -> list[str]:
 
 
 def _compact_spaces(value: str) -> str:
-    return re.sub(r"\s+", " ", str(value or "")).strip()
+    return clean_spaces(value)
