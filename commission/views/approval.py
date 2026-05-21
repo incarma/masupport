@@ -174,12 +174,13 @@ def approval_upload_excel(request):
             )
 
         missing_sample = result.get("missing_sample", []) or []
+        excluded_rows = result.get("excluded_rows", []) or []
+        excluded_summary = result.get("excluded_summary", {}) or {}
         fail_token = ""
-        if missing_sample:
-            rows = [{"user_id": uid, "reason": "사용자 미존재 또는 part 스코프 제외"} for uid in missing_sample]
+        if excluded_rows:
             fail_token = store_fail_rows_as_excel(
-                rows=rows,
-                filename=f"upload_fail_{ym}_{part or 'ALL'}_{kind}.xlsx",
+                rows=excluded_rows,
+                filename=f"upload_excluded_{ym}_{part or 'ALL'}_{kind}.xlsx",
                 owner_id=str(getattr(request.user, "pk", "") or ""),
             )
 
@@ -196,6 +197,7 @@ def approval_upload_excel(request):
                     "inserted": inserted,
                     "missing_users": int(result.get("missing_users") or 0),
                     "missing_sample": (missing_sample[:30] if isinstance(missing_sample, list) else []),
+                    "excluded_summary": excluded_summary,
                     "fail_token": fail_token or "",
                     "file_name": temp.original_name,
                 },
@@ -214,6 +216,8 @@ def approval_upload_excel(request):
             inserted=inserted,
             missing_users=int(result.get("missing_users") or 0),
             missing_sample=missing_sample,
+            excluded_count=len(excluded_rows),
+            excluded_summary=excluded_summary,
             fail_token=fail_token,
             fail_download_url=(f"/commission/download/upload-fail/?token={fail_token}" if fail_token else ""),
         )

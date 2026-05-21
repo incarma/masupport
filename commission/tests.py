@@ -17,8 +17,16 @@ from django.test import RequestFactory, SimpleTestCase, TestCase
 from openpyxl import Workbook
 
 from accounts.models import CustomUser
-from commission.models import DepositOther, DepositSurety
+from commission.models import DepositOther, DepositSummary, DepositSurety
 from commission.services.deposit import calc_filtered_totals, calc_keep_totals_all
+from commission.services.deposit_serializers import (
+    apply_deposit_summary_totals,
+    json_user_detail,
+    other_to_payload,
+    summary_to_payload,
+    surety_to_payload,
+    user_to_payload,
+)
 from commission.services.rate_example_normalizers._common.decimal import (
     decimal_percent_value,
 )
@@ -336,6 +344,103 @@ class DepositServiceAggregateTests(TestCase):
 
         self.assertEqual(surety_keep_all, 1000)
         self.assertEqual(other_keep_all, 3000)
+
+
+# =============================================================================
+# Deposit serializers
+# =============================================================================
+class DepositSerializerTests(TestCase):
+    def setUp(self):
+        self.user = CustomUser.objects.create_user(
+            id="1000001",
+            name="테스트",
+            password="pw",
+            grade="basic",
+            part="MA",
+            branch="서울",
+        )
+
+    def test_user_to_payload_keeps_deposit_home_contract(self):
+        payload = user_to_payload(self.user)
+
+        self.assertEqual(payload["id"], "1000001")
+        self.assertEqual(payload["name"], "테스트")
+        self.assertEqual(payload["part"], "MA")
+        self.assertEqual(payload["branch"], "서울")
+        self.assertIn("join_date_display", payload)
+        self.assertIn("retire_date_display", payload)
+        self.assertIn("enter", payload)
+        self.assertIn("quit", payload)
+
+    def test_json_user_detail_keeps_legacy_data_and_user_keys(self):
+        payload = {"id": "1000001", "name": "테스트"}
+        response = json_user_detail(payload)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertJSONEqual(
+            response.content.decode("utf-8"),
+            {"ok": True, "data": payload, "user": payload},
+        )
+
+    def test_summary_to_payload_and_totals_contract(self):
+        summary = DepositSummary.objects.create(
+            user=self.user,
+            final_payment=1000,
+            sales_total=2000,
+            surety_total=9999,
+            other_total=8888,
+        )
+        DepositSurety.objects.create(
+            user=self.user,
+            product_name="GA개인 보증",
+            amount=3000,
+            status="유지",
+        )
+        DepositOther.objects.create(
+            user=self.user,
+            product_name="기타",
+            product_type="수수료 채권",
+            amount=4000,
+            status="유지인",
+        )
+
+        payload = summary_to_payload(summary)
+        payload = apply_deposit_summary_totals(payload, self.user.pk)
+
+        self.assertEqual(payload["final_payment"], 1000)
+        self.assertEqual(payload["sales_total"], 2000)
+        self.assertEqual(payload["surety_total_all"], 9999)
+        self.assertEqual(payload["other_total_all"], 8888)
+        self.assertEqual(payload["surety_total"], 3000)
+        self.assertEqual(payload["other_total"], 4000)
+        self.assertIn("debt_keep_total", payload)
+
+    def test_detail_serializers_keep_row_keys(self):
+        surety = DepositSurety.objects.create(
+            user=self.user,
+            product_name="GA개인 보증",
+            policy_no="P-1",
+            amount=3000,
+            status="유지",
+        )
+        other = DepositOther.objects.create(
+            user=self.user,
+            product_name="기타",
+            product_type="수수료 채권",
+            amount=4000,
+            bond_no="B-1",
+            status="유지",
+        )
+
+        surety_payload = surety_to_payload(surety)
+        other_payload = other_to_payload(other)
+
+        self.assertEqual(surety_payload["product_name"], "GA개인 보증")
+        self.assertEqual(surety_payload["policy_no"], "P-1")
+        self.assertEqual(surety_payload["amount"], 3000)
+        self.assertEqual(other_payload["product_type"], "수수료 채권")
+        self.assertEqual(other_payload["bond_no"], "B-1")
+        self.assertEqual(other_payload["amount"], 4000)
 
 
 # =============================================================================

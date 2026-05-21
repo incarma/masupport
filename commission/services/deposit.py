@@ -11,6 +11,7 @@ Deposit 조회/합계 서비스.
 주의:
 - 응답 key/계산식/필터 조건 변경 없음.
 - 권한 검증은 기존처럼 View 계층에서 수행한다.
+- payload 직렬화는 commission.services.deposit_serializers 가 담당한다.
 """
 
 from typing import Optional, Tuple
@@ -43,17 +44,29 @@ def _amount_total(qs: QuerySet) -> int:
 
 
 def get_deposit_summary(user_pk: str) -> Optional[DepositSummary]:
-    """DepositSummary 단건 조회."""
+    """
+    DepositSummary 단건 조회.
+
+    user_pk는 CustomUser.pk인 사번 문자열이다.
+    """
     return DepositSummary.objects.filter(user_id=user_pk).first()
 
 
 def get_deposit_surety_queryset(user_pk: str) -> QuerySet[DepositSurety]:
-    """보증보험 상세 조회 queryset."""
+    """
+    보증보험 상세 조회 queryset.
+
+    View/serializer에서 list 변환 전까지 queryset을 유지한다.
+    """
     return DepositSurety.objects.filter(user_id=user_pk).order_by("-id")
 
 
 def get_deposit_other_queryset(user_pk: str) -> QuerySet[DepositOther]:
-    """기타채권 상세 조회 queryset."""
+    """
+    기타채권 상세 조회 queryset.
+
+    View/serializer에서 list 변환 전까지 queryset을 유지한다.
+    """
     return DepositOther.objects.filter(user_id=user_pk).order_by("-id")
 
 

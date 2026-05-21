@@ -129,10 +129,21 @@
     const kind = data?.kind ? String(data.kind) : "-";
     const rowCount = typeof data?.row_count === "number" ? data.row_count : null;
     const inserted = typeof data?.inserted === "number" ? data.inserted : null;
+    const excludedCount = typeof data?.excluded_count === "number" ? data.excluded_count : null;
 
     const parts = [`✅ 완료 (${ym} / ${kind})`];
     if (rowCount !== null) parts.push(`rows: ${rowCount}`);
     if (inserted !== null) parts.push(`반영: ${inserted}`);
+    if (excludedCount !== null && excludedCount > 0) {
+      const s = data?.excluded_summary || {};
+      const detail = [
+        s.user_not_found ? `미매칭 ${s.user_not_found}` : "",
+        s.part_mismatch ? `부서불일치 ${s.part_mismatch}` : "",
+        s.regist_invalid ? `유자격불일치 ${s.regist_invalid}` : "",
+        s.amount_below_min ? `금액미달 ${s.amount_below_min}` : "",
+      ].filter(Boolean).join(", ");
+      parts.push(`제외: ${excludedCount}${detail ? ` (${detail})` : ""}`);
+    }
     return parts.join(" · ");
   };
 

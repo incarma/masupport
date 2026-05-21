@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict
+from typing import Dict, List, Sequence
 
 from accounts.models import CustomUser
 from commission.models import ApprovalPending
@@ -33,6 +33,52 @@ _SPEC = _ApprovalRowSpec()
 _ELIGIBLE_REGIST = {"손생등록", "생보등록", "손보등록"}
 
 
+# ✅ 코랩 기준: 실지급액 10,000원 이상만 미결재 대상으로 저장
+APPROVAL_PENDING_MIN_ACTUAL_PAY = 10_000
+
+
+def _new_excluded_summary() -> Dict[str, int]:
+    return {
+        "user_not_found": 0,
+        "part_mismatch": 0,
+        "regist_invalid": 0,
+        "amount_below_min": 0,
+    }
+
+
+def _append_excluded(
+    rows: List[dict],
+    summary: Dict[str, int],
+    *,
+    user_id: str,
+    emp_name: str,
+    actual_pay: int,
+    reason_code: str,
+    reason: str,
+    user_part: str = "",
+    selected_part: str = "",
+    user_regist: str = "",
+) -> None:
+    """
+    업로드 대상에서 제외된 raw 후보를 사유별로 누적한다.
+
+    저장 모델은 변경하지 않고, 업로드 결과 fail-token Excel로만 제공한다.
+    """
+    summary[reason_code] = int(summary.get(reason_code) or 0) + 1
+    rows.append(
+        {
+            "user_id": user_id,
+            "emp_name": emp_name,
+            "actual_pay": actual_pay,
+            "reason_code": reason_code,
+            "reason": reason,
+            "selected_part": selected_part,
+            "user_part": user_part,
+            "user_regist": user_regist,
+        }
+    )
+
+
 def _safe_cell(row: Sequence[object], idx: int) -> str:
     """
     raw matrix row에서 cell을 안전하게 문자열로 변환한다.
@@ -56,7 +102,7 @@ def handle_upload_commission_approval(
     수수료결재(kind=approval) 업로드
 
     조건:
-    - N열(실지급액) > 0
+    - N열(실지급액) >= 10,000
     - O열(결재값) == 'N'
     - ✅ 유자격(DB): user.regist in ['손생등록','생보등록','손보등록']
     - 동일 사번이 여러 행이면 실지급액 합산
@@ -66,8 +112,10 @@ def handle_upload_commission_approval(
 
     return contract:
     - inserted_or_updated: 저장/upsert 건수
-    - missing_users: 사용자 미존재 또는 part/regist 스코프 제외 건수
+    - missing_users: 사용자 미존재 건수(레거시 호환)
     - missing_sample: 실패 샘플 최대 10건
+    - excluded_rows: 제외 사유별 상세 row
+    - excluded_summary: 제외 사유별 건수
     """
     df = _read_excel_raw_matrix(file_path, original_name=original_name, skiprows=0, header_none=True)
     if df is None or getattr(df, "empty", False):
@@ -102,39 +150,97 @@ def handle_upload_commission_approval(
     if not bucket:
         return upload_result()
 
-    # ✅ 유자격 + (선택) part 스코프
-    qs = (
-        CustomUser.objects
-        .filter(pk__in=bucket.keys())
-        .filter(regist__in=_ELIGIBLE_REGIST)
-    )
-    if part:
-        qs = qs.filter(part=part)
-
-    user_map = qs.in_bulk()
-
-    missing = [uid for uid in bucket.keys() if uid not in user_map]
-    missing_sample = missing[:10]
+    # ✅ DB(CustomUser)를 SSOT로 삼아 미매칭/부서불일치/유자격불일치/금액미달을 분리한다.
+    user_map = CustomUser.objects.filter(pk__in=bucket.keys()).in_bulk()
+    excluded_rows: List[dict] = []
+    excluded_summary = _new_excluded_summary()
+    missing: List[str] = []
 
     objs: List[ApprovalPending] = []
     for uid, rec in bucket.items():
+        emp_name = str(rec.get("emp_name") or "")
+        paid_sum = int(rec.get("paid_sum") or 0)
+
+        if paid_sum < APPROVAL_PENDING_MIN_ACTUAL_PAY:
+            _append_excluded(
+                excluded_rows,
+                excluded_summary,
+                user_id=uid,
+                emp_name=emp_name,
+                actual_pay=paid_sum,
+                reason_code="amount_below_min",
+                reason="실지급액 10,000원 미만",
+                selected_part=part,
+            )
+            continue
+
         u = user_map.get(uid)
         if not u:
+            missing.append(uid)
+            _append_excluded(
+                excluded_rows,
+                excluded_summary,
+                user_id=uid,
+                emp_name=emp_name,
+                actual_pay=paid_sum,
+                reason_code="user_not_found",
+                reason="CustomUser 미매칭",
+                selected_part=part,
+            )
             continue
+
+        user_part = str(getattr(u, "part", "") or "")
+        user_regist = str(getattr(u, "regist", "") or "")
+
+        if part and user_part != part:
+            _append_excluded(
+                excluded_rows,
+                excluded_summary,
+                user_id=uid,
+                emp_name=emp_name,
+                actual_pay=paid_sum,
+                reason_code="part_mismatch",
+                reason="선택 부서와 CustomUser.part 불일치",
+                user_part=user_part,
+                selected_part=part,
+                user_regist=user_regist,
+            )
+            continue
+
+        if user_regist not in _ELIGIBLE_REGIST:
+            _append_excluded(
+                excluded_rows,
+                excluded_summary,
+                user_id=uid,
+                emp_name=emp_name,
+                actual_pay=paid_sum,
+                reason_code="regist_invalid",
+                reason="CustomUser.regist 유자격 조건 불일치",
+                user_part=user_part,
+                selected_part=part,
+                user_regist=user_regist,
+            )
+
+            continue
+
         objs.append(
             ApprovalPending(
                 ym=ym,
                 user=u,
-                emp_name=str(rec.get("emp_name") or ""),
-                actual_pay=int(rec.get("paid_sum") or 0),
+                emp_name=emp_name,
+                actual_pay=paid_sum,
                 approval_flag="N",
             )
         )
+
+    missing_sample = missing[:10]
 
     if not objs:
         return upload_result(
             missing_users=len(missing),
             missing_sample=missing_sample,
+            excluded_rows=excluded_rows,
+            excluded_summary=excluded_summary,
         )
 
     ApprovalPending.objects.bulk_create(
@@ -149,6 +255,8 @@ def handle_upload_commission_approval(
         inserted_or_updated=len(objs),
         missing_users=len(missing),
         missing_sample=missing_sample,
+        excluded_rows=excluded_rows,
+        excluded_summary=excluded_summary,
     )
 
 

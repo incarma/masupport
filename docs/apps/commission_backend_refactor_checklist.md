@@ -1553,222 +1553,364 @@ print(tuple(supported_upload_types()))
 - [ ] 기존 업로드/조회/계산 결과가 동일하다.
 - [ ] 다음 개발자가 보험사별 정책을 더 쉽게 찾을 수 있다.
 - [ ] SSOT 위치가 명확해져 중복 수정 위험이 줄어든다.
+---
 
+# 19. 현재까지 완료된 리팩토링 반영 사항 (2026-05-21 기준)
+
+## 19-1. 완료 요약
+
+현재까지 완료된 저위험 리팩토링 구간은 아래와 같다.
+
+```text
+P2-1 upload_utils 정리        ✅ 완료
+P2-2 upload_handlers 정리     ✅ 완료
+P5 테스트 보강                ✅ 완료
+P3 life_kb.py 저위험 정리     ✅ 완료
+P1-4 Deposit 후속 정리        ✅ 완료
+```
+
+최종 검증 결과:
+
+```text
+python manage.py check                         ✅ 통과
+python manage.py test commission               ✅ 32 tests OK
+python manage.py makemigrations --check --dry-run ✅ No changes detected
+```
 
 ---
 
-# 19. 현재까지 완료된 리팩토링 반영 사항 (2026-05)
+## 19-2. P2-1 upload_utils 정리 완료
 
-## 19-1. 공통 helper 신규 도입 완료
+### 대상 파일
 
-### `_common/decimal.py`
+```text
+commission/upload_utils/_convert.py
+commission/upload_utils/_detect.py
+commission/upload_utils/_readers.py
+commission/upload_utils/_db.py
+commission/upload_utils/__init__.py
+commission/upload_utils/upload_utils.py
+```
 
-완료 사항:
+### 완료 항목
 
-- [x] `decimal_percent_value()` 공통화 완료
-- [x] `decimal_percent_cell()` 공통화 완료
-- [x] `scale_small_percent_text` 옵션 추가
-- [x] 신한생명 `% 문자열 + 소수값` 특수 정책 유지
-- [x] integral normalize 옵션 유지
-- [x] percent format ×100 정책 유지
-- [x] parser별 raw percent 정책 분리 유지
+- [x] empty-like 값 상수화
+- [x] `EMPTY_LIKE_VALUES = frozenset({"", "nan", "none", "-"})` 기준 정리
+- [x] `_convert.py` module docstring 보강
+- [x] Decimal 변환 함수 역할 명확화
+  - [x] `_to_decimal()`은 일반 금액/실적 필드용
+  - [x] `_safe_decimal_q2()`는 DecimalField(decimal_places=2) 저장용
+- [x] `_detect.py` alias/ban group 주석 정리
+- [x] `_readers.py` reader fallback 주석 보강
+- [x] `_db.py` deprecated wrapper 주석 강화
+- [x] `__all__` export surface 점검 및 설명 강화
+- [x] legacy shim `upload_utils.py` 유지
 
-적용 완료 parser:
+### 보존된 정책
 
-- [x] `life_dongyang.py`
-- [x] `life_met.py`
-- [x] `life_kyobo.py`
-- [x] `life_KDB.py`
-- [x] `life_shinhan.py`
-- [x] `life_mirae.py`
-- [x] `life_samsung.py`
-
-회귀 검증:
-
-- [x] `160% → 160` 저장 유지
-- [x] `0.7 + % format → 70` 유지
-- [x] 신한 `% text + 0.7` → 70 유지
-- [x] scientific notation normalize 유지
-
----
-
-### `_common/excel.py`
-
-완료 사항:
-
-- [x] `build_merged_value_map()` 공통화 완료
-- [x] `cell_value_with_merged()` 공통화 완료
-- [x] 병합셀 matrix 전파 helper 공통화 완료
-- [x] worksheet 직접 unmerge 금지 유지
-
-적용 완료 parser:
-
-- [x] `life_KDB.py`
-- [x] `life_lina.py`
-
-회귀 검증:
-
-- [x] KDB C/H 병합 전파 정상
-- [x] 라이나 merged map 정상
-- [x] row count 변화 없음
+- [x] `_norm_emp_id("1234567.0") -> "1234567"` 유지
+- [x] `_extract_emp7_from_a()`의 `s[-8:-1]` 정책 유지
+- [x] pandas `isna` 방어 유지
+- [x] 기존 import surface 유지
+- [x] DB migration 없음
 
 ---
 
-### `_common/rows.py`
+## 19-3. P2-2 upload_handlers 정리 완료
 
-완료 사항:
+### 대상 파일
 
-- [x] `append_unique()` 공통 helper 도입 완료
-- [x] dedupe key 관리 공통화 완료
-- [x] 기존 seen set 정책 유지
+```text
+commission/upload_handlers/approval.py
+commission/upload_handlers/efficiency.py
+commission/upload_handlers/collect.py
+commission/upload_handlers/registry.py
+commission/upload_handlers/deposit.py
+commission/upload_handlers/__init__.py
+```
 
-적용 완료 parser:
+### 완료 항목
 
-- [x] `life_mirae.py`
-- [x] `life_samsung.py`
+- [x] `approval.py` `_safe_cell()` 공통 helper 사용 의도 명시
+- [x] `efficiency.py` `_safe_text()` 공통 helper 사용 의도 명시
+- [x] `_find_header_row_and_col_indices()` 타입 힌트/docstring 보강
+- [x] handler return dict 구조 주석 정리
+- [x] `registry.py` `UploadSpec` 설명 강화
+- [x] `UploadSpec` return dict 계약 명시
+- [x] `deposit.py` `_update_upload_log` SSOT 주석 강화
+- [x] `upload_handlers/__init__.py` public API/legacy alias 주석 강화
+- [x] `approval.py` 타입 힌트 import 누락 보정
+  - [x] `List`
+  - [x] `Sequence`
 
-회귀 검증:
+### 보존된 정책
 
-- [x] duplicate row 증가 없음
-- [x] 기존 dedupe semantics 유지
-
----
-
-## 19-2. parser 내부 중복 제거 완료
-
-### `life_dongyang.py`
-
-완료 사항:
-
-- [x] `_to_decimal_percent()` 제거
-- [x] `decimal_percent_cell()` 공통 helper 사용
-- [x] 기존 normalize_integral 정책 유지
-
----
-
-### `life_met.py`
-
-완료 사항:
-
-- [x] `_to_percent_decimal()` 제거
-- [x] `decimal_percent_cell()` 공통 helper 사용
-- [x] 기존 raw string 처리 정책 유지
-
----
-
-### `life_KDB.py`
-
-완료 사항:
-
-- [x] local decimal parser 제거
-- [x] merged helper 공통화 완료
-- [x] decimal helper 공통화 완료
-- [x] unused `InvalidOperation` import 제거
+- [x] approval raw matrix 위치 기반 파싱 유지
+  - [x] B=이름
+  - [x] C=사번
+  - [x] N=실지급액
+  - [x] O=결재값
+- [x] approval 조건 유지
+  - [x] `actual_pay > 0`
+  - [x] `approval_flag == "N"`
+  - [x] 유자격 `regist in {"손생등록", "생보등록", "손보등록"}`
+- [x] efficiency 사번 E열 고정 유지
+- [x] efficiency `구분 == "지급"` 금액만 합산 유지
+- [x] `bulk_create(update_conflicts=True)` 유지
+- [x] backward-compatible alias 유지
+- [x] registry upload_type 문자열 변경 없음
 
 ---
 
-### `life_kyobo.py`
+## 19-4. P5 테스트 보강 완료
 
-완료 사항:
+### 대상 파일
 
-- [x] decimal helper 공통화 완료
-- [x] local percent parser 제거
-- [x] unused import 제거
+```text
+commission/tests.py
+```
 
----
+### 완료 항목
 
-### `life_shinhan.py`
+- [x] upload_utils empty-like 테스트 추가
+- [x] `_norm_emp_id()` 회귀 테스트 추가
+- [x] `_extract_emp7_from_a()` 회귀 테스트 추가
+- [x] fail token 생성/cache 저장 테스트 추가
+- [x] Excel response smoke 테스트 추가
+- [x] deposit service aggregate 테스트 추가
+- [x] fail download permission helper 테스트 추가
+- [x] Deposit serializer 테스트 추가
 
-완료 사항:
+### 현재 테스트 커버리지 핵심
 
-- [x] decimal helper 공통화 완료
-- [x] 신한 전용 `% text scaling` 유지
-- [x] 기존 parser semantics 유지
+```text
+RateExample decimal helper
+RateExample merged Excel helper
+upload_handlers._common helper
+upload_utils convert helper
+fail token / Excel response helper
+Deposit service aggregate
+Deposit serializers
+fail download permission
+```
 
----
+### 최종 테스트 수
 
-### `life_mirae.py`
-
-완료 사항:
-
-- [x] decimal helper 공통화 완료
-- [x] 기존 미래에셋 normalize 정책 유지
-
----
-
-### `life_samsung.py`
-
-완료 사항:
-
-- [x] decimal helper 공통화 완료
-- [x] 삼성 병합 정책 유지
-- [x] 기존 normalize 정책 유지
-
----
-
-## 19-3. 테스트 코드 추가 완료
-
-### `commission/tests.py`
-
-완료 사항:
-
-- [x] decimal helper 테스트 추가
-- [x] merged helper 테스트 추가
-- [x] append_unique 테스트 추가
-- [x] scale_small_percent_text 테스트 추가
-- [x] normalize_integral 테스트 추가
-
-현재 테스트 결과:
-
-- [x] `python manage.py test commission` → 16 tests OK
-- [x] helper regression test 확보 완료
+```text
+32 tests OK
+```
 
 ---
 
-## 19-4. 현재 검증 완료 상태
+## 19-5. P3 life_kb.py 저위험 parser 정리 완료
 
-### Django 검증
+### 대상 파일
 
-- [x] `python manage.py check`
-- [x] `python manage.py makemigrations --check --dry-run`
+```text
+commission/services/rate_example_normalizers/life_kb.py
+```
 
-### 테스트
+### 완료 항목
 
-- [x] `python manage.py test commission`
-- [x] 16 tests PASS
+- [x] local Decimal parser 일부 공통 helper로 치환
+- [x] `_clean_text()`에서 공통 `clean_text()` 사용
+- [x] `_to_decimal()`에서 공통 `decimal_from_text()` 사용
+- [x] `_rate_cell_to_decimal()`에서 공통 `decimal_percent_cell()` 사용
+- [x] 불필요한 `InvalidOperation` import 제거
+- [x] `Decimal` 타입 힌트 import 유지
+- [x] KB parser 함수 import 확인 완료
 
-### 보안 grep
+### 보존된 정책
 
-- [x] `csrf_exempt` 신규 없음
-- [x] `except: pass` 없음
-- [x] `.file.url` 없음
-- [x] `/media/` 직접 노출 없음
+- [x] `build_life_kb_general_conversion_rows()` 함수명 유지
+- [x] `build_life_kb_health_conversion_rows()` 함수명 유지
+- [x] 일반상품/건강보험 분기 유지
+- [x] 건강보험 B열 `특약` 등장 시 하단 전체 제외 유지
+- [x] 건강보험 `coverage_type = "기타(보장성)"` 유지
+- [x] Excel percent format `×100` 보정 유지
+- [x] 문자열 `"80%"`는 `80`으로 저장 유지
+- [x] row append 구조 변경 없음
+- [x] DB 모델/마이그레이션 영향 없음
 
-### 구조 검증
+---
+
+## 19-6. P1-4 Deposit 후속 정리 완료
+
+### 대상 파일
+
+```text
+commission/views/api_deposit_impl.py
+commission/services/deposit.py
+commission/services/deposit_serializers.py
+commission/tests.py
+```
+
+### 신규 파일
+
+```text
+commission/services/deposit_serializers.py
+```
+
+### 완료 항목
+
+- [x] Deposit serializer helper 분리
+- [x] `user_to_payload()` 분리
+- [x] `summary_to_payload()` 분리
+- [x] `surety_to_payload()` 분리
+- [x] `other_to_payload()` 분리
+- [x] `json_rows()` 분리
+- [x] `json_user_detail()` 분리
+- [x] `apply_deposit_summary_totals()` 분리
+- [x] `DepositTotalPayload` dataclass 도입
+- [x] `api_deposit_impl.py`는 request parsing, permission check, service 호출 중심으로 축소
+- [x] `commission/services/deposit.py` docstring 보강
+- [x] Deposit serializer regression test 추가
+
+### 보존된 응답 계약
+
+- [x] `api_user_detail` 응답에서 `data` + `user` 키 모두 유지
+- [x] `api_deposit_summary` 응답에서 `rows` 유지
+- [x] `surety_total_all`, `other_total_all` 유지
+- [x] 화면 표시용 `surety_total`, `other_total` 필터 합계 정책 유지
+- [x] `debt_keep_total` 유지
+- [x] `deposit_home.html`의 `data-bind` 키 변경 없음
+- [x] `deposit_home.js` alias 계약 변경 없음
+
+---
+
+## 19-7. 현재 완료 기준 DoD
+
+### 코드 구조
 
 - [x] public import surface 유지
 - [x] legacy shim 유지
-- [x] URL 변경 없음
-- [x] DB migration 없음
+- [x] SSOT helper 중복 제거 일부 완료
+- [x] upload_utils 역할 명확화
+- [x] upload_handlers return 계약 명확화
+- [x] Deposit serializer/service/view 책임 분리 강화
+- [x] KB parser 저위험 공통 helper 적용 완료
+
+### 보안
+
+- [x] 파일 직접 URL 노출 없음
+- [x] 업로드/다운로드 권한 완화 없음
+- [x] CSRF 우회 신규 추가 없음
+- [x] token 다운로드 owner 검증 유지
+- [x] 내부 path/traceback 사용자 노출 없음
+
+### 성능
+
+- [x] bulk_create/update_conflicts 유지
+- [x] QuerySet 유지 후 serializer 단계에서 list 변환
+- [x] row-by-row save 후퇴 없음
+- [x] 테스트 DB 기준 회귀 없음
+
+### 회귀
+
+- [x] `python manage.py check` 통과
+- [x] `python manage.py test commission` 32개 통과
+- [x] `python manage.py makemigrations --check --dry-run` 변경 없음
+- [x] KB parser import 정상
 - [x] upload registry 영향 없음
-- [x] replace/append semantics 유지
-- [x] parser row count 회귀 없음
+- [x] URL/DOM/dataset 변경 없음
 
 ---
 
-## 19-5. 다음 단계 예정 작업
+## 19-8. 남은 작업
 
-다음 우선 작업:
+저위험 구간은 완료되었고, 다음 단계부터는 중간~고위험 구간이다.
 
-- [ ] `views/downloads.py` 내부 helper 공통화
-- [ ] 최신 ym fallback helper 정리
-- [ ] excel response 중복 제거
-- [ ] deposit query flow 정리
-- [ ] views 계층 service boundary 강화
+### 다음 후보 1: P6 collect / collect_notice 정리
 
-주의:
+```text
+commission/services/collect.py
+commission/views/collect_notice_export.py
+commission/services/collect_notice_excel.py
+```
 
-- [ ] Deposit 서비스 분리는 별도 단계로 진행
-- [ ] ORM/service/view 책임 분리는 기능 변화 없이 점진 적용
-- [ ] 다운로드 filename/sheet_name/json schema 유지 필수
+남은 항목:
 
+- [ ] collect serializer helper 분리
+- [ ] feedback payload builder 분리
+- [ ] collect_notice workbook style helper 분리
+- [ ] PDF/LibreOffice runtime helper 정리
+- [ ] collect 권한 스코프 회귀 테스트 추가
+
+위험도: 중간.
+
+### 다음 후보 2: P3 고위험 parser 정리
+
+```text
+commission/services/rate_example_normalizers/life_chubb.py
+commission/services/rate_example_normalizers/life_cardif.py
+commission/services/rate_example_normalizers/life_hana.py
+commission/services/rate_example_normalizers/life_heungkuk.py
+commission/services/rate_example_normalizers/life_nh.py
+commission/services/rate_example_normalizers/life_hanhwa.py
+commission/services/rate_example_normalizers/fire_hana.py
+commission/services/rate_example_normalizers/fire_nh.py
+commission/services/rate_example_normalizers/fire_hyundai.py
+commission/services/rate_example_normalizers/fire_lotte.py
+commission/services/rate_example_normalizers/fire_pay.py
+commission/services/rate_example_normalizers/fire_db.py
+commission/services/rate_example_normalizers/fire_kb.py
+```
+
+남은 항목:
+
+- [ ] PDF parser 주석/타입 보강
+- [ ] 좌표 parser 공통화 여부 검토
+- [ ] block/pair parser는 보험사별 단위로 분리 패치
+- [ ] `%`, `×100`, `×12`, `/0.97` 저장 단위 혼용 방지
+- [ ] row count 비교 필수
+
+위험도: 높음.
+
+### 다음 후보 3: P4 폴더 구조 이동
+
+```text
+commission/services/rate_example_normalizers/life/
+commission/services/rate_example_normalizers/fire/
+```
+
+남은 항목:
+
+- [ ] 신규 폴더 생성
+- [ ] 기존 파일 shim 유지
+- [ ] dispatcher import 변경
+- [ ] grep 기반 import 검증
+- [ ] 전체 업로드/조회/계산 smoke test
+
+위험도: 높음. 별도 브랜치 권장.
+
+---
+
+## 20. 현재 권장 진행 순서
+
+```text
+완료:
+P2-1 upload_utils
+→ P2-2 upload_handlers
+→ P5 테스트 보강
+→ life_kb.py 저위험 P3
+→ P1-4 Deposit 후속 구조 정리
+
+남은 단계:
+P6 collect/notice 정리
+→ P3 고위험 parser
+→ P4 폴더 구조 이동
+```
+
+---
+
+## 21. 최종 요약
+
+현재까지의 리팩토링은 기능 변화 없이 아래 효과를 달성했다.
+
+- 업로드 유틸의 공란/Decimal/reader 정책이 명확해졌다.
+- 업로드 핸들러의 결과 dict 및 registry 계약이 명확해졌다.
+- 테스트가 16개에서 32개로 확대되어 회귀 방지력이 강화됐다.
+- KB 생명보험 parser의 저위험 중복이 공통 helper로 정리됐다.
+- Deposit API의 serializer 책임이 분리되어 view/service boundary가 개선됐다.
+
+현재 상태는 “저위험 패치 완료”로 판단 가능하며, 이후 작업은 collect/notice 또는 고위험 parser 단위로 별도 검증을 강화해 진행한다.
