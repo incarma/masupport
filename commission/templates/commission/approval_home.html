@@ -104,6 +104,24 @@
       </button>
     </div>
 
+    <!-- 효율 테이블 컨트롤 (검색 / 출력 개수) -->
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2 aph-ctrl-bar">
+      <div class="d-flex align-items-center gap-2">
+        <input type="text" class="form-control form-control-sm aph-search-input"
+               id="effSearch" placeholder="키워드 검색...">
+        <span class="text-muted small aph-count-label" id="effCount"></span>
+      </div>
+      <div class="d-flex align-items-center gap-1">
+        <label class="form-label mb-0 small fw-semibold">표시</label>
+        <select class="form-select form-select-sm aph-pagesize-select" id="effPageSize">
+          <option value="20" selected>20개</option>
+          <option value="50">50개</option>
+          <option value="100">100개</option>
+          <option value="200">200개</option>
+        </select>
+      </div>
+    </div>
+
     <div class="table-responsive commission-table-scroll">
       <table id="efficiencyExcessTable" class="table table-bordered table-sm text-center commission-nowrap-table">
         <thead class="table-light">
@@ -126,6 +144,7 @@
         </tbody>
       </table>
     </div>
+    <div class="d-flex justify-content-center mt-2" id="effPagination"></div>
 
     <hr class="my-4">
 
@@ -143,6 +162,24 @@
       >
         엑셀 다운로드
       </button>
+    </div>
+
+    <!-- 미결 테이블 컨트롤 (검색 / 출력 개수) -->
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2 aph-ctrl-bar">
+      <div class="d-flex align-items-center gap-2">
+        <input type="text" class="form-control form-control-sm aph-search-input"
+               id="pendSearch" placeholder="키워드 검색...">
+        <span class="text-muted small aph-count-label" id="pendCount"></span>
+      </div>
+      <div class="d-flex align-items-center gap-1">
+        <label class="form-label mb-0 small fw-semibold">표시</label>
+        <select class="form-select form-select-sm aph-pagesize-select" id="pendPageSize">
+          <option value="20" selected>20개</option>
+          <option value="50">50개</option>
+          <option value="100">100개</option>
+          <option value="200">200개</option>
+        </select>
+      </div>
     </div>
 
     <div class="table-responsive commission-table-scroll">
@@ -172,6 +209,7 @@
         </tbody>
       </table>
     </div>
+    <div class="d-flex justify-content-center mt-2" id="pendPagination"></div>
 
   </div>
 </div>
@@ -194,4 +232,5 @@
 <script src="{% static 'js/common/csrf_window.js' %}?v={% now 'U' %}"></script>
 <script src="{% static 'js/commission/approval_excel_upload.js' %}"></script>
 <script src="{% static 'js/commission/approval_home_export.js' %}{% if STATIC_VERSION %}?v={{ STATIC_VERSION }}{% else %}?v=20260226_01{% endif %}"></script>
+<script src="{% static 'js/commission/approval_table_controls.js' %}?v={% now 'U' %}"></script>
 {% endblock %}

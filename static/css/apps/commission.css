@@ -471,6 +471,82 @@
   }
 }
 
+/* ==========================================================
+ Approval Home — 정렬/검색/페이지 크기 컨트롤
+ (#approval-home 하위로만 스코프 제한)
+========================================================== */
+
+/* 타이틀 */
+#approval-home .commission-title { color: #003f7d; }
+
+/* deposit-maxw: approval 카드 최대폭 */
+#approval-home .deposit-maxw { max-width: 1100px; }
+
+/* 가로 스크롤 래퍼 */
+#approval-home .commission-table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 6px;
+}
+
+/* nowrap 테이블 */
+#approval-home .commission-nowrap-table {
+  width: max-content;
+  min-width: 100%;
+  table-layout: auto;
+}
+
+#approval-home .commission-nowrap-table th,
+#approval-home .commission-nowrap-table td {
+  white-space: nowrap;
+  word-break: keep-all;
+  overflow: visible;
+  text-overflow: clip;
+  vertical-align: middle;
+}
+
+#approval-home .commission-nowrap-table .money-cell {
+  white-space: nowrap !important;
+  text-align: right;
+}
+
+/* 컨트롤 바 (검색 + 표시 개수) */
+#approval-home .aph-ctrl-bar { min-height: 32px; }
+
+#approval-home .aph-search-input { width: 180px; min-width: 120px; }
+
+#approval-home .aph-pagesize-select { width: 88px; }
+
+#approval-home .aph-count-label { white-space: nowrap; }
+
+/* 정렬 가능 헤더 */
+#approval-home .commission-nowrap-table thead th {
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+}
+
+#approval-home .commission-nowrap-table thead th.aph-sortable::after {
+  content: " \21D5"; /* ⇕ */
+  font-size: 0.65rem;
+  color: #adb5bd;
+  margin-left: 2px;
+}
+
+#approval-home .commission-nowrap-table thead th.aph-sort-asc::after {
+  content: " \25B2"; /* ▲ */
+  font-size: 0.65rem;
+  color: #005BAC;
+  margin-left: 2px;
+}
+
+#approval-home .commission-nowrap-table thead th.aph-sort-desc::after {
+  content: " \25BC"; /* ▼ */
+  font-size: 0.65rem;
+  color: #005BAC;
+  margin-left: 2px;
+}
+
 /* ── 예시표 페이지 (#rate-example-root 스코프) ───────────────── */
 #rate-example-root {
   --re-badge-radius: 4px;
