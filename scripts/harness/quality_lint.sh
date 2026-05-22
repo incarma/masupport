@@ -165,3 +165,44 @@ else
   echo "❌ 품질 위반 ${VIOLATIONS}건 발견 — docs/harness/QUALITY_RULES.md 확인 필요"
   exit 1
 fi
+
+# ─────────────────────────────────────────
+# RN-01: RateExample normalizer 위험 연산 패턴 경고
+#   → 보험사별 parser에서 % 단위 보정이 섞이면 회귀 가능
+#   → 1차 도입은 경고만 출력한다.
+# ─────────────────────────────────────────
+RN_VIOLATIONS=""
+if [ -d "commission/services/rate_example_normalizers" ]; then
+  RN_VIOLATIONS=$(grep -rn \
+    "\* *100\|/ *100\|/ *0\.97\|\* *12" \
+    commission/services/rate_example_normalizers --include="*.py" 2>/dev/null \
+    | grep -v "_common/decimal.py" \
+    | grep -v "_common/pdf.py" \
+    || true)
+fi
+
+if [ -n "${RN_VIOLATIONS%$'\n'}" ]; then
+  echo "⚠️  [RN-01] RateExample normalizer 위험 연산 패턴 감지 (경고만, 커밋 차단 안 함)"
+  echo "${RN_VIOLATIONS%$'\n'}" | sed 's/^/     /'
+  echo ""
+fi
+
+# ─────────────────────────────────────────
+# RN-02: RateExample parser 내부 PDF extractor 중복 구현 경고
+#   → _common/pdf.py의 extract_pdf_text_with_fallback 사용 권장
+#   → 보험사별 좌표 parser는 예외 가능하므로 경고만 출력한다.
+# ─────────────────────────────────────────
+PDF_EXTRACT_DUP=""
+if [ -d "commission/services/rate_example_normalizers" ]; then
+  PDF_EXTRACT_DUP=$(grep -rn \
+    "def _extract_pdf_text\|PdfReader\|pdfplumber\.open\|fitz\.open" \
+    commission/services/rate_example_normalizers --include="*.py" 2>/dev/null \
+    | grep -v "_common/pdf.py" \
+    || true)
+fi
+
+if [ -n "${PDF_EXTRACT_DUP%$'\n'}" ]; then
+  echo "⚠️  [RN-02] RateExample PDF extractor 중복 구현 후보 (경고만, 커밋 차단 안 함)"
+  echo "${PDF_EXTRACT_DUP%$'\n'}" | sed 's/^/     /'
+  echo ""
+fi
