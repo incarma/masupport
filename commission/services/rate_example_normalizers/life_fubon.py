@@ -17,10 +17,16 @@ from __future__ import annotations
 
 import logging
 import re
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from typing import Iterable
 
 from commission.models import RateExample, RateExampleConversionRow
+from commission.services.rate_example_normalizers._common.pdf import (
+    clean_pdf_text,
+    decimal_from_pdf_percent,
+    dedupe_by_key,
+    extract_pdf_text_with_fallback,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -62,41 +68,11 @@ def _extract_pdf_text(path: str) -> str:
 
     기존 PDF normalizer와 충돌하지 않도록 이 파일 내부 fallback으로 격리한다.
     """
-    try:
-        import pdfplumber  # type: ignore
-
-        with pdfplumber.open(path) as pdf:
-            return "\n".join((page.extract_text() or "") for page in pdf.pages)
-    except Exception:
-        logger.debug("pdfplumber extraction failed for fubon pdf", exc_info=True)
-
-    try:
-        import fitz  # type: ignore
-
-        doc = fitz.open(path)
-        try:
-            return "\n".join(page.get_text("text") for page in doc)
-        finally:
-            doc.close()
-    except Exception:
-        logger.debug("PyMuPDF extraction failed for fubon pdf", exc_info=True)
-
-    try:
-        from pypdf import PdfReader  # type: ignore
-
-        reader = PdfReader(path)
-        return "\n".join((page.extract_text() or "") for page in reader.pages)
-    except Exception:
-        logger.exception("Fubon PDF text extraction failed: path=%s", path)
-        raise
+    return extract_pdf_text_with_fallback(path)
 
 
 def _clean_text(value: object) -> str:
-    text = str(value or "")
-    text = text.replace("\uFFFE", " ")
-    text = text.replace("\u200b", " ")
-    text = re.sub(r"\s+", " ", text).strip()
-    return text
+    return clean_pdf_text(str(value or "").replace("\uFFFE", " ").replace("\u200b", " "))
 
 
 def _clean_product_title(raw: str) -> str:
@@ -114,14 +90,10 @@ def _coverage_type(product_name: str) -> str:
 
 
 def _to_decimal_percent(value: str) -> Decimal | None:
-    text = _clean_text(value).replace(",", "")
-    if not text:
+    dec = decimal_from_pdf_percent(value)
+    if dec is None:
         return None
-
-    try:
-        return Decimal(text).quantize(Decimal("0.0001"))
-    except (InvalidOperation, ValueError):
-        return None
+    return dec.quantize(Decimal("0.0001"))
 
 
 def _is_header_or_noise(line: str) -> bool:
@@ -263,21 +235,13 @@ def build_life_fubon_pdf_conversion_rows(
             )
         )
 
-    deduped: list[RateExampleConversionRow] = []
-    seen: set[tuple[str, str, str, Decimal, Decimal]] = set()
-
-    for row in rows:
-        key = (
+    return dedupe_by_key(
+        rows,
+        lambda row: (
             row.product_name,
             row.plan_type,
             row.pay_period,
             row.year1,
             row.year2,
-        )
-        if key in seen:
-            continue
-
-        seen.add(key)
-        deduped.append(row)
-
-    return deduped
+        ),
+    )

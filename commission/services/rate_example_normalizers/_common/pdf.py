@@ -11,11 +11,26 @@ RateExample PDF parser 공통 helper.
 """
 
 import re
+import logging
+from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any, Iterable
 
 from commission.services.rate_example_normalizers._common.decimal import decimal_from_text
 from commission.services.rate_example_normalizers._common.text import clean_spaces
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class PdfTextItem:
+    """PDF 텍스트 조각. 좌표 기반 parser 공통 row grouping용."""
+
+    text: str
+    x0: float
+    y0: float
+    x1: float
+    y1: float
 
 
 def clean_pdf_text(value: Any) -> str:
@@ -75,3 +90,64 @@ def dedupe_by_key(items: Iterable, key_fn) -> list:
         result.append(item)
 
     return result
+
+
+def group_pdf_items_by_y(
+    items: Iterable[PdfTextItem],
+    *,
+    y_tolerance: float = 3.0,
+) -> list[list[PdfTextItem]]:
+    """PDF 텍스트 조각을 y좌표 기준 행 단위로 묶는다."""
+    rows: list[list[PdfTextItem]] = []
+
+    for item in sorted(items, key=lambda it: (it.y0, it.x0)):
+        if not item.text:
+            continue
+
+        if rows and abs(rows[-1][0].y0 - item.y0) <= y_tolerance:
+            rows[-1].append(item)
+        else:
+            rows.append([item])
+
+    for row in rows:
+        row.sort(key=lambda it: it.x0)
+
+    return rows
+
+
+def extract_pdf_text_with_fallback(path: str) -> str:
+    """
+    PDF 전체 텍스트 추출 fallback chain.
+
+    우선순위:
+    1. pdfplumber
+    2. PyMuPDF
+    3. pypdf
+    """
+    try:
+        import pdfplumber  # type: ignore
+
+        with pdfplumber.open(path) as pdf:
+            return "\n".join((page.extract_text() or "") for page in pdf.pages)
+    except Exception:
+        logger.debug("pdfplumber extraction failed: path=%s", path, exc_info=True)
+
+    try:
+        import fitz  # type: ignore
+
+        doc = fitz.open(path)
+        try:
+            return "\n".join(page.get_text("text") for page in doc)
+        finally:
+            doc.close()
+    except Exception:
+        logger.debug("PyMuPDF extraction failed: path=%s", path, exc_info=True)
+
+    try:
+        from pypdf import PdfReader  # type: ignore
+
+        reader = PdfReader(path)
+        return "\n".join((page.extract_text() or "") for page in reader.pages)
+    except Exception:
+        logger.exception("PDF text extraction failed: path=%s", path)
+        raise

@@ -17,10 +17,14 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from typing import Iterable
 
 from commission.models import RateExample, RateExampleConversionRow
+from commission.services.rate_example_normalizers._common.pdf import (
+    clean_pdf_text,
+    decimal_from_pdf_percent,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -53,15 +57,11 @@ def _extract_pdf_text(path: str) -> str:
 
 
 def _clean_text(value: object) -> str:
-    text = "" if value is None else str(value)
-    text = text.replace("\u2013", "-").replace("\u2014", "-")
-    text = re.sub(r"[ \t\r\f\v]+", " ", text)
-    text = re.sub(r"\n\s*", "\n", text)
-    return text.strip()
+    return clean_pdf_text(str(value or "").replace("\u2013", "-").replace("\u2014", "-"))
 
 
 def _compact(value: object) -> str:
-    return re.sub(r"\s+", " ", "" if value is None else str(value)).strip()
+    return clean_pdf_text(value)
 
 
 def _normalize_plan_type(value: object) -> str:
@@ -78,14 +78,7 @@ def _normalize_plan_type(value: object) -> str:
 
 
 def _to_decimal(value: object) -> Decimal | None:
-    text = _clean_text(value).replace("%", "").replace(",", "").strip()
-    if not text or text == "-":
-        return None
-
-    try:
-        return Decimal(text)
-    except (InvalidOperation, ValueError):
-        return None
+    return decimal_from_pdf_percent(value)
 
 
 # =============================================================================

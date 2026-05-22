@@ -29,26 +29,16 @@ import logging
 import re
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Iterable
 
 from commission.models import RateExample, RateExampleConversionRow
 from commission.services.rate_example_normalizers._common.pdf import (
     clean_pdf_text,
     decimal_from_pdf_percent,
+    group_pdf_items_by_y,
+    PdfTextItem,
 )
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass(frozen=True)
-class _TextItem:
-    """PDF 텍스트 조각. 좌표 기반 테이블 복원용."""
-
-    text: str
-    x0: float
-    y0: float
-    x1: float
-    y1: float
 
 
 @dataclass(frozen=True)
@@ -111,28 +101,7 @@ def _strip_product_code(text: str) -> str:
     return re.sub(r"\s+\d{5,}$", "", text).strip()
 
 
-def _row_items(items: Iterable[_TextItem], *, y_tolerance: float = 3.0) -> list[list[_TextItem]]:
-    """
-    PDF 텍스트를 y좌표 기준으로 같은 행 단위로 묶는다.
-
-    PyMuPDF 추출 시 한 행의 여러 컬럼이 별도 span으로 들어오므로,
-    y좌표 허용 오차 내 span을 하나의 행으로 본다.
-    """
-    rows: list[list[_TextItem]] = []
-
-    for item in sorted(items, key=lambda it: (it.y0, it.x0)):
-        if not item.text:
-            continue
-
-        if rows and abs(rows[-1][0].y0 - item.y0) <= y_tolerance:
-            rows[-1].append(item)
-        else:
-            rows.append([item])
-
-    for row in rows:
-        row.sort(key=lambda it: it.x0)
-
-    return rows
+_TextItem = PdfTextItem
 
 
 def _extract_items_with_pymupdf(path: str) -> list[tuple[int, list[_TextItem]]]:
@@ -164,7 +133,7 @@ def _extract_items_with_pymupdf(path: str) -> list[tuple[int, list[_TextItem]]]:
                             continue
                         x0, y0, x1, y1 = span.get("bbox", (0, 0, 0, 0))
                         items.append(
-                            _TextItem(
+                            PdfTextItem(
                                 text=text,
                                 x0=float(x0),
                                 y0=float(y0),
@@ -276,7 +245,7 @@ def build_fire_hana_pdf_conversion_rows(example: RateExample) -> list[RateExampl
     seen: set[tuple[str, str, str, Decimal]] = set()
 
     for page_no, items in pages:
-        page_rows = _row_items(items)
+        page_rows = group_pdf_items_by_y(items)
         product_blocks = _build_product_blocks(page_rows)
         rate_lines = _extract_rate_lines(page_rows)
 

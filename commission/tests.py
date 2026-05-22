@@ -46,6 +46,8 @@ from commission.services.rate_example_normalizers._common.pdf import (
     clean_pdf_text,
     decimal_from_pdf_percent,
     dedupe_by_key,
+    group_pdf_items_by_y,
+    PdfTextItem,
 )
 from commission.upload_handlers._common import safe_cell_text, upload_result
 from commission.upload_utils import (
@@ -144,6 +146,17 @@ class RateExampleCommonPdfTests(SimpleTestCase):
                 {"product": "B", "rate": "100"},
             ],
         )
+
+    def test_group_pdf_items_by_y_groups_rows_and_sorts_by_x(self):
+        items = [
+            PdfTextItem("B", x0=30, y0=10, x1=40, y1=20),
+            PdfTextItem("A", x0=10, y0=11, x1=20, y1=20),
+            PdfTextItem("C", x0=10, y0=30, x1=20, y1=40),
+        ]
+
+        rows = group_pdf_items_by_y(items, y_tolerance=3)
+
+        self.assertEqual([[item.text for item in row] for row in rows], [["A", "B"], ["C"]])
 
 
 # =============================================================================
