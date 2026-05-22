@@ -157,6 +157,43 @@ class RateExampleCommonPdfTests(SimpleTestCase):
         rows = group_pdf_items_by_y(items, y_tolerance=3)
 
         self.assertEqual([[item.text for item in row] for row in rows], [["A", "B"], ["C"]])
+    
+    def test_group_pdf_items_by_y_respects_tolerance_boundary(self):
+        items = [
+            PdfTextItem("A", x0=10, y0=10, x1=20, y1=20),
+            PdfTextItem("B", x0=20, y0=13, x1=30, y1=20),
+            PdfTextItem("C", x0=10, y0=14.1, x1=20, y1=20),
+        ]
+
+        rows = group_pdf_items_by_y(items, y_tolerance=3)
+
+        self.assertEqual([[item.text for item in row] for row in rows], [["A", "B"], ["C"]])
+
+    def test_decimal_from_pdf_percent_handles_negative_and_plain_decimal(self):
+        self.assertEqual(decimal_from_pdf_percent("-12.5%"), Decimal("-12.5"))
+        self.assertEqual(decimal_from_pdf_percent("수정률 240"), Decimal("240"))
+
+    def test_dedupe_by_key_supports_model_like_objects(self):
+        class Row:
+            def __init__(self, product_name, plan_type, pay_period):
+                self.product_name = product_name
+                self.plan_type = plan_type
+                self.pay_period = pay_period
+
+        rows = [
+            Row("A", "보장", "10년납"),
+            Row("A", "보장", "10년납"),
+            Row("A", "적립", "10년납"),
+        ]
+
+        result = dedupe_by_key(
+            rows,
+            lambda row: (row.product_name, row.plan_type, row.pay_period),
+        )
+
+        self.assertEqual(len(result), 2)
+        self.assertEqual(result[0].plan_type, "보장")
+        self.assertEqual(result[1].plan_type, "적립")
 
 
 # =============================================================================
