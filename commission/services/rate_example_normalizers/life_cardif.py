@@ -21,7 +21,7 @@ from tempfile import NamedTemporaryFile
 from commission.models import RateExample, RateExampleConversionRow
 from commission.services.rate_example_normalizers._common import (
     append_unique,
-    clean_spaces,
+    clean_pdf_text,
     decimal_from_text,
 )
 
@@ -34,7 +34,7 @@ NO_PLAN_TYPE = "사용안함"
 
 
 def _clean_text(value) -> str:
-    return clean_spaces(value)
+    return clean_pdf_text(value)
 
 
 def _header_key(value: str) -> str:

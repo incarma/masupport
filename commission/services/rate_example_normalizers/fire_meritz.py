@@ -27,10 +27,14 @@ from __future__ import annotations
 
 import logging
 import re
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from typing import Iterable
 
 from commission.models import RateExample, RateExampleConversionRow
+from commission.services.rate_example_normalizers._common.pdf import (
+    clean_pdf_text,
+    decimal_from_pdf_percent,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -47,9 +51,7 @@ def _clean_text(value) -> str:
     - 줄바꿈/중복 공백 제거
     - 한 셀의 여러 줄 텍스트를 한 줄로 연결
     """
-    if value is None:
-        return ""
-    return re.sub(r"\s+", " ", str(value).replace("\n", " ")).strip()
+    return clean_pdf_text(str(value or "").replace("\n", " "))
 
 
 def _append_suffix_after_year(value: str, suffix: str) -> str:
@@ -105,11 +107,7 @@ def _to_decimal_percent(value) -> Decimal | None:
     if not text:
         return None
 
-    text = text.replace("%", "").replace(",", "").strip()
-    try:
-        return Decimal(text)
-    except (InvalidOperation, ValueError):
-        return None
+    return decimal_from_pdf_percent(text)
 
 
 def _normalize_product_group(product_name: str, plan_type: str) -> str:

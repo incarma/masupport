@@ -120,13 +120,15 @@ def _to_decimal(v, is_percent_cell: bool = False) -> Decimal | None:
     """
     if not _is_rate_value(v):
         return None
-    try:
-        d = Decimal(str(v))
-        if is_percent_cell:
-            d = (d * 100).quantize(Decimal("0.0001"))
-        return d
-    except InvalidOperation:
+
+    number_format = "0%" if is_percent_cell else ""
+    dec = decimal_percent_value(v, number_format=number_format)
+    if dec is None:
         return None
+
+    if is_percent_cell:
+        return dec.quantize(Decimal("0.0001"))
+    return dec
 
 
 def _is_header_or_comment_row(v2, v3) -> bool:

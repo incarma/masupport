@@ -42,6 +42,11 @@ from commission.services.rate_example_normalizers._common.text import (
     clean_text,
     is_empty_like,
 )
+from commission.services.rate_example_normalizers._common.pdf import (
+    clean_pdf_text,
+    decimal_from_pdf_percent,
+    dedupe_by_key,
+)
 from commission.upload_handlers._common import safe_cell_text, upload_result
 from commission.upload_utils import (
     EMPTY_LIKE_VALUES,
@@ -109,6 +114,36 @@ class RateExampleCommonRowsTests(SimpleTestCase):
         append_unique(rows, seen, "B", ("p2", "10년"))
 
         self.assertEqual(rows, ["A", "B"])
+
+
+class RateExampleCommonPdfTests(SimpleTestCase):
+    def test_clean_pdf_text_compacts_nbsp_and_whitespace(self):
+        self.assertEqual(clean_pdf_text(" A\u00a0\n  B\tC "), "A B C")
+
+    def test_decimal_from_pdf_percent_extracts_numeric_part(self):
+        self.assertEqual(decimal_from_pdf_percent("160% 주)"), Decimal("160"))
+        self.assertEqual(decimal_from_pdf_percent("1,234.5%"), Decimal("1234.5"))
+        self.assertIsNone(decimal_from_pdf_percent("수정률"))
+
+    def test_dedupe_by_key_preserves_order(self):
+        items = [
+            {"product": "A", "rate": "100"},
+            {"product": "A", "rate": "100"},
+            {"product": "B", "rate": "100"},
+        ]
+
+        result = dedupe_by_key(
+            items,
+            lambda item: (item["product"], item["rate"]),
+        )
+
+        self.assertEqual(
+            result,
+            [
+                {"product": "A", "rate": "100"},
+                {"product": "B", "rate": "100"},
+            ],
+        )
 
 
 # =============================================================================

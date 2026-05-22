@@ -19,6 +19,12 @@ from .excel import (
 )
 from .rows import append_unique
 from .text import clean_text, clean_spaces, is_empty_like
+from .pdf import (
+    clean_pdf_text,
+    decimal_from_pdf_percent,
+    dedupe_by_key,
+    extract_pdf_lines_with_pypdf,
+)
 
 __all__ = [
     "clean_text",
@@ -32,4 +38,8 @@ __all__ = [
     "filled_value_above",
     "append_unique",
     "decimal_percent_value",
+    "clean_pdf_text",
+    "decimal_from_pdf_percent",
+    "dedupe_by_key",
+    "extract_pdf_lines_with_pypdf",
 ]

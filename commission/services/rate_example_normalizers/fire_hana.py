@@ -28,10 +28,14 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from typing import Iterable
 
 from commission.models import RateExample, RateExampleConversionRow
+from commission.services.rate_example_normalizers._common.pdf import (
+    clean_pdf_text,
+    decimal_from_pdf_percent,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +72,7 @@ class _RateLine:
 
 def _clean_text(value: object) -> str:
     """PDF 텍스트의 줄바꿈/중복 공백을 정리한다."""
-    return re.sub(r"\s+", " ", str(value or "").replace("\u00a0", " ")).strip()
+    return clean_pdf_text(value)
 
 
 def _to_decimal_percent(value: object) -> Decimal | None:
@@ -82,15 +86,7 @@ def _to_decimal_percent(value: object) -> Decimal | None:
     if not text:
         return None
 
-    text = text.replace("%", "").replace(",", "").strip()
-    match = re.search(r"-?\d+(?:\.\d+)?", text)
-    if not match:
-        return None
-
-    try:
-        return Decimal(match.group(0))
-    except (InvalidOperation, ValueError):
-        return None
+    return decimal_from_pdf_percent(text)
 
 
 def _is_product_name(text: str) -> bool:

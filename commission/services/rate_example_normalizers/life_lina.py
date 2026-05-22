@@ -33,6 +33,9 @@ from commission.services.rate_example_normalizers._common.decimal import (
     decimal_percent_value,
 )
 from commission.services.rate_example_normalizers._common.text import clean_spaces
+from commission.services.rate_example_normalizers._common.pdf import (
+    extract_pdf_lines_with_pypdf,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -299,27 +302,7 @@ def _extract_pdf_lines(example: RateExample) -> list[tuple[int, int, str]]:
     반환:
     - (page_no, line_no, text)
     """
-    try:
-        from pypdf import PdfReader
-    except ImportError as exc:
-        raise RuntimeError(
-            "라이나 PDF 정규화를 위해 pypdf 패키지가 필요합니다. requirements.txt에 pypdf를 추가해 주세요."
-        ) from exc
-
-    lines: list[tuple[int, int, str]] = []
-
-    with example.file.open("rb") as f:
-        reader = PdfReader(f)
-
-        for page_idx, page in enumerate(reader.pages, start=1):
-            text = page.extract_text() or ""
-            for line_idx, raw_line in enumerate(text.splitlines(), start=1):
-                line = _clean_pdf_text(raw_line)
-                if not line:
-                    continue
-                lines.append((page_idx, line_idx, line))
-
-    return lines
+    return extract_pdf_lines_with_pypdf(example)
 
 
 def _is_pdf_noise_line(line: str) -> bool:

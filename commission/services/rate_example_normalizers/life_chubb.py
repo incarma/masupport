@@ -26,6 +26,7 @@ from commission.models import RateExample, RateExampleConversionRow
 from commission.services.rate_example_normalizers._common import (
     append_unique,
     clean_spaces,
+    clean_pdf_text,
 )
 
 logger = logging.getLogger(__name__)
@@ -602,4 +603,4 @@ def _split_csv_values(value: str) -> list[str]:
 
 
 def _compact_spaces(value: str) -> str:
-    return clean_spaces(value)
+    return clean_pdf_text(value)
