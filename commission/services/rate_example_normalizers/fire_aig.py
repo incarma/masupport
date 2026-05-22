@@ -19,9 +19,14 @@ AIG손해보험 수정률 PDF 정규화.
 
 import logging
 import re
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 
 from commission.models import RateExample, RateExampleConversionRow
+from commission.services.rate_example_normalizers._common.pdf import (
+    clean_pdf_text,
+    decimal_from_pdf_percent,
+    extract_pdf_text_with_fallback,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -36,20 +41,15 @@ _PAY_PERIOD_RE = re.compile(r"(?P<pay>\d+\s*년\s*자동\s*갱신)")
 
 def _clean_text(value: object) -> str:
     """PDF 추출 텍스트의 공백/줄바꿈을 정규화한다."""
-    return re.sub(r"\s+", " ", str(value or "")).strip()
+    return clean_pdf_text(value)
 
 
 def _to_decimal_percent(value: object) -> Decimal | None:
     """수정율 표시값을 Decimal로 변환한다. 예: '180%' → Decimal('180')."""
-    text = _clean_text(value).replace("%", "").replace(",", "")
-    if not text:
-        return None
-
-    try:
-        return Decimal(text)
-    except (InvalidOperation, ValueError):
+    rate = decimal_from_pdf_percent(value)
+    if rate is None:
         logger.warning("AIG 수정률 변환 실패: %r", value, exc_info=True)
-        return None
+    return rate
 
 
 def _extract_pdf_text(path: str) -> str:
@@ -64,26 +64,7 @@ def _extract_pdf_text(path: str) -> str:
     - 파일 URL 직접 접근 금지
     - 업로드된 FieldFile.path만 내부 서버 경로로 읽는다.
     """
-    try:
-        from pypdf import PdfReader  # type: ignore
-    except Exception:
-        PdfReader = None
-
-    if PdfReader is None:
-        try:
-            from PyPDF2 import PdfReader  # type: ignore
-        except Exception as exc:
-            raise RuntimeError(
-                "AIG PDF 정규화를 위해 pypdf 또는 PyPDF2가 필요합니다."
-            ) from exc
-
-    reader = PdfReader(path)
-    chunks: list[str] = []
-
-    for page in reader.pages:
-        chunks.append(page.extract_text() or "")
-
-    return "\n".join(chunks)
+    return extract_pdf_text_with_fallback(path)
 
 
 def _parse_aig_pdf_rows(text: str) -> list[dict[str, object]]:

@@ -24,7 +24,7 @@ from .pdf import (
     decimal_from_pdf_percent,
     dedupe_by_key,
     extract_pdf_lines_with_pypdf,
-     extract_pdf_text_with_fallback,
+    extract_pdf_text_with_fallback,
     group_pdf_items_by_y,
     PdfTextItem,
 )
