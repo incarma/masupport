@@ -27,6 +27,11 @@ from typing import Any
 from openpyxl.worksheet.worksheet import Worksheet
 
 from commission.models import RateExample, RateExampleConversionRow
+from commission.services.rate_example_normalizers._common.excel import (
+    build_merged_value_map,
+    cell_value_with_merged,
+)
+from commission.services.rate_example_normalizers._common.text import clean_spaces
 
 
 # =============================================================================
@@ -36,11 +41,7 @@ from commission.models import RateExample, RateExampleConversionRow
 
 def _text(value: Any) -> str:
     """셀 값을 비교/저장 가능한 문자열로 정리한다."""
-    if value is None:
-        return ""
-    text = str(value).replace("\r\n", "\n").replace("\r", "\n")
-    text = " ".join(part.strip() for part in text.split())
-    return text.strip()
+    return clean_spaces(str(value or "").replace("\r\n", "\n").replace("\r", "\n"))
 
 
 def _compact(value: Any) -> str:
@@ -109,22 +110,12 @@ def _merged_value_map(ws: Worksheet) -> dict[tuple[int, int], Any]:
     raw 파일의 병합을 실제로 해제하지 않고도,
     정규화 로직에서는 병합 해제 후 모든 셀에 같은 값이 들어간 것처럼 읽는다.
     """
-    result: dict[tuple[int, int], Any] = {}
-
-    for merged_range in ws.merged_cells.ranges:
-        min_col, min_row, max_col, max_row = merged_range.bounds
-        value = ws.cell(row=min_row, column=min_col).value
-
-        for row in range(min_row, max_row + 1):
-            for col in range(min_col, max_col + 1):
-                result[(row, col)] = value
-
-    return result
+    return build_merged_value_map(ws)
 
 
 def _cell(ws: Worksheet, merged: dict[tuple[int, int], Any], row: int, col: int) -> Any:
     """병합 전파값을 우선하여 셀 값을 읽는다."""
-    return merged.get((row, col), ws.cell(row=row, column=col).value)
+    return cell_value_with_merged(ws, merged, row, col)
 
 
 # =============================================================================

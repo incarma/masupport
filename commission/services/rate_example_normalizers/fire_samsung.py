@@ -31,6 +31,10 @@ from typing import Any
 from openpyxl.worksheet.worksheet import Worksheet
 
 from commission.models import RateExample, RateExampleConversionRow
+from commission.services.rate_example_normalizers._common.excel import (
+    build_worksheet_value_map,
+)
+from commission.services.rate_example_normalizers._common.text import clean_spaces
 
 
 INSURER = "삼성"
@@ -325,20 +329,7 @@ def _build_value_matrix(ws: Worksheet) -> dict[tuple[int, int], Any]:
     실제 workbook은 변경하지 않고, parser 내부에서만 병합 범위 전체에
     좌상단 값을 전파한다.
     """
-    values: dict[tuple[int, int], Any] = {}
-
-    for row in ws.iter_rows():
-        for cell in row:
-            values[(cell.row, cell.column)] = cell.value
-
-    for merged in ws.merged_cells.ranges:
-        min_col, min_row, max_col, max_row = merged.bounds
-        top_left = values.get((min_row, min_col))
-        for row_no in range(min_row, max_row + 1):
-            for col_no in range(min_col, max_col + 1):
-                values[(row_no, col_no)] = top_left
-
-    return values
+    return build_worksheet_value_map(ws)
 
 
 def _find_header_rows(
@@ -679,10 +670,7 @@ def _to_text(value: Any) -> str:
 
 def _clean_text(value: Any) -> str:
     """줄바꿈/중복 공백 정리."""
-    text = _to_text(value)
-    text = text.replace("\r\n", "\n").replace("\r", "\n")
-    text = re.sub(r"\s+", " ", text)
-    return text.strip()
+    return clean_spaces(_to_text(value).replace("\r\n", "\n").replace("\r", "\n"))
 
 
 def _compact(value: Any) -> str:

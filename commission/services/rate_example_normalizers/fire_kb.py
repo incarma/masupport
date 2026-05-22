@@ -30,6 +30,11 @@ from typing import Any
 from openpyxl.worksheet.worksheet import Worksheet
 
 from commission.models import RateExample, RateExampleConversionRow
+from commission.services.rate_example_normalizers._common.excel import (
+    build_merged_value_map,
+    cell_value_with_merged,
+)
+from commission.services.rate_example_normalizers._common.text import clean_spaces
 
 
 TARGET_SHEET_NAME = "GA채널_수정률"
@@ -42,13 +47,12 @@ TARGET_SHEET_NAME = "GA채널_수정률"
 
 def _to_text(value: Any) -> str:
     """셀 값을 사용자 표시 기준 문자열로 정리한다."""
-    if value is None:
-        return ""
-
-    text = str(value).replace("\r\n", "\n").replace("\r", "\n")
-    text = text.replace("\u00a0", " ")
-    text = re.sub(r"[ \t]+", " ", text)
-    return text.strip()
+    return clean_spaces(
+        str(value or "")
+        .replace("\r\n", "\n")
+        .replace("\r", "\n")
+        .replace("\u00a0", " ")
+    )
 
 
 def _one_line(value: Any, *, sep: str = " ") -> str:
@@ -123,15 +127,7 @@ def _merged_value_map(ws: Worksheet) -> dict[tuple[int, int], Any]:
     openpyxl에서 병합 범위의 좌상단 외 셀은 None으로 보이므로,
     정규화 전 별도 map을 구성해 raw 병합 의미를 보존한다.
     """
-    mapping: dict[tuple[int, int], Any] = {}
-
-    for merged in ws.merged_cells.ranges:
-        value = ws.cell(merged.min_row, merged.min_col).value
-        for row in range(merged.min_row, merged.max_row + 1):
-            for col in range(merged.min_col, merged.max_col + 1):
-                mapping[(row, col)] = value
-
-    return mapping
+    return build_merged_value_map(ws)
 
 
 def _cell_value(
@@ -141,9 +137,7 @@ def _cell_value(
     col: int,
 ) -> Any:
     """병합 셀 전파값을 우선 반환한다."""
-    if (row, col) in merged_map:
-        return merged_map[(row, col)]
-    return ws.cell(row, col).value
+    return cell_value_with_merged(ws, merged_map, row, col)
 
 
 # =============================================================================
