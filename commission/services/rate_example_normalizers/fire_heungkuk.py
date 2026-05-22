@@ -24,6 +24,7 @@ from commission.models import RateExample, RateExampleConversionRow
 from commission.services.rate_example_normalizers._common.pdf import (
     clean_pdf_text,
     decimal_from_pdf_percent,
+    extract_pdf_text_with_fallback,
 )
 
 logger = logging.getLogger(__name__)
@@ -38,22 +39,7 @@ def _extract_pdf_text(path: str) -> str:
     pypdf 우선, PyPDF2 fallback.
     PDF 표 파싱은 line 구조가 불안정할 수 있으므로 전체 텍스트를 정규화해 사용한다.
     """
-    try:
-        from pypdf import PdfReader
-    except ImportError:  # pragma: no cover
-        from PyPDF2 import PdfReader  # type: ignore
-
-    reader = PdfReader(path)
-    chunks: list[str] = []
-
-    for page in reader.pages:
-        try:
-            chunks.append(page.extract_text() or "")
-        except Exception:
-            logger.exception("흥국화재 PDF 페이지 텍스트 추출 실패")
-            continue
-
-    return "\n".join(chunks)
+    return extract_pdf_text_with_fallback(path)
 
 
 def _clean_text(value: object) -> str:

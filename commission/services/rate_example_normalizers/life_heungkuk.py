@@ -31,6 +31,7 @@ from commission.services.rate_example_normalizers._common import (
     clean_spaces,
     decimal_from_text,
 )
+from commission.services.rate_example_normalizers._common.pdf import PdfTextItem
 
 logger = logging.getLogger(__name__)
 
@@ -59,12 +60,12 @@ _HEADER_NOISE = {
 
 
 @dataclass(frozen=True)
-class _Word:
-    text: str
-    x0: float
-    y0: float
-    x1: float
-    y1: float
+class _Word(PdfTextItem):
+    """흥국생명 PDF word 좌표.
+
+    공통 PdfTextItem 좌표 계약을 재사용하되,
+    기존 parser의 cx/cy convenience property는 유지한다.
+    """
 
     @property
     def cx(self) -> float:
