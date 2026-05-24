@@ -27,22 +27,22 @@ from commission.services.deposit_serializers import (
     surety_to_payload,
     user_to_payload,
 )
-from commission.services.rate_example_normalizers._common.decimal import (
+from commission.services.rate_example.common.decimal import (
     decimal_percent_value,
 )
-from commission.services.rate_example_normalizers._common.excel import (
+from commission.services.rate_example.common.excel import (
     build_merged_value_map,
     build_worksheet_value_map,
     cell_value_with_merged,
     filled_value_above,
 )
-from commission.services.rate_example_normalizers._common.rows import append_unique
-from commission.services.rate_example_normalizers._common.text import (
+from commission.services.rate_example.common.rows import append_unique
+from commission.services.rate_example.common.text import (
     clean_spaces,
     clean_text,
     is_empty_like,
 )
-from commission.services.rate_example_normalizers._common.pdf import (
+from commission.services.rate_example.common.pdf import (
     clean_pdf_text,
     decimal_from_pdf_percent,
     dedupe_by_key,
