@@ -4800,3 +4800,339 @@ python manage.py shell -c "from commission.models import RateExampleConversionRo
 수정률은 raw 백분율 그대로 year1 저장
 보험사 canonical은 메리츠 고정
 ```
+
+
+
+
+---
+
+# Commission 백엔드 리팩토링(P7) 최종 반영 사항 — 2026-05-22
+
+> 상태: P7-5 완료 / P7-6만 남음  
+> 기준 커밋: abd7dba
+
+---
+
+# P7 리팩토링 목적
+
+commission 앱의 기능 변화 없이 다음 목표를 달성한다.
+
+- parser 공통 helper 체계 구축
+- PDF parser 안정성 강화
+- upload handler 구조 정리
+- regression hardening
+- harness 기반 운영 검증 체계 구축
+- SSOT 강화
+- 회귀 위험 최소화
+
+---
+
+# P7 완료 현황
+
+| 단계 | 상태 |
+|---|---|
+| P7-1 PDF helper 기초 구축 | ✅ 완료 |
+| P7-2 Decimal/Text helper 안정화 | ✅ 완료 |
+| P7-3 PDF parser 안정화 | ✅ 완료 |
+| P7-4 Harness/lint 체계 강화 | ✅ 완료 |
+| P7-5 Regression hardening | ✅ 완료 |
+| P7-6 최종 구조 정리 | 🔄 예정 |
+
+---
+
+# 신규 공통 helper 구조
+
+```text
+commission/services/rate_example_normalizers/_common/
+├── __init__.py
+├── decimal.py
+├── excel.py
+├── pdf.py
+├── rows.py
+└── text.py
+```
+
+---
+
+# decimal.py 최종 정책
+
+## helper
+
+```python
+decimal_from_text()
+decimal_percent_cell()
+decimal_percent_value()
+```
+
+## 정책
+
+### 생명보험
+
+- percent format → ×100 적용
+
+### 손해보험
+
+- raw 그대로 저장
+- ×100 금지
+- /100 금지
+
+### 지급률
+
+- /0.97 보정 유지
+
+---
+
+# text.py 최종 정책
+
+## helper
+
+```python
+clean_text()
+clean_spaces()
+is_empty_like()
+```
+
+## 원칙
+
+- parser별 의미 보존
+- 상품명 merge 정책은 parser 내부 유지
+- 공백 normalize만 공통화
+
+---
+
+# rows.py 최종 정책
+
+## helper
+
+```python
+append_unique()
+```
+
+## 원칙
+
+- append 의미 유지
+- 파일 내부 dedupe만 수행
+- DB dedupe 정책 변경 금지
+
+---
+
+# PDF parser 공통 helper 최종 구조
+
+파일:
+
+```python
+commission/services/rate_example_normalizers/_common/pdf.py
+```
+
+---
+
+# PdfTextItem 정책
+
+```python
+@dataclass(frozen=True)
+class PdfTextItem:
+    text: str
+    x0: float
+    y0: float
+    x1: float
+    y1: float
+```
+
+용도:
+
+- 좌표 기반 row grouping
+- 향후 하나/흥국 PDF parser 확장 기반
+
+---
+
+# group_pdf_items_by_y()
+
+## 목적
+
+y좌표 기준 row grouping
+
+## 특징
+
+- tolerance 기반 grouping
+- x0 정렬 유지
+- parser별 테이블 안정화 지원
+
+---
+
+# extract_pdf_text_with_fallback()
+
+## fallback chain
+
+```text
+1. pdfplumber
+2. PyMuPDF
+3. pypdf
+```
+
+## 로그 정책
+
+| 단계 | 로그 |
+|---|---|
+| 1~2차 실패 | logger.debug |
+| 최종 실패 | logger.exception |
+
+---
+
+# PDF parser 보안 정책
+
+절대 금지:
+
+```python
+example.file.url
+```
+
+반드시:
+
+```python
+example.file.open("rb")
+```
+
+또는 내부 서버 path 사용.
+
+---
+
+# fire_aig.py 안정화 완료 사항
+
+## 완료 항목
+
+- PDF 전체 텍스트 기반 parser
+- 공통 PDF helper 연동
+- Decimal parser 안정화
+- 판매종료 제외 유지
+- dedupe 강화
+
+## 보존 정책
+
+- 상품군=보장 고정
+- pay_period=10년 자동갱신 유지
+- year1 단일 저장 유지
+
+---
+
+# Harness/lint 체계 최종 구조
+
+## 스크립트
+
+```text
+scripts/harness/run_all.sh
+scripts/harness/security_lint.sh
+scripts/harness/quality_lint.sh
+scripts/harness/celery_check.sh
+scripts/harness/css_scope_check.sh
+```
+
+---
+
+# run_all.sh 정책
+
+## 역할
+
+- lint 전체 실행
+- 결과 파일 저장
+- 실패 시 exit 1
+- commit 전 최종 검증
+
+## 결과 저장
+
+```text
+docs/audit/lint_result_YYYYMMDD.txt
+```
+
+---
+
+# Regression hardening 완료 사항
+
+## 테스트 기준
+
+```text
+46 tests OK
+```
+
+## 검증 명령
+
+```powershell
+python manage.py check
+python manage.py test commission
+python manage.py makemigrations --check --dry-run
+bash scripts/harness/run_all.sh
+```
+
+---
+
+# 현재 최종 회귀 방어 기준
+
+다음은 반드시 유지한다.
+
+## 저장 정책
+
+- 생보 percent ×100
+- 손보 raw 유지
+- 지급률 /0.97 유지
+
+## parser 정책
+
+- 보험사별 canonical 유지
+- 보험사별 특수 parser 유지
+- parser 의미 통합 금지
+
+## 보안 정책
+
+- .file.url 금지
+- 다운로드 권한 유지
+- audit log 유지
+
+---
+
+# 최종 금지 사항
+
+```text
+[금지]
+.file.url 직접 사용
+row-by-row save 후퇴
+Decimal → float 변경
+보험사 canonical 임의 변경
+지급률 /0.97 제거
+손보 수정률 ×100 적용
+```
+
+---
+
+# 현재 남은 최종 단계 (P7-6)
+
+## 예정 작업
+
+- parser migration 문서화
+- shim 정책 정리
+- 최종 import surface 정리
+- release candidate 검증
+
+## 아직 금지
+
+- 대규모 파일 이동
+- parser dispatcher 구조 변경
+- 보험사 parser 통합
+
+---
+
+# 최종 상태 요약
+
+현재 commission 백엔드 리팩토링은:
+
+```text
+기능 변화 없는 안정화 리팩토링 완료 직전 단계
+```
+
+상태로 판단한다.
+
+완료 상태:
+
+- upload 구조 안정화 완료
+- parser 공통 helper 구축 완료
+- PDF fallback 체계 구축 완료
+- harness/lint 체계 정착 완료
+- regression hardening 완료

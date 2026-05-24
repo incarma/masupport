@@ -139,6 +139,7 @@ def build_collect_notice_excel(
     title_month: str,
     sources: list[NoticeSourceFile],
     manual_rows: list[ManualRow] | None = None,
+    mask_pii: bool = True,
 ) -> NoticeWorkbookResult:
     """
     환수내역 안내자료 xlsx 생성.
@@ -161,8 +162,8 @@ def build_collect_notice_excel(
 
     rows: list[NoticeRow] = []
     for src in sources:
-        rows.extend(_clean_rows(_iter_first_sheet_rows(src.file), src.ym))
-    rows.extend(_normalize_manual_rows(manual_rows or []))
+        rows.extend(_clean_rows(_iter_first_sheet_rows(src.file), src.ym, mask_pii=mask_pii))
+    rows.extend(_normalize_manual_rows(manual_rows or [], mask_pii=mask_pii))
 
     rows.sort(key=lambda r: r.get("_ym", ""))
 
@@ -201,6 +202,7 @@ def build_collect_notice_pdf(
     title_month: str,
     sources: list[NoticeSourceFile],
     manual_rows: list[ManualRow] | None = None,
+    mask_pii: bool = True,
 ) -> NoticePdfResult:
     """
     환수내역 안내자료 PDF 생성.
@@ -222,6 +224,7 @@ def build_collect_notice_pdf(
         title_month=title_month,
         sources=sources,
         manual_rows=manual_rows or [],
+        mask_pii=mask_pii,
     )
 
     pdf_content = _convert_xlsx_bytes_to_pdf(
@@ -310,7 +313,7 @@ def _cell(row: tuple[Any, ...], idx: int) -> Any:
     return row[idx] if len(row) > idx else ""
 
 
-def _clean_rows(raw_rows: Iterable[tuple[Any, ...]], ym: str) -> list[NoticeRow]:
+def _clean_rows(raw_rows: Iterable[tuple[Any, ...]], ym: str, *, mask_pii: bool = True) -> list[NoticeRow]:
     """
     기존 collect_notice.js 전처리 규칙을 서버로 이전.
 
@@ -318,7 +321,7 @@ def _clean_rows(raw_rows: Iterable[tuple[Any, ...]], ym: str) -> list[NoticeRow]
     1. 첫 행은 헤더로 간주해 제거
     2. A열이 "전체 N건" 형식이면 합계행으로 제거
     3. 지급금액(index 12)이 0 또는 빈 값이면 제거
-    4. 개인정보성 필드 마스킹
+    4. mask_pii=True 시 개인정보성 필드(증권번호/계약자/모집자/지급자) 마스킹
     """
     result: list[NoticeRow] = []
 
@@ -335,14 +338,19 @@ def _clean_rows(raw_rows: Iterable[tuple[Any, ...]], ym: str) -> list[NoticeRow]
         if pay_num is None or pay_num == 0:
             continue
 
+        policy = _to_str(_cell(row, 5))
+        contractor = _to_str(_cell(row, 6))
+        recruiter = _strip_paren_id(_to_str(_cell(row, 14)))
+        payer = _strip_paren_id(_to_str(_cell(row, 15)))
+
         result.append(
             {
                 "_ym": ym,
                 "항목구분": _to_str(_cell(row, 1)),
                 "지급환수": _to_str(_cell(row, 2)),  # raw C열: 지급/환수
                 "상품명": _to_str(_cell(row, 4)),
-                "증권번호": _mask_policy(_to_str(_cell(row, 5))),
-                "계약자": _mask_name(_to_str(_cell(row, 6))),
+                "증권번호": _mask_policy(policy) if mask_pii else policy,
+                "계약자": _mask_name(contractor) if mask_pii else contractor,
                 "수납구분": _to_str(_cell(row, 7)),
                 "영수일": _to_str(_cell(row, 8)),
                 "회차": _to_str(_cell(row, 9)),
@@ -350,22 +358,22 @@ def _clean_rows(raw_rows: Iterable[tuple[Any, ...]], ym: str) -> list[NoticeRow]
                 "지급율": _rate(_cell(row, 11)),
                 "지급금액": _money(_cell(row, 12)),
                 "보험계약일": _to_str(_cell(row, 13)),
-                "모집자": _mask_name(_strip_paren_id(_to_str(_cell(row, 14)))),
-                "지급자": _mask_name(_strip_paren_id(_to_str(_cell(row, 15)))),
+                "모집자": _mask_name(recruiter) if mask_pii else recruiter,
+                "지급자": _mask_name(payer) if mask_pii else payer,
             }
         )
 
     return result
 
 
-def _normalize_manual_rows(manual_rows: list[ManualRow]) -> list[NoticeRow]:
+def _normalize_manual_rows(manual_rows: list[ManualRow], *, mask_pii: bool = True) -> list[NoticeRow]:
     """
     수기 입력 행을 결과 Workbook row 구조로 정규화한다.
 
     규칙:
     - 필수: 월도, 지급/환수, 상품명, 지급금액
     - 지급/환수: 지급 또는 환수만 허용
-    - 증권번호/계약자/모집자/지급자는 원본 파일 처리와 동일하게 마스킹
+    - mask_pii=True 시 증권번호/계약자/모집자/지급자 마스킹 (원본 파일 처리와 동일)
     """
     result: list[NoticeRow] = []
 
@@ -397,14 +405,19 @@ def _normalize_manual_rows(manual_rows: list[ManualRow]) -> list[NoticeRow]:
             if rate_num is None or rate_num < 0 or rate_num > 100:
                 raise ValueError(f"수기 입력 {idx}행의 지급율은 0~100 범위여야 합니다.")
 
+        policy = _to_str(row.get("policy_no"))
+        contractor = _to_str(row.get("contractor"))
+        recruiter = _strip_paren_id(_to_str(row.get("recruiter")))
+        payer = _strip_paren_id(_to_str(row.get("payer")))
+
         result.append(
             {
                 "_ym": ym,
                 "항목구분": _to_str(row.get("item_type")),
                 "지급환수": pay_refund,
                 "상품명": product_name,
-                "증권번호": _mask_policy(_to_str(row.get("policy_no"))),
-                "계약자": _mask_name(_to_str(row.get("contractor"))),
+                "증권번호": _mask_policy(policy) if mask_pii else policy,
+                "계약자": _mask_name(contractor) if mask_pii else contractor,
                 "수납구분": _to_str(row.get("payment_type")),
                 "영수일": _to_str(row.get("receipt_date")),
                 "회차": _money(row.get("round_no")),
@@ -412,8 +425,8 @@ def _normalize_manual_rows(manual_rows: list[ManualRow]) -> list[NoticeRow]:
                 "지급율": _rate(row.get("rate")),
                 "지급금액": _money(amount_raw),
                 "보험계약일": _to_str(row.get("contract_date")),
-                "모집자": _mask_name(_strip_paren_id(_to_str(row.get("recruiter")))),
-                "지급자": _mask_name(_strip_paren_id(_to_str(row.get("payer")))),
+                "모집자": _mask_name(recruiter) if mask_pii else recruiter,
+                "지급자": _mask_name(payer) if mask_pii else payer,
             }
         )
 

@@ -27,12 +27,27 @@ from commission.services.deposit_serializers import (
     surety_to_payload,
     user_to_payload,
 )
-from commission.services.rate_example_normalizers._common.decimal import (
+from commission.services.rate_example.common.decimal import (
     decimal_percent_value,
 )
-from commission.services.rate_example_normalizers._common.excel import (
+from commission.services.rate_example.common.excel import (
     build_merged_value_map,
+    build_worksheet_value_map,
     cell_value_with_merged,
+    filled_value_above,
+)
+from commission.services.rate_example.common.rows import append_unique
+from commission.services.rate_example.common.text import (
+    clean_spaces,
+    clean_text,
+    is_empty_like,
+)
+from commission.services.rate_example.common.pdf import (
+    clean_pdf_text,
+    decimal_from_pdf_percent,
+    dedupe_by_key,
+    group_pdf_items_by_y,
+    PdfTextItem,
 )
 from commission.upload_handlers._common import safe_cell_text, upload_result
 from commission.upload_utils import (
@@ -75,6 +90,110 @@ class RateExampleCommonDecimalTests(SimpleTestCase):
 
     def test_decimal_percent_value_keeps_already_scaled_percent(self):
         self.assertEqual(decimal_percent_value("80%"), Decimal("80"))
+
+
+class RateExampleCommonTextTests(SimpleTestCase):
+    def test_clean_text_preserves_line_policy(self):
+        self.assertEqual(clean_text(" A\nB "), "A\nB")
+
+    def test_clean_spaces_compacts_whitespace(self):
+        self.assertEqual(clean_spaces(" A\n  B\tC "), "A B C")
+
+    def test_is_empty_like(self):
+        self.assertTrue(is_empty_like(None))
+        self.assertTrue(is_empty_like("nan"))
+        self.assertTrue(is_empty_like("-"))
+        self.assertFalse(is_empty_like("0"))
+
+
+class RateExampleCommonRowsTests(SimpleTestCase):
+    def test_append_unique_dedupes_only_same_key(self):
+        rows = []
+        seen = set()
+
+        append_unique(rows, seen, "A", ("p1", "10년"))
+        append_unique(rows, seen, "A-duplicate", ("p1", "10년"))
+        append_unique(rows, seen, "B", ("p2", "10년"))
+
+        self.assertEqual(rows, ["A", "B"])
+
+
+class RateExampleCommonPdfTests(SimpleTestCase):
+    def test_clean_pdf_text_compacts_nbsp_and_whitespace(self):
+        self.assertEqual(clean_pdf_text(" A\u00a0\n  B\tC "), "A B C")
+
+    def test_decimal_from_pdf_percent_extracts_numeric_part(self):
+        self.assertEqual(decimal_from_pdf_percent("160% 주)"), Decimal("160"))
+        self.assertEqual(decimal_from_pdf_percent("1,234.5%"), Decimal("1234.5"))
+        self.assertIsNone(decimal_from_pdf_percent("수정률"))
+
+    def test_dedupe_by_key_preserves_order(self):
+        items = [
+            {"product": "A", "rate": "100"},
+            {"product": "A", "rate": "100"},
+            {"product": "B", "rate": "100"},
+        ]
+
+        result = dedupe_by_key(
+            items,
+            lambda item: (item["product"], item["rate"]),
+        )
+
+        self.assertEqual(
+            result,
+            [
+                {"product": "A", "rate": "100"},
+                {"product": "B", "rate": "100"},
+            ],
+        )
+
+    def test_group_pdf_items_by_y_groups_rows_and_sorts_by_x(self):
+        items = [
+            PdfTextItem("B", x0=30, y0=10, x1=40, y1=20),
+            PdfTextItem("A", x0=10, y0=11, x1=20, y1=20),
+            PdfTextItem("C", x0=10, y0=30, x1=20, y1=40),
+        ]
+
+        rows = group_pdf_items_by_y(items, y_tolerance=3)
+
+        self.assertEqual([[item.text for item in row] for row in rows], [["A", "B"], ["C"]])
+    
+    def test_group_pdf_items_by_y_respects_tolerance_boundary(self):
+        items = [
+            PdfTextItem("A", x0=10, y0=10, x1=20, y1=20),
+            PdfTextItem("B", x0=20, y0=13, x1=30, y1=20),
+            PdfTextItem("C", x0=10, y0=14.1, x1=20, y1=20),
+        ]
+
+        rows = group_pdf_items_by_y(items, y_tolerance=3)
+
+        self.assertEqual([[item.text for item in row] for row in rows], [["A", "B"], ["C"]])
+
+    def test_decimal_from_pdf_percent_handles_negative_and_plain_decimal(self):
+        self.assertEqual(decimal_from_pdf_percent("-12.5%"), Decimal("-12.5"))
+        self.assertEqual(decimal_from_pdf_percent("수정률 240"), Decimal("240"))
+
+    def test_dedupe_by_key_supports_model_like_objects(self):
+        class Row:
+            def __init__(self, product_name, plan_type, pay_period):
+                self.product_name = product_name
+                self.plan_type = plan_type
+                self.pay_period = pay_period
+
+        rows = [
+            Row("A", "보장", "10년납"),
+            Row("A", "보장", "10년납"),
+            Row("A", "적립", "10년납"),
+        ]
+
+        result = dedupe_by_key(
+            rows,
+            lambda row: (row.product_name, row.plan_type, row.pay_period),
+        )
+
+        self.assertEqual(len(result), 2)
+        self.assertEqual(result[0].plan_type, "보장")
+        self.assertEqual(result[1].plan_type, "적립")
 
 
 # =============================================================================
@@ -216,6 +335,48 @@ class RateExampleCommonExcelTests(SimpleTestCase):
         merged_map = build_merged_value_map(ws)
 
         self.assertIsNone(cell_value_with_merged(ws, merged_map, 5, 5))
+
+    def test_build_worksheet_value_map_keeps_plain_cells_and_expands_merged_cells(self):
+        wb = Workbook()
+        ws = wb.active
+        ws["A1"] = "병합값"
+        ws["B2"] = "일반값"
+        ws.merge_cells("A1:A3")
+
+        values = build_worksheet_value_map(ws)
+
+        self.assertEqual(values[(1, 1)], "병합값")
+        self.assertEqual(values[(2, 1)], "병합값")
+        self.assertEqual(values[(3, 1)], "병합값")
+        self.assertEqual(values[(2, 2)], "일반값")
+
+    def test_build_worksheet_value_map_can_skip_plain_empty_cells(self):
+        wb = Workbook()
+        ws = wb.active
+        ws["A1"] = "값"
+
+        values = build_worksheet_value_map(ws, include_empty=False)
+
+        self.assertEqual(values[(1, 1)], "값")
+        self.assertNotIn((5, 5), values)
+
+    def test_filled_value_above_uses_nearest_upper_value(self):
+        values = {
+            (1, 2): "헤더",
+            (2, 2): "상단값",
+            (3, 2): "",
+            (4, 2): None,
+        }
+
+        result = filled_value_above(
+            values,
+            header_row=1,
+            row_no=4,
+            col_no=2,
+            is_filled=lambda value: bool(str(value or "").strip()),
+        )
+
+        self.assertEqual(result, "상단값")
 
 
 # =============================================================================

@@ -513,6 +513,7 @@ function _buildExportFormData(rows, manualPayload = []) {
   fd.set("target_branch", branch);
   fd.set("title_year", YYYY);
   fd.set("title_month", MM);
+  fd.set("no_mask", document.getElementById("chkNoMask")?.checked ? "1" : "0");
 
   rows.forEach((row) => {
     const file = row.querySelector(".notice-row-file-input")?.files?.[0];

@@ -33,7 +33,7 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from openpyxl import load_workbook
 from commission.models import RateExample
-from commission.services.rate_example_normalizers.fire_pay import build_fire_pay_rows
+from commission.services.rate_example.fire.pay.parser import build_fire_pay_rows
 
 logger = logging.getLogger(__name__)
 

@@ -50,6 +50,7 @@ class CollectNoticeExportRequest:
     - file_yms[] / notice_files[]
     - manual_rows(JSON string)
     - output: xlsx | pdf
+    - no_mask: "1" → 마스킹 안 함, 그 외 → 마스킹 (기본값)
     """
 
     target_emp_id: str
@@ -61,6 +62,7 @@ class CollectNoticeExportRequest:
     files: list[Any]
     manual_rows: list[dict[str, Any]]
     output: CollectNoticeOutput
+    mask_pii: bool
 
 
 def _parse_manual_rows(raw: str) -> list[dict[str, Any]]:
@@ -99,6 +101,7 @@ def _parse_export_request(request) -> CollectNoticeExportRequest:
     files = list(request.FILES.getlist("notice_files"))
     output = _parse_output(request.POST.get("output") or "xlsx")
     manual_rows = _parse_manual_rows(request.POST.get("manual_rows") or "[]")
+    mask_pii = (request.POST.get("no_mask") or "0").strip() != "1"
 
     if not target_emp_id:
         raise ValueError("대상자를 먼저 선택해주세요.")
@@ -117,6 +120,7 @@ def _parse_export_request(request) -> CollectNoticeExportRequest:
         files=files,
         manual_rows=manual_rows,
         output=output,
+        mask_pii=mask_pii,
     )
 
 
@@ -145,6 +149,7 @@ def _build_notice_result(parsed: CollectNoticeExportRequest):
         "title_month": parsed.title_month,
         "sources": sources,
         "manual_rows": parsed.manual_rows,
+        "mask_pii": parsed.mask_pii,
     }
 
     if parsed.output == "pdf":
