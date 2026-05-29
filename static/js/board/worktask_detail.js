@@ -163,7 +163,7 @@ import { getCSRFToken } from "../common/manage/csrf.js";
       const data = await _safeJson(res);
 
       if (data.ok) {
-        location.href = redirectUrl || data.redirect_url || "/board/worktasks/";
+        location.href = redirectUrl || data.redirect_url;
       } else {
         alert(data.error || "삭제 중 오류가 발생했습니다.");
         this.dataset.submitting = "";

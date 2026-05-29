@@ -127,7 +127,7 @@ window.EsignSign = (function () {
         },
         body: JSON.stringify({}),
       });
-
+      if (!res.ok) throw new Error(`서버 오류 (${res.status})`);
       const data = await res.json();
 
       if (data.status !== "success") {
@@ -203,7 +203,7 @@ window.EsignSign = (function () {
         },
         body: JSON.stringify({ sign_request_id: requestId }),
       });
-
+      if (!res.ok) throw new Error(`서버 오류 (${res.status})`);
       const data = await res.json();
       if (data.status !== "success") {
         alert(data.message || "삭제에 실패했습니다.");

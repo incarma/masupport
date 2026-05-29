@@ -109,7 +109,21 @@ def calculate_collateral(
 
 
 # ──────────────────────────────────────────────────────────────────────
-# 2. 계산 + DB 저장
+# 2. 대상자 조회
+# ──────────────────────────────────────────────────────────────────────
+
+def get_target_user(target_user_id):
+    """target_user_id로 CustomUser 조회. 없으면 None 반환."""
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    try:
+        return User.objects.get(pk=str(target_user_id))
+    except User.DoesNotExist:
+        return None
+
+
+# ──────────────────────────────────────────────────────────────────────
+# 3. 계산 + DB 저장
 # ──────────────────────────────────────────────────────────────────────
 
 def save_collateral_eval(

@@ -270,6 +270,7 @@ window.EsignFetch = (function () {
         },
         body: JSON.stringify({ updates }),
       });
+      if (!res.ok) throw new Error(`서버 오류 (${res.status})`);
       const data = await res.json();
       if (data.status !== "success") {
         alert(data.message || "처리일시 저장에 실패했습니다.");

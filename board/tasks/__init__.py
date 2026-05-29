@@ -5,8 +5,6 @@
 #   - holidays.py      : 공휴일 DB 동기화 (board.tasks.holidays.*)
 #   - worktask_tasks.py: WorkTask 반복생성/알림 (board.tasks.generate_monthly_worktasks,
 #                                                board.tasks.notify_due_worktasks)
-#
-# ⚠️ 구 파일 안내: board/task.py (단수)는 이 패키지로 통합됨 — deprecation 래퍼 역할만 수행
 
 from .industry_info import collect_board_industry_news, cleanup_old_industry_articles
 

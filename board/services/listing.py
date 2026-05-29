@@ -11,8 +11,10 @@ from dataclasses import dataclass
 from typing import Any, List, Optional, Tuple
 
 from django.contrib.auth import get_user_model
+from django.core.exceptions import FieldDoesNotExist
 from django.core.paginator import Paginator
-from django.db.models import Q, QuerySet
+from django.db.models import Count, OuterRef, Q, QuerySet, Subquery, Value
+from django.db.models.functions import Coalesce
 from django.http import HttpRequest
 from django.utils.dateparse import parse_date
 
@@ -172,4 +174,83 @@ def read_list_params(request: HttpRequest) -> ListParams:
         date_to_raw=date_to_raw,
         date_from=date_from,
         date_to=date_to,
+    )
+
+
+# ---------------------------------------------------------
+# ✅ Post / Task 기본 쿼리셋 빌더
+# ---------------------------------------------------------
+
+def _build_user_channel_subquery() -> Subquery:
+    """
+    Post.user_id → CustomUser.channel 서브쿼리.
+    emp_id 필드 존재 여부에 따라 OR 매칭 적용한다.
+    """
+    try:
+        User._meta.get_field("emp_id")
+        has_emp_id = True
+    except FieldDoesNotExist:
+        has_emp_id = False
+
+    if has_emp_id:
+        return Subquery(
+            User.objects
+            .filter(Q(id=OuterRef("user_id")) | Q(emp_id=OuterRef("user_id")))
+            .values("channel")[:1]
+        )
+    return Subquery(
+        User.objects.filter(id=OuterRef("user_id")).values("channel")[:1]
+    )
+
+
+def get_post_base_qs() -> QuerySet:
+    """
+    Post 목록 기본 쿼리셋.
+    comment_count, user_channel(부문) annotate 포함.
+    visibility 필터는 apply_post_visibility()로 별도 적용한다.
+    """
+    from ..models import Post
+    return (
+        Post.objects.annotate(
+            comment_count=Count("comments", distinct=True),
+            user_channel=Coalesce(_build_user_channel_subquery(), Value("")),
+        )
+        .order_by("-created_at")
+    )
+
+
+def apply_post_visibility(qs: QuerySet, user) -> QuerySet:
+    """
+    Post 목록 visibility 정책 적용 (board/policies.py 목록 레벨).
+    superuser → 전체, head → 본인+지점, leader → 본인.
+    """
+    grade = (getattr(user, "grade", "") or "").strip()
+    if grade == "superuser":
+        return qs
+
+    user_key = (
+        getattr(user, "emp_id", None)
+        or getattr(user, "user_id", None)
+        or user.id
+    )
+    my_id = str(user_key or "")
+    legacy_pk = str(getattr(user, "id", "") or "")
+
+    mine_q = Q(user_id=my_id)
+    if legacy_pk and legacy_pk != my_id:
+        mine_q = mine_q | Q(user_id=legacy_pk)
+
+    if grade == "head":
+        my_branch = (getattr(user, "branch", "") or "").strip()
+        return qs.filter(mine_q | Q(user_branch__iexact=my_branch))
+
+    return qs.filter(mine_q)
+
+
+def get_task_base_qs() -> QuerySet:
+    """Task 목록 기본 쿼리셋 (comment_count annotate 포함)."""
+    from ..models import Task
+    return (
+        Task.objects.annotate(comment_count=Count("comments", distinct=True))
+        .order_by("-created_at")
     )

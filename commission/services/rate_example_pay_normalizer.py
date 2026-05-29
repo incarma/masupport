@@ -32,7 +32,7 @@ import logging
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from openpyxl import load_workbook
-from commission.models import RateExample
+from commission.models import RateExample, RateExamplePayRow
 from commission.services.rate_example.fire.pay.parser import build_fire_pay_rows
 
 logger = logging.getLogger(__name__)
@@ -362,3 +362,22 @@ def normalize_pay_rate_example(
         len(normalized), example.pk, example.insurer_type, normalize_mode,
     )
     return len(normalized)
+
+
+# =============================================================================
+# 지급률 정규화 데이터 초기화
+# =============================================================================
+
+
+def reset_pay_rows(insurer_type: str) -> int:
+    """
+    지급률 정규화 데이터(RateExamplePayRow) insurer_type 단위 전체 삭제.
+
+    지급률은 전사 단일 파일이므로 보험사 단위가 아닌 insurer_type 단위 삭제.
+    반환값: 삭제된 행 수
+    """
+    deleted_count, _ = RateExamplePayRow.objects.filter(
+        insurer_type=insurer_type,
+        category="pay",
+    ).delete()
+    return deleted_count

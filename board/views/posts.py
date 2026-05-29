@@ -13,15 +13,12 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import Count, OuterRef, Q, Subquery, Value
-from django.db.models.functions import Coalesce
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 from accounts.decorators import grade_required
-from accounts.models import CustomUser
 
 from audit.constants import ACTION
 from audit.services import log_action
@@ -40,14 +37,16 @@ from ..constants import (
 from ..forms import CommentForm, PostForm
 from ..models import Attachment, Comment, Post
 from ..policies import can_edit_post, can_view_post
-from ..services.attachments import save_attachments
+from ..services.attachments import delete_post_attachments, save_attachments
 from ..services.comments import handle_comments_actions
 from ..services.inline_update import inline_update_common
 from ..services.listing import (
     apply_common_list_filters,
     apply_keyword_filter,
+    apply_post_visibility,
     build_query_string_without_page,
     get_handlers,
+    get_post_base_qs,
     paginate,
     read_list_params,
 )
@@ -150,41 +149,7 @@ def post_list(request: HttpRequest) -> HttpResponse:
 
     p = read_list_params(request)
 
-    # ---------------------------------------------------------
-    # ✅ annotate: comment_count + user_channel(CustomUser.channel)
-    # - Post.user_id(사번/아이디) -> CustomUser.id 매칭
-    # - user_id 저장 규칙이 PK(id) 또는 emp_id(사번)로 바뀌어도 안전하게 매칭
-    # ---------------------------------------------------------
-    # emp_id 필드 존재 여부에 따라 OR 매칭 적용(필드 없으면 기존 로직 유지)
-    try:
-        CustomUser._meta.get_field("emp_id")
-        _has_emp_id = True
-    except Exception:
-        _has_emp_id = False
-
-    if _has_emp_id:
-        user_channel_sq = Subquery(
-            CustomUser.objects
-            .filter(Q(id=OuterRef("user_id")) | Q(emp_id=OuterRef("user_id")))
-            .values("channel")[:1]
-        )
-    else:
-        user_channel_sq = Subquery(
-            CustomUser.objects.filter(id=OuterRef("user_id")).values("channel")[:1]
-        )
-
-    qs = (
-        Post.objects.annotate(
-            comment_count=Count("comments", distinct=True),
-            user_channel=Coalesce(user_channel_sq, Value("")),
-        )
-        .order_by("-created_at")
-    )
-
-    # ---------------------------------------------------------
-    # ✅ 검색 (기존 로직 유지)
-    # - user_name_field는 Post에 저장된 snapshot(user_name) 기준
-    # ---------------------------------------------------------
+    qs = get_post_base_qs()
     qs = apply_keyword_filter(
         qs,
         p.keyword,
@@ -193,10 +158,6 @@ def post_list(request: HttpRequest) -> HttpResponse:
         content_field="content",
         user_name_field="user_name",
     )
-
-    # ---------------------------------------------------------
-    # ✅ 공용 필터 (기존 로직 유지)
-    # ---------------------------------------------------------
     qs = apply_common_list_filters(
         qs,
         date_from=p.date_from,
@@ -205,31 +166,7 @@ def post_list(request: HttpRequest) -> HttpResponse:
         selected_handler=p.selected_handler,
         selected_status=p.selected_status,
     )
-
-    # ---------------------------------------------------------
-    # ✅ Visibility policy (기존 로직 유지)
-    # ---------------------------------------------------------
-    if not is_superuser:
-        # ✅ 통일 키: emp_id(사번) 우선 → user_id → id
-        user_key = getattr(request.user, "emp_id", None) or getattr(request.user, "user_id", None) or request.user.id
-        my_id = str(user_key or "")
-
-        # 혼재 데이터(예: 기존 글은 PK, 신규 글은 emp_id)까지 최대한 커버
-        legacy_pk = str(getattr(request.user, "id", "") or "")
-
-        if grade == "head":
-            my_branch = (getattr(request.user, "branch", "") or "").strip()
-            # 내 글(통일키) + (가능하면 레거시 PK로 작성된 내 글) + 지점 글
-            mine_q = Q(user_id=my_id)
-            if legacy_pk and legacy_pk != my_id:
-                mine_q = mine_q | Q(user_id=legacy_pk)
-            qs = qs.filter(mine_q | Q(user_branch__iexact=my_branch))
-
-        else:
-            mine_q = Q(user_id=my_id)
-            if legacy_pk and legacy_pk != my_id:
-                mine_q = mine_q | Q(user_id=legacy_pk)
-            qs = qs.filter(mine_q)  
+    qs = apply_post_visibility(qs, request.user)
 
     posts, per_page = paginate(request, qs, default_per_page=10)
     query_string = build_query_string_without_page(request)
@@ -508,8 +445,7 @@ def post_edit(request: HttpRequest, pk: int) -> HttpResponse:
                 with transaction.atomic():
                     form.save()
 
-                    if delete_ids:
-                        Attachment.objects.filter(id__in=delete_ids, post=post).delete()
+                    delete_post_attachments(post, delete_ids)
                     def _create(**kwargs):
                         return Attachment.objects.create(post=post, **kwargs)
 

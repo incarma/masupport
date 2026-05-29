@@ -150,7 +150,7 @@ def _upload_limit_bytes() -> int:
     value = getattr(settings, "BOARD_ATTACHMENT_MAX_UPLOAD_SIZE", DEFAULT_MAX_UPLOAD_SIZE)
     try:
         n = int(value)
-    except Exception:
+    except (TypeError, ValueError):
         n = DEFAULT_MAX_UPLOAD_SIZE
     return max(1, n)
 
@@ -200,6 +200,22 @@ def validate_board_attachment(uploaded_file) -> None:
 # -----------------------------
 # Public API
 # -----------------------------
+def delete_post_attachments(post, ids: list[int]) -> None:
+    """Post 첨부파일 다수 삭제 (ids가 비어 있으면 no-op)."""
+    if not ids:
+        return
+    from ..models import Attachment
+    Attachment.objects.filter(id__in=ids, post=post).delete()
+
+
+def delete_task_attachments(task, ids: list[int]) -> None:
+    """Task 첨부파일 다수 삭제 (ids가 비어 있으면 no-op)."""
+    if not ids:
+        return
+    from ..models import TaskAttachment
+    TaskAttachment.objects.filter(id__in=ids, task=task).delete()
+
+
 def save_attachments(*, files: Iterable, create_func: Callable[..., Any]) -> None:
     """
     ✅ files: request.FILES.getlist("attachments")

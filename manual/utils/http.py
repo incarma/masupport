@@ -16,7 +16,7 @@ def json_body(request) -> Dict[str, Any]:
     try:
         raw = (request.body or b"").decode("utf-8")
         return json.loads(raw) if raw else {}
-    except Exception:
+    except (json.JSONDecodeError, UnicodeDecodeError, ValueError):
         return {}
 
 

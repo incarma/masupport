@@ -7,12 +7,22 @@ from decimal import Decimal
 
 import pandas as pd
 from django.db import transaction
-from django.db.models import Q, Sum
+from django.db.models import Q, Sum, Count
+from django.db.models.functions import Coalesce
 
 from accounts.models import CustomUser
 from dash.models import RetentionRecord, RetentionAgg
 
 logger = logging.getLogger(__name__)
+
+
+def _float_rate(rate) -> float | None:
+    if rate is None:
+        return None
+    try:
+        return float(rate)
+    except (TypeError, ValueError):
+        return None
 
 # ── 유지율 분자 상태 ─────────────────────────────────────────
 NUMERATOR_STATUSES = {"정상", "유예"}
@@ -43,7 +53,7 @@ def _norm_str(v) -> str:
 def _norm_round(v) -> int | None:
     try:
         return int(str(v).strip())
-    except Exception:
+    except (ValueError, TypeError):
         return None
 
 
@@ -51,7 +61,7 @@ def _norm_amount(v) -> int:
     try:
         s = str(v).replace(",", "").strip()
         return max(0, int(float(s)))
-    except Exception:
+    except (ValueError, TypeError):
         return 0
 
 
@@ -130,7 +140,7 @@ def parse_retention_excel(df: pd.DataFrame, life_nl: str) -> tuple[list[dict], l
                 "part_snapshot":  part,
                 "branch_snapshot": branch,
             })
-        except Exception as e:
+        except Exception as e:  # 행별 파싱 — 예외 종류 불특정
             errors.append(f"row={idx}: {e}")
 
     return records, errors
@@ -175,7 +185,7 @@ def bulk_upsert_retention_records(records: list[dict]) -> tuple[int, int]:
                 },
             )
             upserted += 1
-        except Exception as e:
+        except Exception as e:  # DB 제약 위반 등 예외 종류 불특정
             logger.exception("retention upsert failed: %s", e)
             skipped += 1
 
@@ -281,3 +291,142 @@ def rebuild_retention_agg(ym: str, life_nl: str = "") -> int:
 
     logger.info("[retention.agg] rebuild done ym=%s life_nl=%s upserted=%s", ym, life_nl, upserted)
     return upserted
+
+
+def get_retention_api_payload(
+    ym: str,
+    life_nl: str,
+    scope_type: str,
+    scope_key: str,
+    q: str,
+) -> dict:
+    """
+    유지율 API 응답 payload 조립.
+    뷰에서 캐시 확인 후 cache miss 시에만 호출한다.
+    """
+    effective_key = scope_key if scope_type != "all" else "*"
+
+    # ── 집계 데이터 ───────────────────────────────────────────
+    agg_qs = RetentionAgg.objects.filter(
+        ym=ym, scope_type=scope_type, scope_key=effective_key,
+    )
+    if life_nl:
+        agg_qs = agg_qs.filter(life_nl=life_nl)
+
+    rounds = sorted(
+        agg_qs.filter(insurer="").values_list("round_no", flat=True).distinct()
+    )
+
+    # summary (insurer="" = 전체)
+    summary: dict = {}
+    for rnd in rounds:
+        row = agg_qs.filter(round_no=rnd, insurer="").first()
+        if row:
+            summary[rnd] = {
+                "total_amount": row.total_amount,
+                "paid_amount":  row.paid_amount,
+                "total_count":  row.total_count,
+                "paid_count":   row.paid_count,
+                "rate":         _float_rate(row.rate),
+            }
+
+    # trend (최근 6개월)
+    y_int, m_int = map(int, ym.split("-"))
+    trend_labels = []
+    for i in range(5, -1, -1):
+        mm = m_int - i
+        yy = y_int
+        while mm <= 0:
+            mm += 12
+            yy -= 1
+        trend_labels.append(f"{yy:04d}-{mm:02d}")
+
+    trend_by_round: dict[int, list] = {rnd: [] for rnd in rounds}
+    for label in trend_labels:
+        for rnd in rounds:
+            t_agg = RetentionAgg.objects.filter(
+                ym=label,
+                life_nl=life_nl or "",
+                round_no=rnd,
+                scope_type=scope_type,
+                scope_key=effective_key,
+                insurer="",
+            ).first()
+            trend_by_round[rnd].append(_float_rate(t_agg.rate) if t_agg else None)
+
+    # by_insurer
+    insurer_rows_qs = agg_qs.exclude(insurer="")
+    if q:
+        insurer_rows_qs = insurer_rows_qs.filter(insurer__icontains=q)
+
+    insurer_map: dict[str, dict] = {}
+    for row in insurer_rows_qs:
+        key = row.insurer
+        if key not in insurer_map:
+            insurer_map[key] = {"insurer": key, "rounds": {}, "total_count": 0}
+        insurer_map[key]["rounds"][row.round_no] = _float_rate(row.rate)
+        insurer_map[key]["total_count"] = max(
+            insurer_map[key]["total_count"], row.total_count
+        )
+    by_insurer = sorted(insurer_map.values(), key=lambda x: -x["total_count"])[:20]
+
+    # by_planner (설계사별 — 집계 테이블에 설계사 차원 없으므로 record 직접 집계)
+    rec_qs = RetentionRecord.objects.filter(ym=ym)
+    if life_nl:
+        rec_qs = rec_qs.filter(life_nl=life_nl)
+    rec_qs = rec_qs.filter(_scope_filter_retention(scope_type, effective_key))
+    if q:
+        rec_qs = rec_qs.filter(
+            Q(name_snapshot__icontains=q)
+            | Q(emp_id_snapshot__icontains=q)
+            | Q(insurer__icontains=q)
+            | Q(product_name__icontains=q)
+        )
+
+    planner_map: dict[str, dict] = {}
+    for rnd in rounds:
+        rows = (
+            rec_qs.filter(round_no=rnd)
+            .values("emp_id_snapshot", "name_snapshot", "part_snapshot", "branch_snapshot")
+            .annotate(
+                total=Sum("recruit_amount"),
+                paid=Sum("recruit_amount", filter=Q(status__in=["정상", "유예"])),
+                cnt=Count("policy_no"),
+            )
+            .order_by("-total")[:20]
+        )
+        for row in rows:
+            key = row["emp_id_snapshot"] or row["name_snapshot"] or ""
+            if not key:
+                continue
+            if key not in planner_map:
+                planner_map[key] = {
+                    "emp_id":      row["emp_id_snapshot"],
+                    "name":        row["name_snapshot"],
+                    "part":        row["part_snapshot"],
+                    "branch":      row["branch_snapshot"],
+                    "rounds":      {},
+                    "total_count": 0,
+                }
+            total = row["total"] or 0
+            paid  = row["paid"]  or 0
+            rate  = round(paid / total * 100, 2) if total > 0 else None
+            planner_map[key]["rounds"][rnd]    = rate
+            planner_map[key]["total_count"]   += row["cnt"] or 0
+
+    by_planner = sorted(planner_map.values(), key=lambda x: -x["total_count"])[:20]
+
+    return {
+        "ym":         ym,
+        "life_nl":    life_nl,
+        "scope_type": scope_type,
+        "scope_key":  scope_key,
+        "rounds":     rounds,
+        "summary":    summary,
+        "trend": {
+            "labels":   trend_labels,
+            "by_round": {str(k): v for k, v in trend_by_round.items()},
+        },
+        "by_insurer": by_insurer,
+        "by_planner": by_planner,
+    }

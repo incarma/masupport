@@ -55,6 +55,23 @@
            id="navbarContent">
         <ul class="navbar-nav mb-2 mb-lg-0">
 
+          <!-- ✅ AI (superuser only) -->
+          {% if user.grade == 'superuser' %}
+            <li class="nav-item dropdown">
+              <a class="nav-link dropdown-toggle {% if '/ai' in request.path %}active{% else %}inactive{% endif %}"
+                 href="#" id="aiMenu" data-bs-toggle="dropdown">인공지능</a>
+              <ul class="dropdown-menu" aria-labelledby="aiMenu">
+                <li>
+                  <a class="dropdown-item"
+                     href="{% url 'ai:llm_redirect' %}"
+                     target="_blank"
+                     rel="noopener noreferrer">LLM</a>
+                </li>
+                <!-- 향후 메뉴 추가 위치 -->
+              </ul>
+            </li>
+          {% endif %}
+
           <!-- ✅ Dashboard (superuser/head only) -->
           {% if user.grade == 'superuser' or user.grade == 'head' %}
             <li class="nav-item dropdown">
@@ -199,6 +216,28 @@
 
     <div class="offcanvas-body p-0">
       <div class="accordion accordion-flush" id="mobileMenuAccordion">
+
+        {% if user.grade == 'superuser' %}
+          <!-- 인공지능 -->
+          <div class="accordion-item">
+            <h2 class="accordion-header" id="mAiHead">
+              <button class="accordion-button collapsed" type="button"
+                      data-bs-toggle="collapse" data-bs-target="#mAi"
+                      aria-expanded="false" aria-controls="mAi">
+                인공지능
+              </button>
+            </h2>
+            <div id="mAi" class="accordion-collapse collapse" aria-labelledby="mAiHead" data-bs-parent="#mobileMenuAccordion">
+              <div class="accordion-body pt-0">
+                <a class="d-block py-2"
+                   href="{% url 'ai:llm_redirect' %}"
+                   target="_blank"
+                   rel="noopener noreferrer">LLM</a>
+                <!-- 향후 메뉴 추가 위치 -->
+              </div>
+            </div>
+          </div>
+        {% endif %}
 
         {% if user.grade == 'superuser' or user.grade == 'head' %}
           <!-- 대시보드 -->

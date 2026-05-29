@@ -6,10 +6,9 @@
   // Constants
   // =========================================================
   function getForecastBaseUrl() {
-   const root = getRoot();
-   const u = (root?.dataset?.forecastUrl || "").trim();
-   return u || "/dash/api/forecast/";
- }
+    const root = getRoot();
+    return (root?.dataset?.forecastUrl || "").trim();
+  }
 
   const FORECAST_TTL_MS = 60 * 1000; // 1분(페이지 내 재호출 방지용)
 
@@ -938,6 +937,9 @@
   // =========================================================
   document.addEventListener("DOMContentLoaded", function () {
     const root = getRoot();
+    if (!root || root.dataset.inited === "1") return;
+    root.dataset.inited = "1";
+
     const ver = getStaticVer();
 
     try {

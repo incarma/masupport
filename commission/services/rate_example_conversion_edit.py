@@ -274,3 +274,40 @@ def bulk_edit_conversion_rows(*, payload: dict, actor) -> dict:
         "updated_count": updated_count,
         "deleted_count": deleted_count,
     }
+
+
+# =============================================================================
+# 단건 전략유무 수정 / 보험사 단위 초기화
+# =============================================================================
+
+
+def get_conversion_row(row_id: int) -> RateExampleConversionRow | None:
+    """row_id로 단건 조회. 없으면 None."""
+    return RateExampleConversionRow.objects.filter(pk=row_id).first()
+
+
+def save_strategy_flag(
+    row: RateExampleConversionRow, strategy_flag: str
+) -> str:
+    """
+    단건 전략유무 필드만 갱신하고 이전 값을 반환한다.
+
+    반환값: old_value (감사 로그에 before/after 기록용)
+    """
+    old_value = row.strategy_flag
+    row.strategy_flag = strategy_flag
+    row.save(update_fields=["strategy_flag"])
+    return old_value
+
+
+def reset_conversion_rows(insurer_type: str, insurer: str) -> int:
+    """
+    특정 보험사의 환산율 정규화 데이터(RateExampleConversionRow) 전체 삭제.
+
+    반환값: 삭제된 행 수
+    """
+    deleted_count, _ = RateExampleConversionRow.objects.filter(
+        insurer_type=insurer_type,
+        insurer=insurer,
+    ).delete()
+    return deleted_count

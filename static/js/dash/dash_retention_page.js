@@ -14,8 +14,8 @@
   root.dataset.inited = "1";
 
   /* ── URL (boot div dataset SSOT) ─────────────────────── */
-  const API_URL    = root.dataset.retentionApiUrl    || "/dash/api/retention/";
-  const UPLOAD_URL = root.dataset.uploadUrl          || "/dash/api/retention/upload/";
+  const API_URL    = root.dataset.retentionApiUrl;
+  const UPLOAD_URL = root.dataset.uploadUrl;
   const USER_GRADE = root.dataset.userGrade          || "";
 
   /* ── DOM refs ────────────────────────────────────────── */

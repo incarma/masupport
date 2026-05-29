@@ -5,7 +5,6 @@
 "use strict";
 
 (function () {
-  const GUARD_KEY = "__esignConfirmInited";
 
   // ── 연/월 셀렉트 직접 초기화 ────────────────────────────────
   function _initYearMonth() {
@@ -57,8 +56,8 @@
     if (!root) return;
 
     // BFCache 재진입 중복 방지
-    if (root[GUARD_KEY]) return;
-    root[GUARD_KEY] = true;
+    if (root.dataset.inited === "1") return;
+    root.dataset.inited = "1";
 
     const ds    = root.dataset;
     const grade = ds.userGrade || "basic";
@@ -133,7 +132,7 @@
   window.addEventListener("pageshow", (e) => {
     if (e.persisted) {
       const root = document.getElementById("esign-confirm");
-      if (root) root[GUARD_KEY] = false;
+      if (root) root.dataset.inited = "0";
       init();
     }
   });

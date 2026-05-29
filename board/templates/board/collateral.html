@@ -42,7 +42,7 @@
 ════════════════════════════════════════════════════════════ -->
 <div id="collateralBoot"
       data-calc-url="{% url 'board:collateral_calc' %}"
-      data-delete-base-url="/board/collateral/"
+      data-delete-base-url="{% url 'board:collateral' %}"
       data-can-delete="{{ can_delete|yesno:'true,false' }}"
       class="d-none">
 </div>

@@ -12,8 +12,8 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from accounts.decorators import grade_required
-from accounts.models import CustomUser
 from dash.models import SalesRecord
+from dash.services.sales import build_user_map
 
 from .constants import REQUIRED_COLS, AUTO_REQUIRED_COLS
 from .utils import (
@@ -42,7 +42,7 @@ def upload_sales_excel(request):
     try:
         df = pd.read_excel(f)
         df = normalize_columns(df)
-    except Exception as e:
+    except Exception as e:  # xlrd/openpyxl 버전별 다양한 예외 방어
         logger.exception("dash upload read_excel failed")
         return json_err(f"엑셀 읽기 실패: {e}", 400)
 
@@ -75,13 +75,18 @@ def upload_sales_excel(request):
             if not (min_y <= y <= max_y):
                 return False
             return True
-        except Exception:
+        except ValueError:
             return False
 
     def _pick_yms_to_process(yms: set[str]) -> list[str]:
         cleaned = [x for x in yms if _valid_ym(x)]
         cleaned.sort(reverse=True)
         return cleaned[:3]
+
+    # 사번 선행 일괄 조회 — 행별 N+1 방지
+    _emp_col = "담당자코드" if is_auto else "설계사CD"
+    _raw_ids = {to_str_emp_id(v) for v in df[_emp_col]} if _emp_col in df.columns else set()
+    user_map = build_user_map({eid for eid in _raw_ids if eid})
 
     try:
         with transaction.atomic():
@@ -109,7 +114,7 @@ def upload_sales_excel(request):
                             skipped_rows += 1
                             continue
 
-                        user = CustomUser.objects.filter(id=emp_id).first()
+                        user = user_map.get(emp_id)
                         matched_users += 1 if user else 0
                         missing_users += 0 if user else 1
 
@@ -166,7 +171,7 @@ def upload_sales_excel(request):
                             skipped_rows += 1
                             continue
 
-                        user = CustomUser.objects.filter(id=emp_id).first()
+                        user = user_map.get(emp_id)
                         matched_users += 1 if user else 0
                         missing_users += 0 if user else 1
 
@@ -206,7 +211,7 @@ def upload_sales_excel(request):
                         )
                         upserted_rows += 1
 
-                except Exception as row_e:
+                except Exception as row_e:  # 행별 처리 — 예외 종류 불특정
                     skipped_rows += 1
                     if first_row_error is None:
                         first_row_error = f"row={idx} policy_no={r.get('증권번호')} err={row_e}"
@@ -218,7 +223,7 @@ def upload_sales_excel(request):
             if yms_to_process:
                 from dash.tasks import build_sales_forecasts_for_yms
                 build_sales_forecasts_for_yms.delay(yms_to_process)
-        except Exception:
+        except Exception:  # Celery enqueue 실패 — 업로드 결과에 영향 없음
             logger.exception("dash upload: forecast task enqueue failed")
 
         return JsonResponse(
@@ -239,6 +244,6 @@ def upload_sales_excel(request):
             }
         )
 
-    except Exception as e:
+    except Exception as e:  # transaction 전체 실패 — 롤백 후 500 반환
         logger.exception("dash upload failed (500)")
         return json_err(f"서버 오류(업로드 처리 중): {e}", 500)

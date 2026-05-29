@@ -7,7 +7,7 @@ import re
 try:
     import bleach
     from bleach.css_sanitizer import CSSSanitizer
-except Exception:  # pragma: no cover
+except ImportError:  # pragma: no cover
     bleach = None
     CSSSanitizer = None
 

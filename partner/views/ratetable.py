@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import io
 import logging
-import traceback
 from datetime import datetime
 from typing import Optional, Tuple
 
@@ -57,38 +56,6 @@ ALLOWED_RATE_TABLE_GRADES = ("superuser", "head", "leader")
 logger = logging.getLogger(__name__)
 
 
-def _user_branch(user) -> str:
-    return _to_str(getattr(user, "branch", ""))
-
-
-def _can_access_branch(user, branch: str) -> bool:
-    # ✅ 기능 변화 0: 기존 함수명 유지, branch 접근 정책은 공통 SSOT로 위임
-    return can_access_branch(user, branch)
-
-
-def _excel_response(content: bytes, filename: str) -> HttpResponse:
-    # ✅ 기능 변화 0: xlsx 응답 헤더/RFC5987 정책 공통화
-    return excel_response(content, filename)
-
-
-def _safe_tmp_name(name: str) -> str:
-    # ✅ 기능 변화 0: 기존 tmp 파일명 정규화 정책 유지
-    return safe_tmp_name(name)
-
-
-def _to_str(v) -> str:
-    return to_str(v)
-
-
-def _to_emp_id(v) -> str:
-    """
-    사번 정규화:
-    - 숫자/문자 혼합 케이스 대비
-    - 기본은 숫자만 추출하되, 숫자가 없으면 원문 유지
-    """
-    return normalize_emp_id(v)
-
-
 def _pick_sheet_name(xls: pd.ExcelFile) -> str:
     sheets = list(getattr(xls, "sheet_names", []) or [])
     for name in SHEET_PRIORITIES:
@@ -107,7 +74,7 @@ def _detect_header_row(df_raw: pd.DataFrame, max_scan: int = 8) -> int:
     scan = min(max_scan, len(df_raw))
     for i in range(scan):
         row = df_raw.iloc[i].tolist()
-        row_str = [_to_str(v) for v in row if v is not None]
+        row_str = [to_str(v) for v in row if v is not None]
         score = sum(1 for t in targets if any(t in s for s in row_str))
         if score > best_score:
             best_score = score
@@ -141,10 +108,10 @@ def ajax_rate_userlist(request):
     JS(/static/js/partner/manage_table.js)에서 기대하는 JSON:
     { data: [{branch, team_a, team_b, team_c, name, id, non_life_table, life_table}, ...] }
     """
-    branch = _to_str(request.GET.get("branch"))
+    branch = to_str(request.GET.get("branch"))
     if not branch:
         return JsonResponse({"data": []})
-    if not _can_access_branch(request.user, branch):
+    if not can_access_branch(request.user, branch):
         return json_err("다른 지점 데이터에는 접근할 수 없습니다.", status=403, extra={"data": []})
 
     users = (
@@ -196,11 +163,11 @@ def ajax_rate_userlist_excel(request):
     요율현황 엑셀 다운로드
     - 접근제어: superuser 아니면 본인지점만
     """
-    branch = _to_str(request.GET.get("branch"))
+    branch = to_str(request.GET.get("branch"))
     if not branch:
         return JsonResponse({"error": "지점을 선택해주세요."}, status=400)
 
-    if not _can_access_branch(request.user, branch):
+    if not can_access_branch(request.user, branch):
         return JsonResponse({"error": "다른 지점 데이터에는 접근할 수 없습니다."}, status=403)
 
     users = list(
@@ -242,7 +209,7 @@ def ajax_rate_userlist_excel(request):
         df.to_excel(writer, index=False, sheet_name="요율현황")
 
     filename = f"요율현황_{branch}_{datetime.now():%Y%m%d}.xlsx"
-    return _excel_response(output.getvalue(), filename)
+    return excel_response(output.getvalue(), filename)
 
 
 @require_POST
@@ -258,7 +225,7 @@ def ajax_rate_userlist_upload(request):
     + 접근제어: superuser 아니면 본인지점만 업로드 가능 (branch param 기준)
     """
     excel_file = request.FILES.get("excel_file")
-    branch = _to_str(request.POST.get("branch"))
+    branch = to_str(request.POST.get("branch"))
 
     if not excel_file:
         return json_err("엑셀 파일이 없습니다.", status=400)
@@ -266,12 +233,12 @@ def ajax_rate_userlist_upload(request):
         return json_err("branch가 없습니다.", status=400)
 
     # 권한: superuser 아니면 본인지점만
-    if not _can_access_branch(request.user, branch):
+    if not can_access_branch(request.user, branch):
         return json_err("다른 지점 데이터에는 업로드할 수 없습니다.", status=403)
 
     file_path = None
     try:
-        file_path = default_storage.save(f"tmp/{_safe_tmp_name(excel_file.name)}", excel_file)
+        file_path = default_storage.save(f"tmp/{safe_tmp_name(excel_file.name)}", excel_file)
         file_path_full = default_storage.path(file_path)
 
         # 1) 시트 선택(업로드/Sheet1/첫시트)
@@ -284,7 +251,7 @@ def ajax_rate_userlist_upload(request):
         df = pd.read_excel(xls, sheet_name=sheet, header=header_row, dtype=str).fillna("")
 
         # 컬럼 문자열 정리
-        df.columns = [_to_str(c) for c in df.columns]
+        df.columns = [to_str(c) for c in df.columns]
 
         # 3) 사번 컬럼 결정(명시 없으면 C열)
         emp_col = _resolve_emp_col(df)
@@ -300,12 +267,12 @@ def ajax_rate_userlist_upload(request):
         # 5) row → 업데이트 목록 구성
         updates: list[Tuple[str, str, str]] = []
         for _, row in df.iterrows():
-            emp_id = _to_emp_id(row.get(emp_col))
+            emp_id = normalize_emp_id(row.get(emp_col))
             if not emp_id:
                 continue
 
-            nonlife = _to_str(row.get(COL_NONLIFE))
-            life = _to_str(row.get(COL_LIFE))
+            nonlife = to_str(row.get(COL_NONLIFE))
+            life = to_str(row.get(COL_LIFE))
 
             # 둘다 비면 스킵(원치 않는 빈값 덮어쓰기 방지)
             if not nonlife and not life:
@@ -347,7 +314,7 @@ def ajax_rate_userlist_upload(request):
                 object_id=branch,
                 meta={
                     "branch": branch,
-                    "file_name": _safe_tmp_name(excel_file.name),
+                    "file_name": safe_tmp_name(excel_file.name),
                     "sheet": sheet,
                     "updated_count": updated_count,
                     "skipped_count": skipped_count,
@@ -361,9 +328,9 @@ def ajax_rate_userlist_upload(request):
             {"message": f"업로드 완료 ({updated_count}건 업데이트 / {skipped_count}건 스킵됨, sheet={sheet})"}
         )
 
-    except Exception as e:
+    except Exception:
         logger.exception("[partner.ratetable_upload] failed branch=%s user=%s", branch, getattr(request.user, "id", ""))
-        return json_err(f"업로드 중 오류: {str(e)}", status=500)
+        return json_err("업로드 중 오류가 발생했습니다.", status=500)
 
     finally:
         if file_path:
@@ -380,13 +347,13 @@ def ajax_rate_user_detail(request):
     """
     대상자 요율 상세 + find_table_rate 적용
     """
-    user_id = _to_str(request.GET.get("user_id"))
+    user_id = to_str(request.GET.get("user_id"))
     if not user_id:
         return json_err("user_id가 없습니다.", status=400)
 
     try:
         target = CustomUser.objects.get(id=user_id)
-        if not _can_access_branch(request.user, _to_str(target.branch)):
+        if not can_access_branch(request.user, to_str(target.branch)):
             return json_err("대상자 조회 권한이 없습니다.", status=403)
 
         rate_info = RateTable.objects.filter(user=target).first()
@@ -413,9 +380,9 @@ def ajax_rate_user_detail(request):
     except CustomUser.DoesNotExist:
         return json_err("대상자를 찾을 수 없습니다.", status=404)
 
-    except Exception as e:
-        traceback.print_exc()
-        return json_err(str(e), status=500)
+    except Exception:
+        logger.exception("[partner.ratetable] ajax_rate_user_detail failed")
+        return json_err("요율 조회 중 오류가 발생했습니다.", status=500)
 
 
 @require_GET
@@ -429,8 +396,8 @@ def ajax_rate_userlist_template_excel(request):
     - 사번 컬럼이 없어도 C열을 사번으로 인식하므로 가이드에 반영
     """
     try:
-        branch = _to_str(request.GET.get("branch"))
-        if branch and not _can_access_branch(request.user, branch):
+        branch = to_str(request.GET.get("branch"))
+        if branch and not can_access_branch(request.user, branch):
             return json_err("다른 지점 양식은 다운로드할 수 없습니다.", status=403)
 
         # 실제 업로드 권장 양식(명시 사번 포함 버전)
@@ -457,8 +424,8 @@ def ajax_rate_userlist_template_excel(request):
             ws.column_dimensions["C"].width = 20
 
         filename = f"요율현황_업로드양식_{branch+'_' if branch else ''}{datetime.now():%Y%m%d}.xlsx"
-        return _excel_response(output.getvalue(), filename)
+        return excel_response(output.getvalue(), filename)
 
-    except Exception as e:
-        traceback.print_exc()
-        return json_err(f"양식 생성 오류: {str(e)}", status=500)
+    except Exception:
+        logger.exception("[partner.ratetable] ajax_rate_userlist_template_excel failed")
+        return json_err("양식 생성 중 오류가 발생했습니다.", status=500)

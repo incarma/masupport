@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
-from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 
@@ -13,6 +12,7 @@ from audit.services import log_action
 
 from ..constants import MANUAL_TITLE_MAX_LEN
 from ..models import Manual
+from ..services import manuals as manuals_svc
 from ..utils import (
     access_to_flags,
     fail,
@@ -46,7 +46,7 @@ def manual_create_ajax(request):
         return fail("공개 범위 값이 올바르지 않습니다.", 400)
 
     admin_only, is_published = access_to_flags(access)
-    manual = Manual.objects.create(title=title, admin_only=admin_only, is_published=is_published)
+    manual = manuals_svc.create_manual(title=title, admin_only=admin_only, is_published=is_published)
 
     log_action(
         request,
@@ -77,9 +77,8 @@ def manual_update_title_ajax(request):
     if len(title) > MANUAL_TITLE_MAX_LEN:
         return fail(f"제목은 {MANUAL_TITLE_MAX_LEN}자 이하여야 합니다.", 400)
 
-    m = get_object_or_404(Manual, id=int(mid))
-    m.title = title
-    m.save(update_fields=["title", "updated_at"])
+    m = manuals_svc.get_manual_or_404(int(mid))
+    m = manuals_svc.update_manual_title(m, title)
 
     log_action(
         request,
@@ -105,41 +104,65 @@ def manual_bulk_update_ajax(request):
     if not isinstance(items, list):
         return fail("items 형식이 올바르지 않습니다.", 400)
 
-    updated = []
+    # 1단계: 모든 항목 검증 (DB 미접촉)
+    validated = []
+    for it in items:
+        mid = it.get("id")
+        title = to_str(it.get("title"))
+        access = to_str(it.get("access") or "normal")
 
+        if not is_digits(mid):
+            return fail("id 값이 올바르지 않습니다.", 400)
+        if not title:
+            return fail("제목은 비워둘 수 없습니다.", 400)
+        if len(title) > MANUAL_TITLE_MAX_LEN:
+            return fail(f"제목은 {MANUAL_TITLE_MAX_LEN}자 이하여야 합니다.", 400)
+        if access not in ("normal", "admin", "staff"):
+            return fail("공개 범위 값이 올바르지 않습니다.", 400)
+
+        admin_only, is_published = access_to_flags(access)
+        validated.append({
+            "id": int(mid),
+            "title": title,
+            "admin_only": admin_only,
+            "is_published": is_published,
+            "access": access,
+        })
+
+    if not validated:
+        return ok({"updated": []})
+
+    # 2단계: 한 번의 쿼리로 전체 조회
+    id_list = [v["id"] for v in validated]
+    manual_map = {m.id: m for m in manuals_svc.get_manuals_by_ids(id_list)}
+    if set(manual_map) != set(id_list):
+        return fail("존재하지 않는 매뉴얼이 포함되어 있습니다.", 400)
+
+    # 3단계: bulk_update (N회 save → 1회 UPDATE)
+    manuals_data = [
+        {
+            "manual": manual_map[v["id"]],
+            "title": v["title"],
+            "admin_only": v["admin_only"],
+            "is_published": v["is_published"],
+        }
+        for v in validated
+    ]
     with transaction.atomic():
-        for it in items:
-            mid = it.get("id")
-            title = to_str(it.get("title"))
-            access = to_str(it.get("access") or "normal")
+        updated_manuals = manuals_svc.bulk_update_manuals(manuals_data)
 
-            if not is_digits(mid):
-                return fail("id 값이 올바르지 않습니다.", 400)
-            if not title:
-                return fail("제목은 비워둘 수 없습니다.", 400)
-            if len(title) > MANUAL_TITLE_MAX_LEN:
-                return fail(f"제목은 {MANUAL_TITLE_MAX_LEN}자 이하여야 합니다.", 400)
-            if access not in ("normal", "admin", "staff"):
-                return fail("공개 범위 값이 올바르지 않습니다.", 400)
-
-            m = get_object_or_404(Manual, id=int(mid))
-            admin_only, is_published = access_to_flags(access)
-
-            m.title = title
-            m.admin_only = admin_only
-            m.is_published = is_published
-            m.save(update_fields=["title", "admin_only", "is_published", "updated_at"])
-
-            log_action(
-                request,
-                ACTION.MANUAL_BULK_UPDATE,
-                obj=m,
-                meta={"field": "bulk_update", "title": m.title, "access": access},
-            )
-
-            updated.append(
-                {"id": m.id, "title": m.title, "admin_only": m.admin_only, "is_published": m.is_published}
-            )
+    # 4단계: 감사 로그 + 응답 구성
+    updated = []
+    for m, v in zip(updated_manuals, validated):
+        log_action(
+            request,
+            ACTION.MANUAL_BULK_UPDATE,
+            obj=m,
+            meta={"field": "bulk_update", "title": m.title, "access": v["access"]},
+        )
+        updated.append(
+            {"id": m.id, "title": m.title, "admin_only": m.admin_only, "is_published": m.is_published}
+        )
 
     return ok({"updated": updated})
 
@@ -155,10 +178,6 @@ def manual_reorder_ajax(request):
     payload = json_body(request)
     ordered_ids = payload.get("ordered_ids") or []
 
-    # ✅ 정렬 요청 ID 검증 공통화
-    # 기능 변화 0:
-    # - ordered_ids 형식 오류 메시지 유지
-    # - 중복 매뉴얼 ID 오류 메시지 유지
     ordered_ids, err = clean_reorder_ids(
         ordered_ids,
         label="ordered_ids",
@@ -167,13 +186,12 @@ def manual_reorder_ajax(request):
     if err:
         return fail(err, 400)
 
-    exist_count = Manual.objects.filter(id__in=ordered_ids).count()
+    exist_count = manuals_svc.count_existing_manuals(ordered_ids)
     if exist_count != len(ordered_ids):
         return fail("존재하지 않는 매뉴얼이 포함되어 있습니다.", 400)
 
     with transaction.atomic():
-        # ✅ sort_order 저장 공통화
-        # 기존과 동일하게 1부터 순서 저장
+        # update_sort_order는 utils/rules.py의 공통 헬퍼 — 모델 클래스를 인자로 받는다
         update_sort_order(Manual, ordered_ids)
 
     log_action(
@@ -200,7 +218,7 @@ def manual_delete_ajax(request):
     if not is_digits(mid):
         return fail("id 값이 올바르지 않습니다.", 400)
 
-    m = get_object_or_404(Manual, id=int(mid))
+    m = manuals_svc.get_manual_or_404(int(mid))
 
     log_action(
         request,

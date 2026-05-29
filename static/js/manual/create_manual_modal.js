@@ -14,8 +14,8 @@
     }
 
     const modal = document.getElementById("createManualModal");
-    if (!modal || modal.dataset.bound) return;
-    modal.dataset.bound = "true";
+    if (!modal || modal.dataset.inited === "1") return;
+    modal.dataset.inited = "1";
 
     const form = modal.querySelector("#createManualForm");
     const input = modal.querySelector("#manualTitleInput");

@@ -311,7 +311,7 @@ window.EsignSave = (function () {
         },
         body: JSON.stringify({ month: ym, part, branch, rows }),
       });
-
+      if (!res.ok) throw new Error(`서버 오류 (${res.status})`);
       const data = await res.json();
       if (data.status !== "success") {
         alert(data.message || "저장에 실패했습니다.");

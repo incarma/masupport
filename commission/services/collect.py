@@ -28,6 +28,7 @@ from commission.models import (
     CollectDropdownFeedback,
     CollectFeedback,
     CollectRecord,
+    CollectUploadLog,
     DepositSummary,
 )
 
@@ -709,3 +710,17 @@ def save_dropdown_feedback(
         fb.id, feedback_type, emp_id, ym, value,
     )
     return fb
+
+
+# =============================================================================
+# 업로드 이력
+# =============================================================================
+
+
+def get_last_collect_upload_log() -> CollectUploadLog | None:
+    """
+    가장 최근 CollectUploadLog 단건 반환.
+
+    collect_home 페이지의 최근 업로드 현황 표시에 사용한다.
+    """
+    return CollectUploadLog.objects.first()

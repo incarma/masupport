@@ -9,31 +9,21 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_GET
 
 from accounts.decorators import grade_required
-from dash.models import SalesDailyAgg, SalesForecast, SalesForecastDaily
+from dash.services import forecast as forecast_svc
 from dash.task_runtime import build_scope_forecast_now, CATEGORIES
 from dash.task_runtime import _build_aggs_for_scope
 
 from .constants import FORECAST_MODEL_VER
+from .utils.json import json_err
 
 logger = logging.getLogger(__name__)
 
 
 def _bootstrap_requested_scope_if_missing(ym: str, asof_day: int, scope: str, scope_key: str) -> None:
-    agg_exists = SalesDailyAgg.objects.filter(
-        ym=ym,
-        scope_type=scope,
-        scope_key=scope_key,
-        category__in=CATEGORIES,
-    ).exists()
-    forecast_exists = SalesForecast.objects.filter(
-        ym=ym,
-        scope_type=scope,
-        scope_key=scope_key,
-        category__in=CATEGORIES,
-        model_ver=FORECAST_MODEL_VER,
-        asof_day__lte=asof_day,
-        pred_total_p50__isnull=False,   # ← NULL(껍데기) forecast는 없는 것으로 간주
-    ).exists()
+    agg_exists = forecast_svc.check_agg_exists(ym, scope, scope_key, CATEGORIES)
+    forecast_exists = forecast_svc.check_forecast_exists(
+        ym, asof_day, scope, scope_key, CATEGORIES, FORECAST_MODEL_VER
+    )
 
     if agg_exists and forecast_exists:
         return
@@ -103,17 +93,17 @@ def dash_forecast_api(request):
 
     ym = (request.GET.get("ym") or "").strip()
     if not ym:
-        return JsonResponse({"ok": False, "message": "ym is required"}, status=400)
+        return json_err("ym is required")
 
     try:
         y, m = map(int, ym.split("-"))
         last_day = calendar.monthrange(y, m)[1]
-    except Exception:
-        return JsonResponse({"ok": False, "message": "invalid ym"}, status=400)
+    except (ValueError, TypeError):
+        return json_err("invalid ym")
 
     try:
         asof_day = int(request.GET.get("asof_day") or 1)
-    except Exception:
+    except (ValueError, TypeError):
         asof_day = 1
     asof_day = max(1, min(asof_day, last_day))
 
@@ -139,66 +129,6 @@ def dash_forecast_api(request):
 
     labels = list(range(1, last_day + 1))
 
-    def build_category_payload(category: str):
-        # 실제 누적선
-        rows = SalesDailyAgg.objects.filter(
-            ym=ym, scope_type=scope, scope_key=scope_key, category=category
-        ).values("day", "cumsum")
-        actual_map = {r["day"]: int(r["cumsum"] or 0) for r in rows}
-        actual_cumsum = [actual_map.get(d, 0) for d in labels]
-
-        # ✅ 예측(가장 최신 생성본 1개): asof_day 정확일치가 아니라 "asof_day <= 요청 asof_day" 중 최신
-        fc = (
-            SalesForecast.objects.filter(
-                ym=ym,
-                scope_type=scope,
-                scope_key=scope_key,
-                category=category,
-                model_ver=FORECAST_MODEL_VER,
-                asof_day__lte=asof_day,
-            )
-            .order_by("-asof_day", "-created_at")
-            .first()
-        )
-
-        if not fc:
-            return {
-                "category": category,
-                "asof_day": asof_day,
-                "actual_cumsum": actual_cumsum,
-                "pred": None,
-            }
-
-        days = SalesForecastDaily.objects.filter(forecast=fc).values(
-            "day", "pred_cumsum_p10", "pred_cumsum_p50", "pred_cumsum_p90"
-        )
-        pred_map = {r["day"]: r for r in days}
-
-        def series(key):
-            out = []
-            for d in labels:
-                v = (pred_map.get(d) or {}).get(key)
-                out.append(None if v is None else int(v))
-            return out
-
-        return {
-            "category": category,
-            "asof_day": int(fc.asof_day),
-            "generated_at": fc.created_at.isoformat(),
-            "actual_cumsum": actual_cumsum,
-            "pred": {
-                "p10": series("pred_cumsum_p10"),
-                "p50": series("pred_cumsum_p50"),
-                "p90": series("pred_cumsum_p90"),
-                "totals": {
-                    "p10": fc.pred_total_p10,
-                    "p50": fc.pred_total_p50,
-                    "p90": fc.pred_total_p90,
-                },
-                "actual_to_date": fc.actual_to_date,
-            },
-        }
-
     payload = {
         "schema": "multi-category-v1",
         "meta": {
@@ -210,10 +140,10 @@ def dash_forecast_api(request):
         "scope_key": scope_key,
         "labels": labels,
         "series": {
-            "long": build_category_payload("long"),
-            "car": build_category_payload("car"),
-            "long_nonlife": build_category_payload("long_nonlife"),
-            "long_life": build_category_payload("long_life"),
+            cat: forecast_svc.get_category_payload(
+                ym, scope, scope_key, cat, asof_day, labels, FORECAST_MODEL_VER
+            )
+            for cat in ("long", "car", "long_nonlife", "long_life")
         },
     }
     # ✅ 호환용 alias (프론트가 categories로 접근해도 되게)

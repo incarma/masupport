@@ -1,6 +1,7 @@
 (function () {
   const root = document.getElementById("dash-sales");
-  if (!root) return;
+  if (!root || root.dataset.modalInited === "1") return;
+  root.dataset.modalInited = "1";
 
   const modalEl = document.getElementById("productNameModal");
   const modalText = document.getElementById("productNameModalText");

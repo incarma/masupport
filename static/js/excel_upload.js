@@ -83,7 +83,14 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    const fileName = fileInput.files[0]?.name || "선택한 파일";
+    const file = fileInput.files[0];
+    const MAX_BYTES = 50 * 1024 * 1024; // nginx client_max_body_size 50m
+    if (file.size > MAX_BYTES) {
+      alert(`파일 크기(${(file.size / 1024 / 1024).toFixed(1)}MB)가 업로드 한도(50MB)를 초과합니다.\n파일을 분할하여 업로드해주세요.`);
+      return;
+    }
+
+    const fileName = file.name || "선택한 파일";
     if (!confirm(`"${fileName}" 파일을 업로드하시겠습니까?`)) return;
 
     if (uploadForm.dataset.submitting === "1") return;
@@ -102,7 +109,15 @@ document.addEventListener("DOMContentLoaded", () => {
         credentials: "same-origin",
       });
 
-      // 서버가 JSON을 준다는 전제(현재 응답이 JSON이므로)
+      // HTTP 수준 오류 먼저 처리 (413 등 nginx가 HTML로 반환하는 경우)
+      if (res.status === 413) {
+        throw new Error("파일 크기가 서버 한도(50MB)를 초과합니다. 파일을 분할하여 업로드해주세요.");
+      }
+      const ct = (res.headers.get("content-type") || "").toLowerCase();
+      if (!ct.includes("application/json")) {
+        throw new Error(`서버 오류가 발생했습니다 (HTTP ${res.status}). 관리자에게 문의해주세요.`);
+      }
+
       const data = await res.json();
 
       // 모달 표시용 메시지 구성
@@ -162,9 +177,10 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     } catch (err) {
       console.error(err);
+      const errMsg = escapeHtml(err?.message || "업로드 중 오류가 발생했습니다.");
       showResultModal({
         titleHtml: "❌ 업로드 오류",
-        bodyHtml: `<div class="small">업로드 중 오류가 발생했습니다. 콘솔 로그를 확인해주세요.</div>`,
+        bodyHtml: `<div class="small">${errMsg}</div>`,
         showReload: false,
       });
     } finally {

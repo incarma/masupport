@@ -35,9 +35,9 @@
 
   if (!listEl || !btnEdit || !btnSave || !btnDone || !csrfForm) return;
 
-  // 중복 바인딩 방지
-  if (listEl.dataset.bound === "true") return;
-  listEl.dataset.bound = "true";
+  // BFCache / 중복 바인딩 방지
+  if (listEl.dataset.inited === "1") return;
+  listEl.dataset.inited = "1";
 
   // SortableJS 필수
   if (typeof window.Sortable === "undefined") {

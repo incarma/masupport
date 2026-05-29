@@ -62,7 +62,7 @@ def upload_retention_excel(request):
             logger.exception("retention agg rebuild failed ym=%s", ym)
 
     # 업로드 로그 (ym+life_nl 단위, 가장 많은 ym 기준)
-    main_ym = max(yms, key=lambda x: records.count({"ym": x})) if yms else ""
+    main_ym = max(yms, key=lambda x: sum(1 for r in records if r["ym"] == x)) if yms else ""
     if main_ym:
         RetentionUploadLog.objects.update_or_create(
             ym=main_ym,

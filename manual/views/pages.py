@@ -9,8 +9,9 @@ from audit.constants import ACTION
 from audit.services import log_action
 
 from ..forms import ManualForm
-from ..models import Manual
-from ..utils import ensure_default_section, manual_accessible_or_denied, filter_manuals_for_user
+from ..services import manuals as manuals_svc
+from ..services import sections as sections_svc
+from ..utils import ensure_default_section, manual_accessible_or_denied
 
 
 @grade_required("superuser", "head", "leader", "basic")
@@ -25,11 +26,8 @@ def manual_list(request):
     - 직원전용(is_published=False)은 superuser만 노출
     - 관리자전용(admin_only=True)은 superuser/head만 노출
     """
-    qs = Manual.objects.all()
-    qs = filter_manuals_for_user(qs, request.user)
-
-    qs = qs.order_by("sort_order", "-updated_at")
-    return render(request, "manual/manual_list.html", {"manuals": qs})
+    manuals = manuals_svc.get_manual_list(request.user)
+    return render(request, "manual/manual_list.html", {"manuals": manuals})
 
 
 @not_inactive_required
@@ -40,7 +38,7 @@ def manual_detail(request, pk):
     - 섹션 0개면 기본 섹션 생성
     - sections -> blocks -> attachments prefetch
     """
-    manual = get_object_or_404(Manual, pk=pk)
+    manual = manuals_svc.get_manual_or_404(pk)
 
     denied = manual_accessible_or_denied(request, manual)
     if denied:
@@ -48,11 +46,7 @@ def manual_detail(request, pk):
 
     ensure_default_section(manual)
 
-    sections = (
-        manual.sections
-        .prefetch_related("blocks", "blocks__attachments")
-        .order_by("sort_order", "created_at")
-    )
+    sections = sections_svc.get_manual_sections(manual)
     return render(request, "manual/manual_detail.html", {"m": manual, "sections": sections})
 
 
@@ -76,7 +70,7 @@ def manual_create(request):
 @grade_required("superuser")
 def manual_edit(request, pk):
     """superuser 전용: 폼 기반 수정(관리용)"""
-    obj = get_object_or_404(Manual, pk=pk)
+    obj = manuals_svc.get_manual_or_404(pk)
 
     if request.method == "POST":
         form = ManualForm(request.POST, instance=obj)

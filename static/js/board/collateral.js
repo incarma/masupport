@@ -529,12 +529,16 @@
 
     /* Boot dataset 에서 URL / 권한 플래그 읽기 */
     _calcUrl    = root.dataset.calcUrl      || "";
-    _deleteBase = root.dataset.deleteBaseUrl || "/board/collateral/";
+    _deleteBase = root.dataset.deleteBaseUrl || "";
     _canDelete  = root.dataset.canDelete    === "true";
     _canViewSensitiveHistory = root.dataset.canViewSensitiveHistory === "true" || _canDelete === true;
 
     if (!_calcUrl) {
       console.error("[CollateralApp] calcUrl 없음. #collateralBoot dataset 확인.");
+      return;
+    }
+    if (!_deleteBase) {
+      console.error("[CollateralApp] deleteBaseUrl 없음. #collateralBoot dataset 확인.");
       return;
     }
 
