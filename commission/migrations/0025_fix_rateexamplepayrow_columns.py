@@ -1,3 +1,4 @@
+# django_ma/commission/migrations/0025_fix_rateexamplepayrow_columns.py
 # commission/migrations/0025_fix_rateexamplepayrow_columns.py
 from django.db import migrations
 
