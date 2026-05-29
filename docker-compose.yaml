@@ -123,6 +123,32 @@ services:
     cpus: "0.5"
     restart: unless-stopped
 
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: open-webui
+    volumes:
+      - open-webui:/app/backend/data
+    environment:
+      # WSL2에서 실행 중인 Ollama에 접근
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+      # Open WebUI는 서브패스(/ai/)가 아닌 전용 서브도메인으로 분리
+      - WEBUI_URL=https://ai.ma-support.kr
+      - CORS_ALLOW_ORIGIN=https://ai.ma-support.kr
+      # 관리자 외 회원가입 차단 (사내 전용)
+      # - ENABLE_SIGNUP=false
+    # 외부 포트 미노출 — Nginx 내부 통신만 허용
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    mem_limit: 1g
+    cpus: "1.0"
+    restart: unless-stopped
+
   nginx:
     image: nginx:alpine
     container_name: django_nginx
@@ -131,6 +157,8 @@ services:
       - "443:443"
     depends_on:
       web:
+        condition: service_healthy
+      open-webui:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/nginx-healthz | grep -q ok"]
@@ -152,3 +180,4 @@ volumes:
   pgdata:
   media_data:
   staticfiles:
+  open-webui:
