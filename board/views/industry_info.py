@@ -10,20 +10,29 @@ from django.conf import settings
 from django.core.paginator import Paginator
 from django.http import JsonResponse, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, render
-from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from audit.constants import ACTION
 from audit.services import log_action
 
 from board.constants_industry import TOPIC_CHOICES
-from board.industry_models import IndustryArticle, IndustryUserPreference
+from board.industry_models import IndustryArticle
+from board.services.industry import (
+    get_article_qs,
+    get_bookmark_count,
+    get_bookmarked_article_qs,
+    get_or_create_pref,
+    get_pref_map,
+    mark_clicked,
+    update_and_save_pref,
+)
 from board.services.industry_recommend import (
     get_major_articles,
     get_recommended_articles_for_user,
 )
 from board.services.industry_news import normalize_external_url
 from board.services.rate_limit import check_rate_limit, rate_limited_json
+from board.views._json import _json_ok, _json_err
 
 
 logger = logging.getLogger(__name__)
@@ -41,14 +50,6 @@ __all__ = [
 # =========================================================
 INDUSTRY_PER_PAGE_CHOICES = [20, 50, 100, 150]
 INDUSTRY_PER_PAGE_DEFAULT = 20
-
-
-def _json_ok(message: str = "ok", **data) -> JsonResponse:
-    return JsonResponse({"ok": True, "message": message, "data": data})
-
-
-def _json_err(message: str = "error", status: int = 400, **data) -> JsonResponse:
-    return JsonResponse({"ok": False, "message": message, "data": data}, status=status)
 
 
 def _get_per_page(request: HttpRequest) -> int:
@@ -86,16 +87,7 @@ def industry_info(request: HttpRequest) -> HttpResponse:
     topic = (request.GET.get("topic") or "").strip()
     per_page = _get_per_page(request)
 
-    latest_qs = IndustryArticle.objects.filter(
-        is_active=True,
-        is_hidden=False,
-    ).order_by("-published_at", "-id")
-
-    if topic:
-        latest_qs = latest_qs.filter(topic=topic)
-
-    # 페이지네이션
-    paginator = Paginator(latest_qs, per_page)
+    paginator = Paginator(get_article_qs(topic=topic), per_page)
     page_obj = paginator.get_page(request.GET.get("page"))
     latest_articles = _attach_safe_display_url(page_obj)
 
@@ -112,26 +104,14 @@ def industry_info(request: HttpRequest) -> HttpResponse:
     recommended_articles = _attach_safe_display_url(recommended_articles)
 
     article_ids = [a.id for a in (latest_articles + recommended_articles)]
-    pref_map = {
-        pref.article_id: pref
-        for pref in IndustryUserPreference.objects.filter(
-            user=request.user,
-            article_id__in=article_ids,
-        )
-    }
-
     context = {
         "topics": TOPIC_CHOICES,
         "selected_topic": topic,
         "recommended_articles": recommended_articles,
         "latest_articles": latest_articles,
-        "pref_map": pref_map,
+        "pref_map": get_pref_map(request.user, article_ids),
         "bookmarked_only": False,
-        "bookmark_count": IndustryUserPreference.objects.filter(
-            user=request.user,
-            is_bookmarked=True,
-        ).count(),
-        # 페이지네이션
+        "bookmark_count": get_bookmark_count(request.user),
         "page_obj": page_obj,
         "per_page": per_page,
         "per_page_choices": INDUSTRY_PER_PAGE_CHOICES,
@@ -147,53 +127,19 @@ def industry_bookmarks(request: HttpRequest) -> HttpResponse:
     topic = (request.GET.get("topic") or "").strip()
     per_page = _get_per_page(request)
 
-    bookmarked_ids = (
-        IndustryUserPreference.objects
-        .filter(user=request.user, is_bookmarked=True)
-        .values_list("article_id", flat=True)
-    )
-
-    latest_qs = (
-        IndustryArticle.objects
-        .filter(
-            id__in=bookmarked_ids,
-            is_active=True,
-            is_hidden=False,
-        )
-        .order_by("-published_at", "-id")
-    )
-
-    if topic:
-        latest_qs = latest_qs.filter(topic=topic)
-
-    # 페이지네이션
-    paginator = Paginator(latest_qs, per_page)
+    paginator = Paginator(get_bookmarked_article_qs(request.user, topic=topic), per_page)
     page_obj = paginator.get_page(request.GET.get("page"))
     latest_articles = _attach_safe_display_url(page_obj)
 
-    bookmark_count = IndustryUserPreference.objects.filter(
-        user=request.user,
-        is_bookmarked=True,
-    ).count()
-
     article_ids = [a.id for a in latest_articles]
-    pref_map = {
-        pref.article_id: pref
-        for pref in IndustryUserPreference.objects.filter(
-            user=request.user,
-            article_id__in=article_ids,
-        )
-    }
-
     context = {
         "topics": TOPIC_CHOICES,
         "selected_topic": topic,
         "recommended_articles": [],
         "latest_articles": latest_articles,
-        "pref_map": pref_map,
+        "pref_map": get_pref_map(request.user, article_ids),
         "bookmarked_only": True,
-        "bookmark_count": bookmark_count,
-        # 페이지네이션
+        "bookmark_count": get_bookmark_count(request.user),
         "page_obj": page_obj,
         "per_page": per_page,
         "per_page_choices": INDUSTRY_PER_PAGE_CHOICES,
@@ -224,7 +170,7 @@ def industry_save_preference(request: HttpRequest, article_id: int) -> JsonRespo
 
     try:
         body = json.loads(request.body.decode("utf-8") or "{}")
-    except Exception:
+    except (json.JSONDecodeError, UnicodeDecodeError):
         return _json_err("요청 본문이 올바르지 않습니다.")
 
     rating = body.get("rating")
@@ -242,27 +188,17 @@ def industry_save_preference(request: HttpRequest, article_id: int) -> JsonRespo
         if rating < 1 or rating > 5:
             return _json_err("평점은 1~5 사이여야 합니다.")
 
-    pref, _ = IndustryUserPreference.objects.get_or_create(
-        user=request.user,
-        article=article,
-    )
+    pref, _ = get_or_create_pref(request.user, article)
 
     changed_actions: list[str] = []
-
     if rating is not None:
-        pref.rating = rating
         changed_actions.append(ACTION.SUPPORT_USER_RATE)
-
     if is_bookmarked is not None:
-        pref.is_bookmarked = bool(is_bookmarked)
         changed_actions.append(ACTION.SUPPORT_USER_BOOKMARK)
-
     if is_hidden is not None:
-        pref.is_hidden = bool(is_hidden)
         changed_actions.append(ACTION.SUPPORT_USER_HIDE)
 
-    pref.updated_at = timezone.now()
-    pref.save()
+    update_and_save_pref(pref, rating=rating, is_bookmarked=is_bookmarked, is_hidden=is_hidden)
 
     for action in changed_actions:
         try:
@@ -313,14 +249,6 @@ def industry_mark_click(request: HttpRequest, article_id: int) -> JsonResponse:
         is_hidden=False,
     )
 
-    pref, _ = IndustryUserPreference.objects.get_or_create(
-        user=request.user,
-        article=article,
-    )
-
-    pref.clicked_at = timezone.now()
-    pref.is_read = True
-    pref.read_at = pref.read_at or timezone.now()
-    pref.save(update_fields=["clicked_at", "is_read", "read_at", "updated_at"])
-
+    pref, _ = get_or_create_pref(request.user, article)
+    mark_clicked(pref)
     return _json_ok("기록되었습니다.", article_id=article.id)

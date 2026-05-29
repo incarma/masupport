@@ -117,7 +117,8 @@ function setActiveRow(row) {
 ========================================================= */
 async function fetchTargetDetail(targetId) {
   const base = toStr(els.root?.dataset?.targetDetailUrl);
-  const url = base ? new URL(base, window.location.origin) : new URL("/partner/ajax/rate-user-detail/", window.location.origin);
+  if (!base) return { ok: false, data: { status: "error", message: "target-detail-url 누락" } };
+  const url = new URL(base, window.location.origin);
   url.searchParams.set("user_id", toStr(targetId));
 
   const res = await fetch(url.toString(), {

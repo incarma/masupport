@@ -13,7 +13,6 @@ Playbook 규칙:
 
 from __future__ import annotations
 
-import json
 import logging
 from urllib.parse import quote
 
@@ -26,17 +25,10 @@ from django.views.decorators.http import require_POST, require_http_methods
 
 from audit.services import log_action
 from audit.constants import ACTION
-from partner.views.responses import json_ok as _ok, json_err as _err
+from partner.services.efficiency import _generate_confirm_group_id as _gen_group_id
+from partner.views.responses import json_ok as _ok, json_err as _err, parse_json_body as _parse_body
 
 logger = logging.getLogger(__name__)
-
-
-def _parse_json(request) -> tuple[dict | None, JsonResponse | None]:
-    """request.body JSON 파싱. 실패 시 (None, error_response) 반환."""
-    try:
-        return json.loads(request.body or '{}'), None
-    except (json.JSONDecodeError, ValueError):
-        return None, _err('잘못된 JSON 형식입니다.')
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -189,9 +181,7 @@ def esign_save(request):
     if grade not in ('superuser', 'head', 'leader'):
         return _err('저장 권한이 없습니다.', status=403)
 
-    body, err = _parse_json(request)
-    if err:
-        return err
+    body = _parse_body(request)
 
     month  = (body.get('month')  or '').strip()
     part   = (body.get('part')   or '').strip()
@@ -224,7 +214,7 @@ def esign_save(request):
     try:
         with transaction.atomic():
             # 1) EfficiencyConfirmGroup 생성
-            group_id = _generate_confirm_group_id(user)
+            group_id = _gen_group_id(uploader_id=str(user.pk))
             group = EfficiencyConfirmGroup.objects.create(
                 confirm_group_id=group_id,
                 uploader=user,
@@ -301,36 +291,6 @@ def esign_save(request):
         'saved_count':      len(rows),
         'signer_count':     sign_request.signs.count(),
     })
-
-
-def _generate_confirm_group_id(user) -> str:
-    """
-    EfficiencyConfirmGroup ID 생성.
-    기존 manage_efficiency 규약과 동일한 포맷 유지.
-    포맷: YYYYMMDDHHММ_<user_id>_<seq02d>
-    """
-    from django.utils import timezone as tz
-    from partner.models import EfficiencyConfirmGroup
-
-    now    = tz.localtime()
-    base   = now.strftime('%Y%m%d%H%M')
-    prefix = f"{base}_{user.pk}_"
-
-    last = (
-        EfficiencyConfirmGroup.objects
-        .filter(confirm_group_id__startswith=prefix)
-        .order_by('-confirm_group_id')
-        .first()
-    )
-    if last:
-        try:
-            seq = int(last.confirm_group_id.rsplit('_', 1)[-1]) + 1
-        except (ValueError, IndexError):
-            seq = 1
-    else:
-        seq = 1
-
-    return f"{prefix}{seq:02d}"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -478,9 +438,7 @@ def esign_delete_group(request):
     from partner.services.esign_service import delete_sign_request
 
     user  = request.user
-    body, err = _parse_json(request)
-    if err:
-        return err
+    body = _parse_body(request)
 
     sign_request_id = body.get('sign_request_id')
     if not sign_request_id:
@@ -542,9 +500,7 @@ def esign_update_process_date(request):
     if grade not in ('superuser', 'head'):
         return _err('처리일시 수정 권한이 없습니다.', status=403)
 
-    body, err = _parse_json(request)
-    if err:
-        return err
+    body = _parse_body(request)
 
     updates = body.get('updates', [])
     if not isinstance(updates, list) or not updates:

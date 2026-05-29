@@ -82,12 +82,12 @@
       updateLevelUrl: U.str(d.updateLevelUrl),
       deleteSubadminUrl: U.str(d.deleteSubadminUrl),
       addSubadminUrl: U.str(d.addSubadminUrl),
-      searchUrl: U.str(d.searchUrl || "/api/accounts/search-user/"),
+      searchUrl: U.str(d.searchUrl),
 
       // cascade endpoints (superuser)
-      fetchChannelsUrl: U.str(d.fetchChannelsUrl || "/partner/ajax/fetch-channels/"),
-      fetchPartsUrl: U.str(d.fetchPartsUrl || "/partner/ajax/fetch-parts/"),
-      fetchBranchesUrl: U.str(d.fetchBranchesUrl || "/partner/ajax/fetch-branches/"),
+      fetchChannelsUrl: U.str(d.fetchChannelsUrl),
+      fetchPartsUrl: U.str(d.fetchPartsUrl),
+      fetchBranchesUrl: U.str(d.fetchBranchesUrl),
     };
   }
 
@@ -806,6 +806,10 @@
    * 8) Init (DOM ready + BFCache pageshow)
    * ========================================================= */
   function initAll() {
+    const root = getRoot();
+    if (!root || root.dataset.inited === "1") return;
+    root.dataset.inited = "1";
+
     const ctx = getContext();
     if (!isAllowedGrade(ctx.userGrade)) return;
 
@@ -823,6 +827,12 @@
   }
 
   document.addEventListener("DOMContentLoaded", initAll);
-  window.addEventListener("pageshow", (e) => { if (e.persisted) initAll(); });
+  window.addEventListener("pageshow", (e) => {
+    if (e.persisted) {
+      const root = getRoot();
+      if (root) root.dataset.inited = "0";
+      initAll();
+    }
+  });
 
 })();

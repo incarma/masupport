@@ -4,13 +4,14 @@ from __future__ import annotations
 
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
-from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_POST
 
 from audit.constants import ACTION
 from audit.services import log_action
 
-from ..models import ManualBlock, ManualSection
+from ..models import ManualBlock
+from ..services import blocks as blocks_svc
+from ..services import sections as sections_svc
 from ..utils.uploads import validate_manual_image
 from ..utils import (
     block_to_dict,
@@ -45,20 +46,11 @@ def manual_block_add_ajax(request):
     if not (is_digits(manual_id) and is_digits(section_id)):
         return fail("요청값이 올바르지 않습니다.", 400)
 
-    try:
-        sec = ManualSection.objects.get(id=int(section_id), manual_id=int(manual_id))
-    except ManualSection.DoesNotExist:
+    sec = blocks_svc.get_section_for_block(int(section_id), int(manual_id))
+    if sec is None:
         return fail("섹션을 찾을 수 없습니다.", 404)
 
-    last_order = ManualBlock.objects.filter(section=sec).count()
-
-    b = ManualBlock.objects.create(
-        manual=sec.manual,  # 기존 호환 유지
-        section=sec,
-        content=content,
-        image=image if image else None,
-        sort_order=last_order + 1,
-    )
+    b = blocks_svc.add_block(sec, content=content, image=image)
 
     log_action(
         request,
@@ -91,25 +83,15 @@ def manual_block_update_ajax(request):
         if err:
             return fail(err, 400)
 
-    b = get_object_or_404(
-        ManualBlock.objects.select_related("section__manual").prefetch_related("attachments"),
-        id=int(block_id),
-    )
+    b = blocks_svc.get_block_or_404_for_update(int(block_id))
 
     with transaction.atomic():
-        b.content = content
-
-        if remove_image == "1":
-            if b.image:
-                b.image.delete(save=False)
-            b.image = None
-
-        if image:
-            if b.image:
-                b.image.delete(save=False)
-            b.image = image
-
-        b.save()
+        b = blocks_svc.update_block(
+            b,
+            content=content,
+            remove_image=(remove_image == "1"),
+            new_image=image,
+        )
 
     log_action(
         request,
@@ -140,7 +122,7 @@ def manual_block_delete_ajax(request):
     if not is_digits(block_id):
         return fail("block_id가 올바르지 않습니다.", 400)
 
-    b = get_object_or_404(ManualBlock.objects.prefetch_related("attachments"), pk=int(block_id))
+    b = blocks_svc.get_block_or_404_for_delete(int(block_id))
     manual_id = b.manual_id
     section_id = b.section_id
 
@@ -171,12 +153,8 @@ def manual_block_reorder_ajax(request):
     if not is_digits(section_id) or not isinstance(block_ids, list):
         return fail("요청값이 올바르지 않습니다.", 400)
 
-    section = get_object_or_404(ManualSection, pk=int(section_id))
+    section = sections_svc.get_section_or_404(int(section_id))
 
-    # ✅ block_ids 검증 공통화
-    # 기능 변화 0:
-    # - block_ids 형식 오류 메시지 유지
-    # - 중복 블록 ID 오류 메시지 유지
     cleaned, err = clean_reorder_ids(
         block_ids,
         label="block_ids",
@@ -185,17 +163,11 @@ def manual_block_reorder_ajax(request):
     if err:
         return fail(err, 400)
 
-    existing = set(
-        ManualBlock.objects
-        .filter(section=section)
-        .values_list("id", flat=True)
-    )
-
+    existing = blocks_svc.get_section_block_ids(section)
     if set(cleaned) != existing:
         return fail("현재 섹션의 블록 목록과 요청값이 일치하지 않습니다.", 400)
 
     with transaction.atomic():
-        # ✅ 기존과 동일하게 sort_order 1부터 저장
         update_sort_order(ManualBlock, cleaned)
 
     log_action(
@@ -234,16 +206,12 @@ def manual_block_move_ajax(request):
     from_sid = int(from_section_id)
     to_sid = int(to_section_id)
 
-    from_sec = get_object_or_404(ManualSection, pk=from_sid)
-    to_sec = get_object_or_404(ManualSection, pk=to_sid)
+    from_sec = sections_svc.get_section_or_404(from_sid)
+    to_sec = sections_svc.get_section_or_404(to_sid)
 
     if from_sec.manual_id != to_sec.manual_id:
         return fail("서로 다른 매뉴얼 간 이동은 허용되지 않습니다.", 400)
 
-    # ✅ 이동 전/후 블록 목록 검증 공통화
-    # 기능 변화 0:
-    # - from_block_ids / to_block_ids 오류 메시지 유지
-    # - 중복 검증은 전체 목록 합산 기준으로 기존처럼 별도 수행
     cleaned_from, err = clean_reorder_ids(
         from_block_ids,
         label="from_block_ids",
@@ -264,12 +232,7 @@ def manual_block_move_ajax(request):
     if len(all_requested) != len(set(all_requested)):
         return fail("중복된 블록 ID가 포함되어 있습니다.", 400)
 
-    existing_union = set(
-        ManualBlock.objects
-        .filter(section_id__in=[from_sid, to_sid])
-        .values_list("id", flat=True)
-    )
-
+    existing_union = blocks_svc.get_block_ids_for_sections([from_sid, to_sid])
     if set(all_requested) != existing_union:
         return fail("이동 대상 섹션의 블록 목록과 요청값이 일치하지 않습니다.", 400)
 
@@ -277,10 +240,9 @@ def manual_block_move_ajax(request):
         return fail("이동 대상 블록 목록이 비어있습니다.", 400)
 
     with transaction.atomic():
-        ManualBlock.objects.filter(id__in=cleaned_to).update(section_id=to_sid)
+        blocks_svc.move_blocks_to_section(cleaned_to, to_sid)
 
-        # ✅ 양쪽 섹션 sort_order를 같은 transaction 안에서 저장
-        # manual 가이드의 “블록 이동 트랜잭션 필수” 규약 유지
+        # 양쪽 섹션 sort_order를 같은 transaction 안에서 저장
         update_sort_order(
             ManualBlock,
             cleaned_from,

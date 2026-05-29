@@ -4,16 +4,16 @@ from __future__ import annotations
 
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
-from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_POST
 
 from audit.constants import ACTION
 from audit.services import log_action
 
 from ..constants import SECTION_TITLE_MAX_LEN
-from ..models import Manual, ManualSection
+from ..models import ManualSection
+from ..services import manuals as manuals_svc
+from ..services import sections as sections_svc
 from ..utils import (
-    ensure_default_section,
     fail,
     is_digits,
     json_body,
@@ -39,11 +39,8 @@ def manual_section_add_ajax(request):
     if not is_digits(manual_id):
         return fail("manual_id가 올바르지 않습니다.", 400)
 
-    m = get_object_or_404(Manual, pk=int(manual_id))
-    last = m.sections.order_by("-sort_order", "-id").first()
-    next_order = (last.sort_order if last else 0) + 1
-
-    sec = ManualSection.objects.create(manual=m, sort_order=next_order, title="")
+    m = manuals_svc.get_manual_or_404(int(manual_id))
+    sec = sections_svc.add_section(m)
 
     log_action(
         request,
@@ -78,9 +75,8 @@ def manual_section_title_update_ajax(request):
     if len(title) > SECTION_TITLE_MAX_LEN:
         return fail(f"소제목은 최대 {SECTION_TITLE_MAX_LEN}자까지 가능합니다.", 400)
 
-    sec = get_object_or_404(ManualSection, pk=int(section_id))
-    sec.title = title
-    sec.save(update_fields=["title", "updated_at"])
+    sec = sections_svc.get_section_or_404(int(section_id))
+    sec = sections_svc.update_section_title(sec, title)
 
     log_action(
         request,
@@ -110,10 +106,11 @@ def manual_section_delete_ajax(request):
     if not is_digits(section_id):
         return fail("section_id가 올바르지 않습니다.", 400)
 
-    sec = get_object_or_404(ManualSection, pk=int(section_id))
+    sec = sections_svc.get_section_or_404(int(section_id))
     manual = sec.manual
     deleted_section_id = sec.id
-    sec.delete()
+
+    new_sec = sections_svc.delete_section(sec)
 
     log_action(
         request,
@@ -125,11 +122,7 @@ def manual_section_delete_ajax(request):
         },
     )
 
-    new_section = None
-    if manual.sections.count() == 0:
-        created = ensure_default_section(manual)
-        new_section = {"id": created.id, "title": created.title or ""}
-
+    new_section = {"id": new_sec.id, "title": new_sec.title or ""} if new_sec else None
     return ok({"new_section": new_section})
 
 
@@ -148,12 +141,8 @@ def manual_section_reorder_ajax(request):
     if not is_digits(manual_id) or not isinstance(section_ids, list):
         return fail("요청값이 올바르지 않습니다.", 400)
 
-    manual = get_object_or_404(Manual, pk=int(manual_id))
+    manual = manuals_svc.get_manual_or_404(int(manual_id))
 
-    # ✅ section_ids 검증 공통화
-    # 기능 변화 0:
-    # - 숫자 아닌 값 차단
-    # - 중복 섹션 ID 차단
     cleaned, err = clean_reorder_ids(
         section_ids,
         label="section_ids",
@@ -162,17 +151,11 @@ def manual_section_reorder_ajax(request):
     if err:
         return fail(err, 400)
 
-    existing = set(
-        ManualSection.objects
-        .filter(manual=manual)
-        .values_list("id", flat=True)
-    )
-
+    existing = sections_svc.get_section_ids(manual)
     if set(cleaned) != existing:
         return fail("현재 매뉴얼의 섹션 목록과 요청값이 일치하지 않습니다.", 400)
 
     with transaction.atomic():
-        # ✅ 기존과 동일하게 sort_order 1부터 저장
         update_sort_order(ManualSection, cleaned)
 
     log_action(

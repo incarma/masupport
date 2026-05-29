@@ -94,9 +94,9 @@ document.addEventListener("DOMContentLoaded", () => {
     return {
       tableFetch,
       tableSave,
-      rateList: String(root.dataset.rateListUrl || "/partner/ajax/rate-userlist/").trim(),
-      rateExcel: String(root.dataset.rateExcelUrl || "/partner/ajax/rate-userlist-excel/").trim(),
-      rateUpload: String(root.dataset.rateUploadUrl || "/partner/ajax/rate-userlist-upload/").trim(),
+      rateList: String(root.dataset.rateListUrl || "").trim(),
+      rateExcel: String(root.dataset.rateExcelUrl || "").trim(),
+      rateUpload: String(root.dataset.rateUploadUrl || "").trim(),
       rateTemplate,
     };
   }

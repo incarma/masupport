@@ -47,7 +47,7 @@
      data-update-level-url="{% url 'partner:ajax_update_level' %}"
      data-delete-subadmin-url="{% url 'partner:ajax_delete_subadmin' %}"
      data-add-subadmin-url="{% url 'partner:ajax_add_sub_admin' %}"
-     data-search-url="/api/accounts/search-user/"
+     data-search-url="{% url 'accounts:api_search_user' %}"
      data-fetch-channels-url="{% url 'partner:ajax_fetch_channels' %}"
      data-fetch-parts-url="{% url 'partner:ajax_fetch_parts' %}"
      data-fetch-branches-url="{% url 'partner:ajax_fetch_branches' %}">

@@ -153,6 +153,8 @@ INSTALLED_APPS = [
     "django_extensions",
     "django_recaptcha",
     "audit.apps.AuditConfig",
+    # AI
+    "ai.apps.AiConfig",
 ]
 
 # =============================================================================

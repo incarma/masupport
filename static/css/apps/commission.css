@@ -12,14 +12,14 @@
 #deposit-home .deposit-maxw { max-width: 1100px; }
 
 /* 환수관리(collect_home): partner 앱과 동일한 wide 레이아웃 */
-#collect-home .collect-wide {
+#collect-home {
   width: 86vw;
   max-width: none;
   margin-left: calc(-43vw + 50%);
 }
 
 @media (max-width: 576px) {
-  #collect-home .collect-wide {
+  #collect-home {
     width: 100%;
     margin-left: 0;
   }

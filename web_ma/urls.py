@@ -68,6 +68,7 @@ urlpatterns = [
     # 를 관리하고 있으므로, 여기서는 prefix 1번만 붙여 위임합니다.
     # ---------------------------------------------------------------------
     path("accounts/", include(("accounts.urls", "accounts"), namespace="accounts")),
+    path("ai/", include(("ai.urls", "ai"), namespace="ai")),
 ]
 
 

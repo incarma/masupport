@@ -3,9 +3,7 @@ from __future__ import annotations
 
 from django.db.models import Q, QuerySet
 
-
-def clean_list(vals) -> list[str]:
-    return sorted({str(v).strip() for v in vals if str(v).strip() and str(v).strip().lower() != "nan"})
+from dash.services.sales import clean_list  # noqa: F401  (re-export for backward compat)
 
 
 def apply_head_scope_to_salesrecord_qs(qs: QuerySet, *, user) -> tuple[QuerySet, str]:

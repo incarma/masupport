@@ -60,16 +60,16 @@ import { initBlockSortable } from "./sort_blocks.js";
   const attachInput = document.getElementById("manualQuillAttachInput");
 
   // 필수 요소 체크 (깨지면 조용히 종료)
-  if (!sectionsEl || !bootEl || !modalEl || !btnSave || !titleEl || !errBox || !csrfForm) {
+  if (!rootEl || !sectionsEl || !bootEl || !modalEl || !btnSave || !titleEl || !errBox || !csrfForm) {
     console.warn("[manual_detail_block/index] Required elements missing.");
     return;
   }
 
   /* =========================================================================
-   * 0.1) Bind guard (BFCache / 중복 로드 방지)
+   * 0.1) Bind guard (BFCache / 중복 로드 방지) — rootEl = #manual-detail
    * ========================================================================= */
-  if (document.documentElement.dataset.manualDetailBound === "true") return;
-  document.documentElement.dataset.manualDetailBound = "true";
+  if (rootEl.dataset.inited === "1") return;
+  rootEl.dataset.inited = "1";
 
   /* =========================================================================
    * 0.2) URLs from Boot

@@ -25,8 +25,11 @@ from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
 
 from accounts.decorators import grade_required
+from audit.constants import ACTION
+from audit.services import log_action
 from commission.models import RateExample
-from commission.views.utils_json import _json_ok
+from commission.services.rate_example_pay_normalizer import reset_pay_rows
+from commission.views.utils_json import _json_ok, _json_error
 
 logger = logging.getLogger(__name__)
 
@@ -154,22 +157,15 @@ def rate_example_pay_reset(request):
     지급률 정규화 데이터(RateExamplePayRow) 전체 삭제.
     지급률은 전사 단일 파일이므로 보험사 단위가 아닌 전체 삭제.
     """
-    from commission.models import RateExamplePayRow  # noqa: PLC0415
-
     insurer_type = (request.POST.get("insurer_type") or RateExample.TYPE_LIFE).strip()
     if insurer_type == "nonlife":
         insurer_type = RateExample.TYPE_FIRE
     if insurer_type not in {RateExample.TYPE_LIFE, RateExample.TYPE_FIRE}:
         insurer_type = RateExample.TYPE_LIFE
 
-    deleted_count, _ = RateExamplePayRow.objects.filter(
-        insurer_type=insurer_type,
-        category="pay",
-    ).delete()
+    deleted_count = reset_pay_rows(insurer_type)
 
     try:
-        from audit.constants import ACTION  # noqa: PLC0415
-        from audit.services import log_action  # noqa: PLC0415
         log_action(
             request,
             ACTION.COMMISSION_RATE_EXAMPLE_DELETE,   # 가장 근접한 기존 ACTION 재사용

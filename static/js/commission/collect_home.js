@@ -391,12 +391,17 @@ function rowToArray(row, tab) {
 
 /**
  * SheetJS 기반 엑셀 다운로드.
- * 전체/신규/장기3/6/12 탭 데이터를 시트별로 구분한 1개 파일 생성.
- * 조회된 데이터가 없는 탭은 시트 생성 생략.
+ * 전체/신규/장기3/6/12 탭 데이터를 병렬 페치 후 시트별로 구분한 1개 파일 생성.
+ * 방문하지 않은 탭도 현재 필터(ym/part/bizmoon) 기준으로 서버에서 가져온다.
+ * 서버 응답이 빈 배열인 탭은 시트 생성 생략.
  */
-function downloadExcel() {
+async function downloadExcel() {
   if (typeof XLSX === "undefined") {
     alert("엑셀 라이브러리를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.");
+    return;
+  }
+  if (!state.ym) {
+    alert("먼저 조회 버튼을 눌러 데이터를 불러오세요.");
     return;
   }
 
@@ -407,6 +412,28 @@ function downloadExcel() {
     long6:  "장기6개월",
     long12: "장기12개월",
   };
+
+  const dlBtn = document.getElementById("collectExcelDownloadBtn");
+  if (dlBtn) { dlBtn.disabled = true; dlBtn.textContent = "다운로드 중..."; }
+
+  try {
+    await Promise.all(
+      Object.keys(TAB_LABELS).map(async tab => {
+        const data = await apiFetch(URLS.list, {
+          tab,
+          ym:      state.ym,
+          part:    state.part,
+          bizmoon: state.bizmoon,
+        });
+        if (data.ok) _allTabData[tab] = data.data?.rows ?? [];
+      })
+    );
+  } catch (err) {
+    console.error("[collect_home] downloadExcel fetch 오류:", err);
+    alert("데이터 조회 중 오류가 발생했습니다.");
+    if (dlBtn) { dlBtn.disabled = false; dlBtn.textContent = "엑셀 다운로드"; }
+    return;
+  }
 
   const wb = XLSX.utils.book_new();
   let hasData = false;
@@ -423,6 +450,8 @@ function downloadExcel() {
     ws["!cols"] = headers.map(() => ({ wch: 15 }));
     XLSX.utils.book_append_sheet(wb, ws, label);
   }
+
+  if (dlBtn) { dlBtn.disabled = false; dlBtn.textContent = "엑셀 다운로드"; }
 
   if (!hasData) {
     alert("다운로드할 데이터가 없습니다. 먼저 조회해주세요.");
@@ -878,8 +907,8 @@ function bindEvents() {
   // 조회 완료 후 활성화됨 (초기 disabled)
   const dlBtn = document.getElementById("collectExcelDownloadBtn");
   if (dlBtn) {
-    dlBtn.addEventListener("click", () => {
-      downloadExcel();
+    dlBtn.addEventListener("click", async () => {
+      await downloadExcel();
     });
   }
 

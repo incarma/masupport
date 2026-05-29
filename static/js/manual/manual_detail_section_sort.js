@@ -35,10 +35,9 @@
     return;
   }
 
-  // 중복 바인딩 방지
-  const htmlEl = document.documentElement;
-  if (htmlEl.dataset.manualSectionSortBound === "true") return;
-  htmlEl.dataset.manualSectionSortBound = "true";
+  // BFCache / 중복 바인딩 방지 (sectionsEl = #manualSections)
+  if (sectionsEl.dataset.inited === "1") return;
+  sectionsEl.dataset.inited = "1";
 
   /* =========================================================================
    * 1) CSRF

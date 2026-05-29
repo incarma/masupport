@@ -29,10 +29,7 @@ from django.http import (
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
-from django.db.models.functions import Trim
-
 from accounts.decorators import grade_required
-from accounts.models import CustomUser
 from board.forms import WorkTaskCommentForm
 from board.models import WorkCategory, WorkTask, WorkTaskAttachment, WorkTaskComment
 from board.services.holidays import get_holidays_between, resolve_next_business_day
@@ -50,33 +47,7 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 def _get_worktask_branch_options(request) -> list[str]:
-    """
-    WorkTask 지점 선택 옵션.
-    - superuser: 활성 사용자 CustomUser.branch 전체 distinct
-    - 그 외: 본인 branch만 노출
-    """
-    user = request.user
-
-    if getattr(user, "grade", "") == "superuser":
-        qs = CustomUser.objects.filter(is_active=True)
-        part = (getattr(user, "part", "") or "").strip()
-        channel = (getattr(user, "channel", "") or "").strip()
-        if part:
-            qs = qs.filter(part=part)
-        elif channel:
-            qs = qs.filter(channel=channel)
-
-        return list(
-            qs
-            .annotate(branch_name=Trim("branch"))
-            .exclude(branch_name="")
-            .values_list("branch_name", flat=True)
-            .distinct()
-            .order_by("branch_name")
-        )
-
-    branch = (getattr(user, "branch", "") or "").strip()
-    return [branch] if branch else []
+    return wt_svc.get_branch_options(request.user)
 
 
 # =============================================================================
@@ -159,7 +130,7 @@ def worktask_list(request):
     paginator = Paginator(qs, 20)
     page_obj  = paginator.get_page(request.GET.get("page"))
 
-    categories     = WorkCategory.objects.filter(is_active=True).order_by("sort_order")
+    categories     = wt_svc.get_active_categories()
     status_choices = WorkTask.STATUS_CHOICES
     prev_ym, next_ym = _adjacent_yms(ym)
     today = timezone.localdate()
@@ -235,7 +206,7 @@ def worktask_create(request):
     업무 항목 등록.
     owner=request.user 는 서비스에서 강제 주입 (뷰에서 직접 지정 금지).
     """
-    categories = WorkCategory.objects.filter(is_active=True).order_by("sort_order")
+    categories = wt_svc.get_active_categories()
 
     if request.method == "POST":
         data = _extract_post_data(request)
@@ -306,7 +277,7 @@ def worktask_edit(request, pk: int):
     get_user_task → owner != request.user 이면 404.
     """
     task       = wt_svc.get_user_task(request.user, pk)
-    categories = WorkCategory.objects.filter(is_active=True).order_by("sort_order")
+    categories = wt_svc.get_active_categories()
 
     if request.method == "POST":
         data = _extract_post_data(request)
@@ -396,8 +367,8 @@ def worktask_att_download(request, att_id: int):
     """
     # ① 첨부파일 존재 확인
     try:
-        att = WorkTaskAttachment.objects.get(pk=att_id)
-    except WorkTaskAttachment.DoesNotExist:
+        att = wt_svc.get_attachment_or_404(att_id)
+    except Http404:
         try:
             log_action(
                 request,
@@ -406,7 +377,7 @@ def worktask_att_download(request, att_id: int):
             )
         except Exception:
             logger.exception("audit log 기록 실패 — worktask_att_download (404)")
-        raise Http404("첨부파일을 찾을 수 없습니다.")
+        raise
 
     # ② 소유자 격리
     if att.task.owner_id != request.user.pk:
@@ -548,9 +519,8 @@ def worktask_inline_update(request, pk: int):
 
     # 필드별 값 변환 및 검증
     if field == "category":
-        from board.models import WorkCategory
         try:
-            cat = WorkCategory.objects.get(code=value, is_active=True)
+            cat = wt_svc.get_category_by_code(value)
         except WorkCategory.DoesNotExist:
             return _err("존재하지 않는 분류입니다.")
         task.category = cat
@@ -619,8 +589,6 @@ def _extract_post_data(request) -> dict:
     related_users → User 인스턴스 리스트로 변환.
     숫자 필드 → 안전 변환.
     """
-    from accounts.models import CustomUser
-
     post = request.POST
 
     def _int_or(key: str, default):
@@ -631,7 +599,7 @@ def _extract_post_data(request) -> dict:
 
     # 관련인물 pk 목록 → User 인스턴스
     uid_list = post.getlist("related_users")
-    related  = list(CustomUser.objects.filter(pk__in=uid_list)) if uid_list else []
+    related  = wt_svc.get_users_by_pks(uid_list)
 
     # 날짜 안전 파싱 헬퍼
     def _parse_date(key: str):

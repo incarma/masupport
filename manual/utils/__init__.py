@@ -29,11 +29,6 @@ from .rules import (
 from .serializers import attachment_to_dict, block_to_dict
 from .parsing import to_str, is_digits
 from .files import open_manual_fileresponse
-from .reorder import (
-    clean_ordered_ids,
-    require_same_id_set,
-    update_sort_order_rows,
-)
 
 __all__ = [
     "json_body",
@@ -54,7 +49,4 @@ __all__ = [
     "to_str",
     "is_digits",
     "open_manual_fileresponse",
-    "clean_ordered_ids",
-    "require_same_id_set",
-    "update_sort_order_rows",
 ]

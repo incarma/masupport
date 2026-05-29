@@ -21,11 +21,11 @@ from commission.upload_handlers import (
     _handle_upload_efficiency_pay_excess,
 )
 from commission.upload_utils import _read_excel_raw_matrix
+from commission.services.approval import delete_pending_scope, upsert_upload_log
 
 from audit.services import log_action
 from audit.constants import ACTION
 
-from ..models import ApprovalExcelUploadLog, ApprovalPending, EfficiencyPayExcess
 from ._files import save_temp_upload, safe_delete
 from ._ym import resolve_ym
 from .utils_fail_excel import store_fail_rows_as_excel
@@ -50,46 +50,34 @@ def _common_upload(*, request, ym: str, part: str, kind: str, file_path: str, or
     df_raw = _read_excel_raw_matrix(file_path, original_name=original_name, skiprows=0, header_none=True)
     row_count = int(len(df_raw.index)) if df_raw is not None else 0
 
-    if kind == "approval":
-        del_qs = ApprovalPending.objects.filter(ym=ym)
-        if part:
-            del_qs = del_qs.filter(user__part=part)
-        del_qs.delete()
+    delete_pending_scope(ym=ym, part=part, kind=kind)
 
+    if kind == "approval":
         result = _handle_upload_commission_approval(
             file_path=file_path,
             original_name=original_name,
             ym=ym,
             part=part,
         )
-        inserted = int(result.get("inserted_or_updated") or 0)
-
     elif kind == "efficiency":
-        del_qs = EfficiencyPayExcess.objects.filter(ym=ym)
-        if part:
-            del_qs = del_qs.filter(user__part=part)
-        del_qs.delete()
-
         result = _handle_upload_efficiency_pay_excess(
             file_path=file_path,
             original_name=original_name,
             ym=ym,
             part=part,
         )
-        inserted = int(result.get("inserted_or_updated") or 0)
-
     else:
         raise ValueError("구분(kind)을 선택해주세요. (efficiency/approval)")
 
-    ApprovalExcelUploadLog.objects.update_or_create(
+    inserted = int(result.get("inserted_or_updated") or 0)
+
+    upsert_upload_log(
         ym=ym,
         part=part,
         kind=kind,
-        defaults={
-            "uploaded_by": request.user,
-            "row_count": row_count,
-            "file_name": (original_name or "")[:255],
-        },
+        uploaded_by=request.user,
+        row_count=row_count,
+        file_name=original_name or "",
     )
 
     return row_count, inserted, result

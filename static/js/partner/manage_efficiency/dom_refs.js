@@ -1,45 +1,45 @@
 // django_ma/static/js/partner/manage_efficiency/dom_refs.js
 // =========================================================
 // ✅ DOM references (Manage Efficiency)
-// - confirmGroupId 신규 추가
+// - get 접근자 패턴: BFCache 복원 후 stale DOM 참조 방지
 // - 페이지별 element id 기반으로 안전 참조
 // =========================================================
 
 export const els = {
   // root
-  root: document.getElementById("manage-efficiency"),
+  get root()  { return document.getElementById("manage-efficiency"); },
 
   // top controls
-  year: document.getElementById("yearSelect"),
-  month: document.getElementById("monthSelect"),
-  branch: document.getElementById("branchSelect"), // superuser only
-  btnSearch: document.getElementById("btnSearchPeriod"),
+  get year()  { return document.getElementById("yearSelect"); },
+  get month() { return document.getElementById("monthSelect"); },
+  get branch() { return document.getElementById("branchSelect"); }, // superuser only
+  get btnSearch() { return document.getElementById("btnSearchPeriod"); },
 
   // sections
-  inputSection: document.getElementById("inputSection"),
-  mainSheet: document.getElementById("mainSheet"),
+  get inputSection() { return document.getElementById("inputSection"); },
+  get mainSheet()    { return document.getElementById("mainSheet"); },
 
   // input actions
-  btnAddRow: document.getElementById("btnAddRow"),
-  btnResetRows: document.getElementById("btnResetRows"),
-  btnSaveRows: document.getElementById("btnSaveRows"),
-  inputTable: document.getElementById("inputTable"),
+  get btnAddRow()    { return document.getElementById("btnAddRow"); },
+  get btnResetRows() { return document.getElementById("btnResetRows"); },
+  get btnSaveRows()  { return document.getElementById("btnSaveRows"); },
+  get inputTable()   { return document.getElementById("inputTable"); },
 
   // accordion container
-  accordion: document.getElementById("confirmGroupsAccordion"),
-  sheetNotice: document.getElementById("sheetNotice"),
+  get accordion()   { return document.getElementById("confirmGroupsAccordion"); },
+  get sheetNotice() { return document.getElementById("sheetNotice"); },
 
   // loading
-  loading: document.getElementById("loadingOverlay"),
+  get loading() { return document.getElementById("loadingOverlay"); },
 
   // confirm upload (modal)
-  btnConfirmUploadDo: document.getElementById("btnConfirmUploadDo"),
-  confirmFileInput: document.getElementById("confirmFileInput"),
-  confirmFileName: document.getElementById("confirmFileName"),
+  get btnConfirmUploadDo() { return document.getElementById("btnConfirmUploadDo"); },
+  get confirmFileInput()   { return document.getElementById("confirmFileInput"); },
+  get confirmFileName()    { return document.getElementById("confirmFileName"); },
 
   // ✅ NEW: group id hidden
-  confirmGroupId: document.getElementById("confirmGroupId"),
+  get confirmGroupId() { return document.getElementById("confirmGroupId"); },
 
   // legacy
-  confirmAttachmentId: document.getElementById("confirmAttachmentId"),
+  get confirmAttachmentId() { return document.getElementById("confirmAttachmentId"); },
 };

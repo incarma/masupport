@@ -9,15 +9,21 @@ from django.urls import NoReverseMatch, reverse
 from django.utils import timezone
 
 from accounts.decorators import grade_required
-from accounts.models import CustomUser
-from commission.models import ApprovalPending, DepositUploadLog, EfficiencyPayExcess, CollectRecord, CollectUploadLog, RateExample
+from commission.models import RateExample
 from commission.upload_handlers.registry import supported_upload_types
+from commission.services.approval import (
+    list_parts_excluding_centers,
+    get_approval_pending_qs,
+    get_efficiency_excess_qs,
+)
 from commission.services.collect import (
     get_available_yms,
     get_available_parts,
     get_available_bizmoons,
+    get_last_collect_upload_log,
     date_to_ym,
 )
+from commission.services.deposit import get_upload_dates
 from commission.services.rate_example import RateExampleService
 
 from .constants import EXCESS_THRESHOLD
@@ -44,15 +50,7 @@ UPLOAD_TYPES_ORDER = [
 
 
 def _list_parts_excluding_centers() -> list[str]:
-    qs = (
-        CustomUser.objects.exclude(part__isnull=True)
-        .exclude(part__exact="")
-        .exclude(part__icontains="센터")
-        .values_list("part", flat=True)
-        .distinct()
-        .order_by("part")
-    )
-    return list(qs)
+    return list_parts_excluding_centers()
 
 
 def _ym_from_year_month(year: int, month: int) -> str:
@@ -142,19 +140,7 @@ def deposit_home(request):
     supported = set(supported_upload_types())
     upload_types = [x for x in UPLOAD_TYPES_ORDER if x in supported]
 
-    logs = (
-        DepositUploadLog.objects.filter(part__in=parts, upload_type__in=upload_types).only("part", "upload_type", "uploaded_at")
-    )
-
-    upload_dates: dict[str, dict[str, str]] = {p: {} for p in parts}
-    for row in logs:
-        ts = getattr(row, "uploaded_at", None)
-        upload_dates[row.part][row.upload_type] = ts.strftime("%Y-%m-%d") if ts else "-"
-
-    # 템플릿에서 키 존재를 기대하므로 빈 값도 채워줌
-    for p in parts:
-        for ut in upload_types:
-            upload_dates[p].setdefault(ut, "-")
+    upload_dates = get_upload_dates(parts, upload_types)
 
     ctx = {
         "parts": parts,
@@ -192,35 +178,10 @@ def approval_home(request):
     if selected_part and selected_part not in parts:
         selected_part = ""
 
-    # -------------------------------------------------------------------------
-    # 1) Pending (approval_flag='N' + 유자격 조건)
-    # -------------------------------------------------------------------------
-    pending_qs = (
-        ApprovalPending.objects.select_related("user").filter(
-            ym=selected_ym,
-            user__isnull=False,
-            approval_flag="N",
-            user__regist__in=["손생등록", "손보등록", "생보등록"],
-        )
+    pending_rows = get_approval_pending_qs(selected_ym, part=selected_part)
+    efficiency_rows = get_efficiency_excess_qs(
+        selected_ym, part=selected_part, threshold=EXCESS_THRESHOLD
     )
-
-    # -------------------------------------------------------------------------
-    # 2) Efficiency excess (threshold 이상)
-    # -------------------------------------------------------------------------
-    efficiency_qs = (
-        EfficiencyPayExcess.objects.select_related("user").filter(
-            ym=selected_ym,
-            user__isnull=False,
-            pay_amount_sum__gt=EXCESS_THRESHOLD,
-        )
-    )
-
-    if selected_part:
-        pending_qs = pending_qs.filter(user__part=selected_part)
-        efficiency_qs = efficiency_qs.filter(user__part=selected_part)
-
-    pending_rows = pending_qs.order_by("user__part", "user__branch", "user__name", "user__id")
-    efficiency_rows = efficiency_qs.order_by("user__part", "user__branch", "user__name", "user__id")
 
     ctx = {
         # controls options
@@ -280,8 +241,7 @@ def collect_home(request):
     # 기본 월도: 가장 최신 업로드 월도, 없으면 현재 월도
     default_ym = available_yms[0] if available_yms else date_to_ym(timezone.localdate())
  
-    # 최근 업로드 이력 (업로드 현황 표시용)
-    last_upload_log = CollectUploadLog.objects.first()
+    last_upload_log = get_last_collect_upload_log()
  
     ctx = {
         "available_yms":    available_yms,

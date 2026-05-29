@@ -18,6 +18,8 @@
    * ========================================================== */
   const root = document.getElementById("deposit-home");
   if (!root) return;
+  if (root.dataset.inited === "1") return;
+  root.dataset.inited = "1";
 
   const bindRoot = document;
   const ds = root.dataset || {};
@@ -35,10 +37,10 @@
    * 2) URL config
    * ========================================================== */
   const URLS = {
-    userDetail: ds.userDetailUrl || "/commission/api/user-detail/",
-    summary: ds.depositSummaryUrl || "/commission/api/deposit-summary/",
-    surety: ds.depositSuretyUrl || "/commission/api/deposit-surety/",
-    other: ds.depositOtherUrl || "/commission/api/deposit-other/",
+    userDetail: ds.userDetailUrl,
+    summary: ds.depositSummaryUrl,
+    surety: ds.depositSuretyUrl,
+    other: ds.depositOtherUrl,
   };
 
   /* ==========================================================

@@ -18,6 +18,7 @@ from board.constants import AUDIT_ACTION_COLLATERAL_EVAL, COLLATERAL_RATE_MAP
 from board.services.collateral import (
     delete_collateral_eval,
     get_eval_history,
+    get_target_user,
     save_collateral_eval,
 )
 from board.services.rate_limit import check_rate_limit, rate_limited_json
@@ -62,7 +63,7 @@ def collateral_calc(request):
 
     try:
         body = json.loads(request.body)
-    except Exception:
+    except (json.JSONDecodeError, ValueError):
         return _json_error("요청 형식이 올바르지 않습니다.")
 
     property_type   = str(body.get("property_type", "")).strip()
@@ -86,11 +87,8 @@ def collateral_calc(request):
     # 대상자 조회 (선택 항목)
     target_user = None
     if target_user_id:
-        from django.contrib.auth import get_user_model
-        User = get_user_model()
-        try:
-            target_user = User.objects.get(pk=str(target_user_id))
-        except User.DoesNotExist:
+        target_user = get_target_user(target_user_id)
+        if target_user is None:
             return _json_error("대상자를 찾을 수 없습니다.")
 
     obj, result = save_collateral_eval(

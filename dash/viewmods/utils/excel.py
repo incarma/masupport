@@ -27,7 +27,7 @@ def to_date(v) -> Optional[date]:
     if isinstance(v, (pd.Timestamp, datetime)):
         try:
             return v.date()
-        except Exception:
+        except (AttributeError, ValueError):
             return None
 
     if isinstance(v, date):
@@ -41,20 +41,20 @@ def to_date(v) -> Optional[date]:
     if re.match(r"^\d{2}/\d{2}/\d{2}$", s):
         try:
             return datetime.strptime(s, "%y/%m/%d").date()
-        except Exception:
+        except ValueError:
             return None
 
     # "20260103"
     if re.match(r"^\d{8}$", s):
         try:
             return datetime.strptime(s, "%Y%m%d").date()
-        except Exception:
+        except ValueError:
             return None
 
     try:
         dt = pd.to_datetime(s, errors="coerce")
         return None if pd.isna(dt) else dt.date()
-    except Exception:
+    except Exception:  # pandas OutOfBoundsDatetime 등 버전별 다양한 예외 방어
         return None
 
 
@@ -68,7 +68,7 @@ def to_str_emp_id(v) -> Optional[str]:
         if s.endswith(".0"):
             s = s[:-2]
         return s
-    except Exception:
+    except (AttributeError, ValueError):
         return str(v).strip()
 
 
@@ -80,7 +80,7 @@ def to_int_money(v) -> Optional[int]:
         if s == "" or s.lower() == "nan":
             return None
         return int(float(s))
-    except Exception:
+    except ValueError:
         return None
 
 
@@ -125,10 +125,10 @@ def parse_ins_period(v) -> Tuple[Optional[date], Optional[date]]:
     ds = de = None
     try:
         ds = datetime.strptime(a, "%Y%m%d").date() if len(a) == 8 else None
-    except Exception:
+    except ValueError:
         ds = None
     try:
         de = datetime.strptime(b, "%Y%m%d").date() if len(b) == 8 else None
-    except Exception:
+    except ValueError:
         de = None
     return (ds, de)

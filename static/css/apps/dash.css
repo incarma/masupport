@@ -368,7 +368,7 @@
   }
 
   #dash-sales .dash-product-top10-table {
-+    min-width: 480px;
+    min-width: 480px;
   }
 }
 
@@ -685,14 +685,14 @@
   CSP strict helpers - Dash
 ========================================================== */
 
-.dash-title {
+#dash-sales .dash-title {
   color: #003f7d;
 }
 
-.dash-filter-flex {
+#dash-sales .dash-filter-flex {
   flex: 1;
 }
 
-.dash-product-modal {
+#dash-sales .dash-product-modal {
   max-width: 720px;
 }

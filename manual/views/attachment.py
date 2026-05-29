@@ -7,14 +7,14 @@ import os
 
 from django.contrib.auth.decorators import login_required
 from django.http import Http404
-from django.shortcuts import get_object_or_404
 from django.utils.cache import patch_cache_control
 from django.views.decorators.http import require_POST
 
 from audit.constants import ACTION
 from audit.services import log_action
 
-from ..models import ManualBlock, ManualBlockAttachment
+from ..services import attachments as attachments_svc
+from ..services import blocks as blocks_svc
 from ..utils import fail, is_digits, json_body, ok, to_str, ensure_superuser_or_403, attachment_to_dict, open_manual_fileresponse
 from ..utils.permissions import manual_accessible_or_denied
 from ..utils.uploads import validate_manual_attachment
@@ -38,18 +38,14 @@ def manual_block_attachment_upload_ajax(request):
         return fail("block_id가 올바르지 않습니다.", 400)
     if not upfile:
         return fail("업로드할 파일이 없습니다.", 400)
-    
+
     err = validate_manual_attachment(upfile)
     if err:
         return fail(err, 400)
 
-    b = get_object_or_404(
-        ManualBlock.objects.select_related("section__manual", "manual"),
-        pk=int(block_id),
-    )
-
-    a = ManualBlockAttachment.objects.create(
-        block=b,
+    b = attachments_svc.get_block_for_attachment_upload(int(block_id))
+    a = attachments_svc.create_attachment(
+        b,
         file=upfile,
         original_name=to_str(getattr(upfile, "name", "")),
         size=int(getattr(upfile, "size", 0) or 0),
@@ -62,7 +58,6 @@ def manual_block_attachment_upload_ajax(request):
         meta={"block_id": b.id, "manual_id": b.manual_id, "name": a.original_name, "size": a.size},
     )
 
-    # ✅ SSOT 직렬화(utils.serializers) 사용
     return ok({"attachment": attachment_to_dict(a)})
 
 
@@ -80,10 +75,7 @@ def manual_block_attachment_delete_ajax(request):
     if not is_digits(attachment_id):
         return fail("attachment_id가 올바르지 않습니다.", 400)
 
-    a = get_object_or_404(
-        ManualBlockAttachment.objects.select_related("block__section__manual", "block__manual"),
-        pk=int(attachment_id),
-    )
+    a = attachments_svc.get_attachment_or_404(int(attachment_id))
     manual = a.block.section.manual if a.block.section_id else a.block.manual
 
     log_action(
@@ -99,10 +91,7 @@ def manual_block_attachment_delete_ajax(request):
 @login_required
 def manual_attachment_download(request, attachment_id: int):
     """권한 검증 후 첨부파일을 FileResponse로 제공한다."""
-    a = get_object_or_404(
-        ManualBlockAttachment.objects.select_related("block__section__manual", "block__manual"),
-        pk=attachment_id,
-    )
+    a = attachments_svc.get_attachment_or_404(attachment_id)
 
     manual = a.block.section.manual if a.block.section_id else a.block.manual
     denied = manual_accessible_or_denied(request, manual)
@@ -115,10 +104,6 @@ def manual_attachment_download(request, attachment_id: int):
     filename = a.original_name or os.path.basename(a.file.name)
 
     try:
-        # ✅ 기능 변화 0:
-        # - 권한 검증 후 FileResponse 제공
-        # - RFC5987 한글 파일명 헤더 유지
-        # - 파일 직접 URL 노출 없음
         response = open_manual_fileresponse(
             a.file,
             filename=filename,
@@ -140,10 +125,7 @@ def manual_attachment_download(request, attachment_id: int):
 @login_required
 def manual_block_image(request, block_id: int):
     """권한 검증 후 블록 이미지를 inline FileResponse로 제공한다."""
-    b = get_object_or_404(
-        ManualBlock.objects.select_related("section__manual", "manual"),
-        pk=block_id,
-    )
+    b = blocks_svc.get_block_or_404_for_image(block_id)
 
     manual = b.section.manual if b.section_id else b.manual
     denied = manual_accessible_or_denied(request, manual)
@@ -154,9 +136,6 @@ def manual_block_image(request, block_id: int):
         raise Http404("이미지가 없습니다.")
 
     try:
-        # ✅ 기능 변화 0:
-        # - 기존처럼 inline 이미지 응답
-        # - private cache-control 유지
         return open_manual_fileresponse(
             b.image,
             as_attachment=False,

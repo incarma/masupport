@@ -19,7 +19,7 @@ from typing import Optional, Tuple
 from django.db.models import QuerySet, Sum
 from django.db.models.functions import Coalesce
 
-from commission.models import DepositOther, DepositSummary, DepositSurety
+from commission.models import DepositOther, DepositSummary, DepositSurety, DepositUploadLog
 
 
 SURETY_PRODUCT_KEYWORD = "GA개인"
@@ -34,6 +34,7 @@ __all__ = [
     "get_deposit_other_queryset",
     "calc_filtered_totals",
     "calc_keep_totals_all",
+    "get_upload_dates",
 ]
 
 
@@ -105,3 +106,33 @@ def calc_keep_totals_all(user_pk: str) -> Tuple[int, int]:
     )
 
     return _amount_total(surety_keep_all), _amount_total(other_keep_all)
+
+
+def get_upload_dates(
+    parts: list[str], upload_types: list[str]
+) -> dict[str, dict[str, str]]:
+    """
+    부서×업로드타입 업로드 최신일 매핑.
+
+    deposit_home 페이지의 업로드 현황 표에 사용한다.
+    반환 형식: {부서: {업로드타입: "YYYY-MM-DD" | "-"}}
+    누락 셀은 "-"로 채운다.
+    """
+    logs = (
+        DepositUploadLog.objects.filter(
+            part__in=parts,
+            upload_type__in=upload_types,
+        )
+        .only("part", "upload_type", "uploaded_at")
+    )
+
+    result: dict[str, dict[str, str]] = {p: {} for p in parts}
+    for row in logs:
+        ts = getattr(row, "uploaded_at", None)
+        result[row.part][row.upload_type] = ts.strftime("%Y-%m-%d") if ts else "-"
+
+    for p in parts:
+        for ut in upload_types:
+            result[p].setdefault(ut, "-")
+
+    return result

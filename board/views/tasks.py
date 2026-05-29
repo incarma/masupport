@@ -13,7 +13,6 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import Count
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -41,10 +40,11 @@ from ..services.listing import (
     apply_keyword_filter,
     build_query_string_without_page,
     get_handlers,
+    get_task_base_qs,
     paginate,
     read_list_params,
 )
-from ..services.attachments import save_attachments
+from ..services.attachments import delete_task_attachments, save_attachments
 
 
 __all__ = [
@@ -143,7 +143,7 @@ def task_list(request: HttpRequest) -> HttpResponse:
     """
     p = read_list_params(request)
 
-    qs = Task.objects.annotate(comment_count=Count("comments", distinct=True)).order_by("-created_at")
+    qs = get_task_base_qs()
 
     qs = apply_keyword_filter(
         qs, p.keyword, p.search_type,
@@ -412,8 +412,7 @@ def task_edit(request: HttpRequest, pk: int) -> HttpResponse:
                     task.user_branch = task.user_branch or (getattr(request.user, "branch", "") or "")
                     task.save()
 
-                    if delete_ids:
-                        TaskAttachment.objects.filter(id__in=delete_ids, task=task).delete()
+                    delete_task_attachments(task, delete_ids)
 
                     def _create(**kwargs):
                         return TaskAttachment.objects.create(task=task, **kwargs)

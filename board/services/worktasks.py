@@ -408,48 +408,78 @@ def generate_monthly_tasks(year: int, month: int) -> int:
 
     중복 방지: (template_task, target_ym) 조합이 이미 존재하면 skip.
     생성된 레코드 수 반환.
+
+    DB 접근 패턴:
+      1) 반복 원본 전체 조회 + related_users prefetch (1 query)
+      2) 이미 생성된 자식 template_task_id 일괄 수집 (1 query)
+      3) 미생성 워크태스크 bulk_create (1 INSERT)
+      4) related_users M2M 설정 (M2M 있는 건만, prefetch 캐시 활용)
     """
     target_ym = f"{year}-{month:02d}"
 
-    # 반복 원본만 조회
-    templates = WorkTask.objects.filter(
-        template_task__isnull=True,
-    ).exclude(recurrence_type=WorkTask.RECURRENCE_NONE)
-
-    created_count = 0
-    for tmpl in templates:
-        # 중복 방지
-        if WorkTask.objects.filter(template_task=tmpl, target_ym=target_ym).exists():
-            continue
-
-        due = _calc_due_date(tmpl, year, month)
-
-        try:
-            with transaction.atomic():
-                child = WorkTask.objects.create(
-                    owner=tmpl.owner,
-                    category=tmpl.category,
-                    title=tmpl.title,
-                    description=tmpl.description,
-                    due_date=due,
-                    recurrence_type=WorkTask.RECURRENCE_NONE,   # 자식은 반복 없음
-                    template_task=tmpl,
-                    target_ym=target_ym,
-                    status=WorkTask.STATUS_PENDING,
-                    priority=tmpl.priority,
-                )
-                if tmpl.related_users.exists():
-                    child.related_users.set(tmpl.related_users.all())
-            created_count += 1
-        except Exception:
-            logger.exception(
-                "반복 WorkTask 생성 실패: template_pk=%s target_ym=%s",
-                tmpl.pk, target_ym,
-            )
-
-    logger.info(
-        "generate_monthly_tasks: %s-%02d created=%s", year, month, created_count,
+    # ① 반복 원본 조회 + related_users 미리 로드 (N+1 방지)
+    templates = list(
+        WorkTask.objects.filter(
+            template_task__isnull=True,
+        ).exclude(recurrence_type=WorkTask.RECURRENCE_NONE)
+        .prefetch_related("related_users")
     )
+    if not templates:
+        logger.info("generate_monthly_tasks: %s-%02d created=0 (no templates)", year, month)
+        return 0
+
+    # ② 이미 생성된 자식의 template_task_id를 단일 쿼리로 수집
+    existing_tmpl_ids = set(
+        WorkTask.objects.filter(
+            template_task__in=templates,
+            target_ym=target_ym,
+        ).values_list("template_task_id", flat=True)
+    )
+
+    # ③ 미생성 템플릿으로 WorkTask 인스턴스 구성 (M2M 제외)
+    pending: list[tuple[WorkTask, WorkTask]] = []
+    for tmpl in templates:
+        if tmpl.pk in existing_tmpl_ids:
+            continue
+        pending.append((
+            WorkTask(
+                owner=tmpl.owner,
+                category=tmpl.category,
+                title=tmpl.title,
+                description=tmpl.description,
+                due_date=_calc_due_date(tmpl, year, month),
+                recurrence_type=WorkTask.RECURRENCE_NONE,
+                template_task=tmpl,
+                target_ym=target_ym,
+                status=WorkTask.STATUS_PENDING,
+                priority=tmpl.priority,
+            ),
+            tmpl,
+        ))
+
+    if not pending:
+        logger.info("generate_monthly_tasks: %s-%02d created=0 (all exist)", year, month)
+        return 0
+
+    task_objects = [task for task, _ in pending]
+
+    try:
+        with transaction.atomic():
+            # ④ 단일 INSERT — PostgreSQL RETURNING으로 pk 자동 채워짐
+            WorkTask.objects.bulk_create(task_objects)
+            # ⑤ M2M related_users 설정 (prefetch 캐시 사용, 추가 쿼리 없음)
+            for task_obj, tmpl in pending:
+                if task_obj.pk and tmpl.related_users.exists():
+                    task_obj.related_users.set(tmpl.related_users.all())
+    except Exception:
+        logger.exception(
+            "generate_monthly_tasks bulk 생성 실패: target_ym=%s count=%s",
+            target_ym, len(pending),
+        )
+        return 0
+
+    created_count = len(task_objects)
+    logger.info("generate_monthly_tasks: %s-%02d created=%s", year, month, created_count)
     return created_count
 
 
@@ -474,6 +504,71 @@ def _calc_due_date(tmpl: WorkTask, year: int, month: int) -> date | None:
 # =============================================================================
 # 알림 대상 조회 (Celery 배치용 — Phase 4)
 # =============================================================================
+
+def get_active_categories():
+    """활성 WorkCategory 목록 (정렬: sort_order)."""
+    from board.models import WorkCategory
+    return WorkCategory.objects.filter(is_active=True).order_by("sort_order")
+
+
+def get_category_by_code(code: str):
+    """
+    코드로 활성 WorkCategory 조회.
+    존재하지 않으면 WorkCategory.DoesNotExist 발생.
+    """
+    from board.models import WorkCategory
+    return WorkCategory.objects.get(code=code, is_active=True)
+
+
+def get_attachment_or_404(att_id: int):
+    """
+    WorkTaskAttachment 조회. 없으면 Http404 발생.
+    att.task 는 owner 검증을 위해 select_related 로 함께 로드한다.
+    """
+    from django.http import Http404
+    from board.models import WorkTaskAttachment
+    try:
+        return WorkTaskAttachment.objects.select_related("task").get(pk=att_id)
+    except WorkTaskAttachment.DoesNotExist:
+        raise Http404("첨부파일을 찾을 수 없습니다.")
+
+
+def get_users_by_pks(pks: list) -> list:
+    """pk 목록으로 CustomUser 인스턴스 리스트 반환."""
+    from accounts.models import CustomUser
+    if not pks:
+        return []
+    return list(CustomUser.objects.filter(pk__in=pks))
+
+
+def get_branch_options(user) -> list[str]:
+    """
+    WorkTask 지점 선택 옵션.
+    - superuser: 활성 사용자 branch 전체 distinct (part/channel 필터 적용)
+    - 그 외: 본인 branch만 반환
+    """
+    from accounts.models import CustomUser
+    from django.db.models.functions import Trim
+
+    if getattr(user, "grade", "") == "superuser":
+        qs = CustomUser.objects.filter(is_active=True)
+        part = (getattr(user, "part", "") or "").strip()
+        channel = (getattr(user, "channel", "") or "").strip()
+        if part:
+            qs = qs.filter(part=part)
+        elif channel:
+            qs = qs.filter(channel=channel)
+        return list(
+            qs.annotate(branch_name=Trim("branch"))
+            .exclude(branch_name="")
+            .values_list("branch_name", flat=True)
+            .distinct()
+            .order_by("branch_name")
+        )
+
+    branch = (getattr(user, "branch", "") or "").strip()
+    return [branch] if branch else []
+
 
 def get_pending_notify_tasks() -> "QuerySet[WorkTask]":
     """

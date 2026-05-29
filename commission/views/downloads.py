@@ -17,7 +17,11 @@ from django.views.decorators.http import require_GET
 
 from accounts.decorators import grade_required
 from commission.upload_handlers.approval import APPROVAL_PENDING_MIN_ACTUAL_PAY
-from ..models import ApprovalPending, EfficiencyPayExcess
+from commission.services.approval import (
+    filter_by_ym_or_latest,
+    get_approval_pending_for_download,
+    get_efficiency_excess_all,
+)
 from ._excel_export import rows_to_excel_response, xlsx_bytes_response
 from .utils_json import _json_error
 
@@ -32,19 +36,7 @@ def _get_requested_ym(request) -> str:
 
 
 def _filter_by_requested_or_latest_ym(qs, ym: str):
-    """
-    다운로드 공통 월도 필터.
-    - ym이 있으면 해당 ym 필터
-    - ym이 없으면 최신 ym fallback
-    """
-    if ym:
-        return ym, qs.filter(ym=ym)
-
-    latest = qs.order_by("-ym").values_list("ym", flat=True).first()
-    if not latest:
-        return "", None
-
-    return latest, qs.filter(ym=latest)
+    return filter_by_ym_or_latest(qs, ym)
 
 
 def _format_updated_at(value) -> str:
@@ -158,14 +150,7 @@ def download_approval_pending_excel(request):
     - ym 없으면 최신 ym 기준
     """
     ym = _get_requested_ym(request)
-    qs = (
-        ApprovalPending.objects
-        .filter(
-            approval_flag="N",
-            actual_pay__gte=APPROVAL_PENDING_MIN_ACTUAL_PAY,
-        )
-        .select_related("user")
-    )
+    qs = get_approval_pending_for_download(ym, APPROVAL_PENDING_MIN_ACTUAL_PAY)
     ym, qs = _filter_by_requested_or_latest_ym(qs, ym)
     if qs is None:
         return _json_error(NO_DOWNLOAD_DATA_MESSAGE, status=404)
@@ -187,7 +172,7 @@ def download_efficiency_excess_excel(request):
     - ym 없으면 최신 ym 기준
     """
     ym = _get_requested_ym(request)
-    qs = EfficiencyPayExcess.objects.all().select_related("user")
+    qs = get_efficiency_excess_all()
     ym, qs = _filter_by_requested_or_latest_ym(qs, ym)
     if qs is None:
         return _json_error(NO_DOWNLOAD_DATA_MESSAGE, status=404)

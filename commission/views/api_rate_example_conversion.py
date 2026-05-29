@@ -20,10 +20,13 @@ from django.views.decorators.http import require_GET, require_POST
 from accounts.decorators import grade_required
 from audit.constants import ACTION
 from audit.services import log_action
-from commission.models import RateExample, RateExampleConversionRow
+from commission.models import RateExample
 from commission.services.rate_example_conversion_edit import (
     RateExampleConversionEditError,
     bulk_edit_conversion_rows,
+    get_conversion_row,
+    reset_conversion_rows,
+    save_strategy_flag,
 )
 from commission.views.utils_json import _json_error, _json_ok
 
@@ -288,13 +291,11 @@ def rate_example_conversion_strategy_update(request):
     if strategy_flag not in STRATEGY_CHOICES:
         return _json_error("전략유무 값이 올바르지 않습니다.", status=400)
 
-    row = RateExampleConversionRow.objects.filter(pk=int(row_id)).first()
+    row = get_conversion_row(int(row_id))
     if not row:
         return _json_error("대상 데이터를 찾을 수 없습니다.", status=404)
 
-    old_value = row.strategy_flag
-    row.strategy_flag = strategy_flag
-    row.save(update_fields=["strategy_flag"])
+    old_value = save_strategy_flag(row, strategy_flag)
 
     try:
         log_action(
@@ -336,20 +337,13 @@ def rate_example_conversion_reset(request):
         insurer_type: "life" 고정
         insurer: 삭제 대상 보험사명
     """
-    from commission.models import RateExampleConversionRow  # noqa: PLC0415
-    from audit.constants import ACTION  # noqa: PLC0415
-    from audit.services import log_action  # noqa: PLC0415
-
     insurer_type = request.POST.get("insurer_type", "").strip()
     insurer      = request.POST.get("insurer", "").strip()
 
     if not insurer_type or not insurer:
         return _json_error("insurer_type 및 insurer 파라미터가 필요합니다.")
 
-    deleted_count, _ = RateExampleConversionRow.objects.filter(
-        insurer_type=insurer_type,
-        insurer=insurer,
-    ).delete()
+    deleted_count = reset_conversion_rows(insurer_type, insurer)
 
     try:
         log_action(
