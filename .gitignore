@@ -41,3 +41,5 @@ static/pdf/*.pdf
 
 gunicorn.ctl
 celerybeat-schedule
+
+logs/
