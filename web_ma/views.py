@@ -1,10 +1,9 @@
 # django_ma/web_ma/views.py
 import logging
+from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse, HttpResponseServerError
-from django.shortcuts import render, redirect
-from django.urls import reverse
+from django.shortcuts import redirect
 from django.views.decorators.csrf import requires_csrf_token
-from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.cache import never_cache
 
 
@@ -23,18 +22,12 @@ def handler500(request):
     return HttpResponseServerError("Server Error (500)")
 
 
-@ensure_csrf_cookie
+@login_required
 @never_cache
 def landing_view(request):
     """
-    랜딩 페이지 뷰.
+    루트 뷰. 로그인한 사용자만 진입 가능.
     - 인증된 사용자  : board:industry_info 로 즉시 리다이렉트
-    - 미인증 사용자  : 랜딩 페이지 렌더링 (DB 쿼리 없음 — 정적 에셋만)
+    - 미인증 사용자  : /login/?next=/ 로 리다이렉트
     """
-    if request.user.is_authenticated:
-        return redirect("board:industry_info")
-
-    context = {
-        "next_url": reverse("board:industry_info"),
-    }
-    return render(request, "landing/index.html", context)
+    return redirect("board:industry_info")
