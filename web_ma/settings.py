@@ -123,6 +123,7 @@ ALLOWED_HOSTS = config(
         "local.ma-support.kr,"
         "ma-support.kr,"
         "www.ma-support.kr,"
+        "ai.ma-support.kr,"
         # Docker internal upstream hosts
         "web,"
         "django_web"
@@ -132,7 +133,7 @@ ALLOWED_HOSTS = config(
 
 CSRF_TRUSTED_ORIGINS = config(
     "CSRF_TRUSTED_ORIGINS",
-    default="https://local.ma-support.kr,https://ma-support.kr,https://www.ma-support.kr",
+    default="https://local.ma-support.kr,https://ma-support.kr,https://www.ma-support.kr,https://ai.ma-support.kr",
     cast=lambda v: [s.strip() for s in v.split(",") if s.strip()],
 )
 
@@ -148,6 +149,8 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django.contrib.humanize",
+    # OAuth2 / OIDC provider
+    "oauth2_provider",
     # Local apps
     "home",
     "join",
@@ -186,6 +189,8 @@ MIDDLEWARE = [
     # - 중복 csrftoken으로 인한 CSRF 불일치 방지
     "web_ma.middleware.CleanupLegacyCSRFCookieMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    # OAuth2 Bearer 토큰으로 request.auth / request.user 설정
+    "oauth2_provider.middleware.OAuth2TokenMiddleware",
     # ✅ Phase 3: 강제 비밀번호 변경(플래그+정책엔진 기반)
     # - 인증 이후(request.user 필요) 위치 고정
     "accounts.middleware.force_password_change.ForcePasswordChangeMiddleware",
@@ -301,6 +306,27 @@ FORCE_PASSWORD_CHANGE_EXEMPT_GRADES = _csv_set(
         default="superuser,head",
     )
 )
+
+# =============================================================================
+# 6-1) OAuth2 / OIDC Provider (django-oauth-toolkit)
+# -----------------------------------------------------------------------------
+# - Open WebUI SSO 연동 전용
+# - PKCE 필수 (Authorization Code + PKCE)
+# - superuser grade만 접근 허용 (CustomUserInfoView에서 grade 검증)
+# - OIDC 발급 주체(iss): https://ma-support.kr
+# =============================================================================
+OAUTH2_PROVIDER = {
+    "ACCESS_TOKEN_EXPIRE_SECONDS": 3600,
+    "SCOPES": {
+        "openid": "OpenID Connect",
+        "profile": "프로필 정보",
+        "email": "이메일",
+    },
+    "PKCE_REQUIRED": True,
+    "ALLOWED_REDIRECT_URI_SCHEMES": ["https"],
+    "OIDC_ENABLED": True,
+    "OIDC_ISS_ENDPOINT": "https://ma-support.kr",
+}
 
 # =============================================================================
 # 7) I18N / Timezone

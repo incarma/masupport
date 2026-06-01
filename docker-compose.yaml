@@ -126,6 +126,10 @@ services:
   open-webui:
     image: ghcr.io/open-webui/open-webui:main
     container_name: open-webui
+    # OAUTH_CLIENT_ID / OAUTH_CLIENT_SECRET / WEBUI_SECRET_KEY 는
+    # docker/.env.prod 에서 주입 (커밋 금지)
+    env_file:
+      - ./docker/.env.prod
     volumes:
       - open-webui:/app/backend/data
     environment:
@@ -134,8 +138,20 @@ services:
       # Open WebUI는 서브패스(/ai/)가 아닌 전용 서브도메인으로 분리
       - WEBUI_URL=https://ai.ma-support.kr
       - CORS_ALLOW_ORIGIN=https://ai.ma-support.kr
-      # 관리자 외 회원가입 차단 (사내 전용)
-      # - ENABLE_SIGNUP=false
+      # ── OIDC / OAuth2 연동 ──────────────────────────────────────────────
+      - ENABLE_OAUTH_SIGNUP=true
+      - OAUTH_MERGE_ACCOUNTS_BY_EMAIL=true
+      - OAUTH_PROVIDER_NAME=MA Support
+      - OPENID_PROVIDER_URL=https://ma-support.kr/o
+      - OAUTH_SCOPES=openid profile email
+      - OAUTH_USERNAME_CLAIM=name
+      - OAUTH_EMAIL_CLAIM=email
+      # 회원가입 차단 — OIDC 경로만 허용
+      - ENABLE_SIGNUP=false
+      # 아래 항목은 docker/.env.prod 에서 주입 필요 (env_file 경유):
+      #   OAUTH_CLIENT_ID=<STEP 5 완료 후 admin에서 발급된 Client ID>
+      #   OAUTH_CLIENT_SECRET=<STEP 5 완료 후 admin에서 발급된 Client Secret>
+      #   WEBUI_SECRET_KEY=<python -c "import secrets; print(secrets.token_hex(32))">
     # 외부 포트 미노출 — Nginx 내부 통신만 허용
     expose:
       - "8080"

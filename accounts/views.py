@@ -7,6 +7,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import (
     LoginView,
+    LogoutView,
     PasswordChangeView,
     PasswordChangeDoneView,
 )
@@ -623,3 +624,21 @@ def api_search_user(request: HttpRequest) -> JsonResponse:
 @login_required
 def search_user(request: HttpRequest) -> JsonResponse:
     return api_search_user(request)
+
+
+# =============================================================================
+# Auth — CustomLogoutView
+# django_ma 로그아웃 시 Open WebUI 세션 쿠키도 함께 만료
+# =============================================================================
+
+class CustomLogoutView(LogoutView):
+    """
+    기본 LogoutView에 Open WebUI JWT 쿠키 만료를 추가한다.
+    쿠키명 'token', 도메인 .ma-support.kr — 세션 종료 시 자동 로그아웃 연동.
+    """
+
+    def dispatch(self, request: HttpRequest, *args, **kwargs) -> HttpResponse:
+        response = super().dispatch(request, *args, **kwargs)
+        if request.method == "POST":
+            response.delete_cookie("token", path="/", domain=".ma-support.kr")
+        return response

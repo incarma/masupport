@@ -10,7 +10,8 @@ from django.contrib.auth import views as auth_views
 from django.urls import include, path
 
 from accounts.custom_admin import custom_admin_site
-from accounts.views import SessionCloseLoginView
+from accounts.views import CustomLogoutView, SessionCloseLoginView
+from ai.oidc import CustomUserInfoView
 from web_ma.views import healthz, landing_view
 
 _ADMIN_PATH = os.environ.get("ADMIN_URL_PATH", "admin")
@@ -30,7 +31,7 @@ urlpatterns = [
     # Auth
     # ---------------------------------------------------------------------
     path("login/", SessionCloseLoginView.as_view(template_name="registration/login.html"), name="login"),
-    path("logout/", auth_views.LogoutView.as_view(), name="logout"),
+    path("logout/", CustomLogoutView.as_view(), name="logout"),
     # Phase 3(강제 비번변경) whitelist(SSOT, URL name 기준):
     # - login
     # - logout
@@ -68,6 +69,15 @@ urlpatterns = [
     # 를 관리하고 있으므로, 여기서는 prefix 1번만 붙여 위임합니다.
     # ---------------------------------------------------------------------
     path("accounts/", include(("accounts.urls", "accounts"), namespace="accounts")),
+
+    # -------------------------------------------------------------------------
+    # OAuth2 / OIDC
+    # - /o/userinfo/ は CustomUserInfoView로 override (grade 검증 + 이메일 가공)
+    # - 반드시 oauth2_provider include보다 먼저 등록해야 우선 매칭됨
+    # -------------------------------------------------------------------------
+    path("o/userinfo/", CustomUserInfoView.as_view()),
+    path("o/", include("oauth2_provider.urls", namespace="oauth2_provider")),
+
     path("ai/", include(("ai.urls", "ai"), namespace="ai")),
 ]
 
