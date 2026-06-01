@@ -94,7 +94,7 @@ function escapeAttr(v) {
    Tooltip (Bootstrap 5) - DT redraw 대응
 ========================================================= */
 function initTooltipsInMainTable() {
-  // ✅ Bootstrap Tooltip 재초기화 공통화
+  const scope = els.mainTable?.closest?.("#mainSheet") || els.root || document;
   initBootstrapTooltips(scope);
 }
 

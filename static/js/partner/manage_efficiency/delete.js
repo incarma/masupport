@@ -103,6 +103,7 @@ async function postJson(url, body) {
       "X-CSRFToken": getCSRFToken(),
       "X-Requested-With": "XMLHttpRequest",
     },
+    credentials: "same-origin",
     body: JSON.stringify(body || {}),
   });
 
